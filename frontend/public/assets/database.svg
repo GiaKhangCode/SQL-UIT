@@ -1,0 +1,8 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="Icon / Database">
+<rect x="0.5" y="0.5" width="19" height="19" fill="#EAEEF2"/>
+<rect x="0.5" y="0.5" width="19" height="19" stroke="#EAEEF2"/>
+<path id="Vector" d="M10 6.66667C13.2217 6.66667 15.8333 5.54738 15.8333 4.16667C15.8333 2.78595 13.2217 1.66667 10 1.66667C6.77834 1.66667 4.16667 2.78595 4.16667 4.16667C4.16667 5.54738 6.77834 6.66667 10 6.66667Z" stroke="#D8DEE4" stroke-width="1.5"/>
+<path id="Vector_2" d="M4.16667 4.16667V9.16667M4.16667 9.16667C4.16667 10.5833 6.75 11.6667 10 11.6667C13.25 11.6667 15.8333 10.5833 15.8333 9.16667M4.16667 9.16667V14.1667C4.16667 15.5833 6.75 16.6667 10 16.6667C13.25 16.6667 15.8333 15.5833 15.8333 14.1667V9.16667M15.8333 9.16667V4.16667" stroke="#D8DEE4" stroke-width="1.5" stroke-linecap="round"/>
+</g>
+</svg>
