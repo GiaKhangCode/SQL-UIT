@@ -9,3 +9,5 @@ bcrypt==3.2.0
 PyJWT==2.8.0
 python-multipart==0.0.9
 python-dotenv==1.0.1
+sqlglot==30.18.0
+google-genai

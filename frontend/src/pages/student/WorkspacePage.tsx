@@ -15,6 +15,7 @@ import { useLoad } from "../../components/useLoad";
 import { useTheme } from "../../context/ThemeContext";
 import { studentApi, type QueryResult } from "../../services/studentApi";
 import type { DataTable, Problem, Submission } from "../../data/mockData";
+import { AiChatPanel } from "../../components/AiChatPanel";
 const editorTheme = EditorView.theme({
   "&": {
     backgroundColor: "var(--surface)",
@@ -30,9 +31,10 @@ const editorTheme = EditorView.theme({
     backgroundColor: "var(--surface)",
     color: "var(--muted)",
     border: "none",
-    padding: "24px 8px 0 16px",
+    padding: "0 8px 0 16px",
   },
-  ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "var(--subtle)" },
+  ".cm-activeLine": { backgroundColor: "var(--subtle)" },
+  ".cm-activeLineGutter": { backgroundColor: "transparent" },
   ".cm-cursor": { borderLeftColor: "var(--accent)" },
   ".cm-scroller": { overflow: "auto" },
   ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
@@ -98,7 +100,8 @@ function Workspace({ problem }: { problem: Problem }) {
   const [problemTab, setProblemTab] = useState("Description");
   const [resultTab, setResultTab] = useState("Run result");
   const [mobileTab, setMobileTab] = useState("Problem");
-  const [help, setHelp] = useState<"Hint" | "AI" | null>(null);
+  const [help, setHelp] = useState<"Hint" | null>(null);
+  const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
   const [helpText, setHelpText] = useState("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<QueryResult | null>(null);
@@ -243,7 +246,7 @@ function Workspace({ problem }: { problem: Problem }) {
             </button>
           ))}
         </div>
-        <div className="workspace-layout">
+        <div className={`workspace-layout ${isAiPanelOpen ? "with-ai" : ""}`}>
           <section
             className={
               "problem-pane mobile-pane" +
@@ -327,13 +330,13 @@ function Workspace({ problem }: { problem: Problem }) {
               <section className="help-drawer" aria-label="Problem help">
                 <div className="section-heading">
                   <div className="help-tabs">
-                    {(["Hint", "AI"] as const).map((t) => (
+                    {(["Hint"] as const).map((t) => (
                       <button
                         className={help === t ? "active" : ""}
                         onClick={() => setHelp(t)}
                         key={t}
                       >
-                        {t === "AI" ? "Ask AI" : "Hint"}
+                        {t}
                       </button>
                     ))}
                   </div>
@@ -373,8 +376,8 @@ function Workspace({ problem }: { problem: Problem }) {
                     : undefined
                 }
                 onClick={(e) => {
-                  helpTrigger.current = e.currentTarget;
-                  setHelp("AI");
+                  setIsAiPanelOpen(true);
+                  if (expanded) setExpanded(false);
                 }}
               >
                 Ask AI
@@ -621,6 +624,13 @@ function Workspace({ problem }: { problem: Problem }) {
               </div>
             </section>
           </div>
+          {isAiPanelOpen && (
+            <AiChatPanel 
+              problem={problem} 
+              code={code} 
+              onClose={() => setIsAiPanelOpen(false)} 
+            />
+          )}
         </div>
       </main>
       {confirmReset && (

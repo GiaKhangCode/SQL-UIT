@@ -1292,7 +1292,7 @@ body:has(.assignment-work-page), body:has(.scope-detail-page) { background: var(
 .dashboard-activity-card .section-heading h2 { font-size:16px; }
 .dashboard-activity-card .section-heading small { display:block; margin-top:4px; }
 .dashboard-activity-body { display:grid; grid-template-columns:300px minmax(0,1fr); gap:40px; }
-.dashboard-activity-stats { display:grid; grid-template-columns:1fr auto; align-content:start; gap:12px; }
+.dashboard-activity-stats { display:grid; grid-template-columns:1fr; align-content:start; gap:12px; }
 .dashboard-solved { grid-column:1/-1; display:flex; align-items:baseline; gap:12px; margin-bottom:8px; }
 .dashboard-solved b { font-size:38px; line-height:44px; }
 .dashboard-solved span { color:var(--muted); font-size:12px; }

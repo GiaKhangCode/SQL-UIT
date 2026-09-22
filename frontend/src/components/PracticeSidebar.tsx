@@ -2,65 +2,68 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { problems } from "../data/mockData";
 import { Activity } from "./Activity";
-// Exact intensity fixtures from Figma's September contribution calendar.
-const calendarLevels: Record<number, number> = {
-  1: 3,
-  2: 1,
-  4: 4,
-  5: 3,
-  7: 1,
-  8: 1,
-  9: 3,
-  10: 4,
-  12: 1,
-  14: 4,
-  15: 3,
-  18: 2,
-};
-const ranges = ["Week", "Sep 2026", "All time"] as const;
+import { DailySubmission, studentApi } from "../services/studentApi";
+import { useLoad } from "./useLoad";
+
+function formatLearners(num: number): string {
+  if (num >= 1000) {
+    return (num / 1000).toFixed(1) + "k";
+  }
+  return num.toString();
+}
+
+const ranges = ["Week", "Month", "All time"] as const;
 type Range = (typeof ranges)[number];
-const rankings: Record<Range, { id: string; learners: string }[]> = {
-  Week: [
-    { id: "p1", learners: "1.2k" },
-    { id: "p2", learners: "986" },
-    { id: "p6", learners: "742" },
-    { id: "p9", learners: "624" },
-    { id: "p10", learners: "518" },
-  ],
-  "Sep 2026": [
-    { id: "p2", learners: "3.4k" },
-    { id: "p1", learners: "2.8k" },
-    { id: "p10", learners: "1.9k" },
-    { id: "p6", learners: "1.5k" },
-    { id: "p9", learners: "1.1k" },
-  ],
-  "All time": [
-    { id: "p1", learners: "12.8k" },
-    { id: "p6", learners: "9.6k" },
-    { id: "p2", learners: "8.4k" },
-    { id: "p9", learners: "6.2k" },
-    { id: "p10", learners: "4.7k" },
-  ],
-};
-export function PracticeActivity() {
+export function PracticeActivity({ submissions = [] }: { submissions?: DailySubmission[] }) {
+  const now = new Date();
+  const currentMonth = now.toLocaleString('default', { month: 'long' });
+  const currentYear = now.getFullYear();
+  
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const firstDayOfWeek = new Date(now.getFullYear(), now.getMonth(), 1).getDay();
+  // 0 = Sunday, 1 = Monday, ... 6 = Saturday. We want Monday=0, Sunday=6
+  const emptyCells = (firstDayOfWeek + 6) % 7;
+  
+  // Calculate activity levels for the month
+  const calendarLevels: Record<number, number> = {};
+  let activeDays = 0;
+  let totalSubmissions = 0;
+  
+  submissions.forEach(sub => {
+    const d = new Date(sub.date);
+    if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) {
+      const day = d.getDate();
+      let level = 1;
+      if (sub.count >= 7) level = 4;
+      else if (sub.count >= 5) level = 3;
+      else if (sub.count >= 3) level = 2;
+      
+      calendarLevels[day] = level;
+      activeDays++;
+      totalSubmissions += sub.count;
+    }
+  });
+
   return (
     <section className="practice-activity">
       <h3>
-        September activity <small>2026</small>
+        {currentMonth} activity <small>{currentYear}</small>
       </h3>
-      <p className="tiny muted">24 submissions · 12 active days</p>
+      <p className="tiny muted">{totalSubmissions} submissions · {activeDays} active days</p>
       <div
         className="practice-calendar"
         role="img"
-        aria-label="September 2026 demonstration SQL activity calendar. Twelve active days; deeper purple indicates higher activity."
+        aria-label={`${currentMonth} ${currentYear} SQL activity calendar. ${activeDays} active days; deeper purple indicates higher activity.`}
       >
         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
           <span className="practice-calendar-weekday" key={day}>
             {day}
           </span>
         ))}
-        <span />
-        {Array.from({ length: 30 }, (_, i) => (
+        {Array.from({ length: emptyCells }, (_, i) => (
+          <span key={`empty-${i}`} />
+        ))}
+        {Array.from({ length: daysInMonth }, (_, i) => (
           <span
             key={i}
             className={
@@ -68,10 +71,7 @@ export function PracticeActivity() {
               (calendarLevels[i + 1] || 0)
             }
             title={
-              "September " +
-              (i + 1) +
-              " · Activity level " +
-              (calendarLevels[i + 1] || 0)
+              `${currentMonth} ${i + 1} · Activity level ${calendarLevels[i + 1] || 0}`
             }
           >
             {i + 1}
@@ -86,13 +86,19 @@ export function PracticeActivity() {
         <span>More</span>
       </div>
       <div className="practice-mobile-heatmap">
-        <Activity small />
+        <Activity small submissions={submissions} />
       </div>
     </section>
   );
 }
 export function PracticeTrending() {
   const [range, setRange] = useState<Range>("Week");
+  
+  const { data: trendingProblems, loading } = useLoad(
+    async () => await studentApi.getTrending(range),
+    [range]
+  );
+  
   return (
     <section className="practice-trending">
       <h3>Trending problems</h3>
@@ -113,8 +119,11 @@ export function PracticeTrending() {
         aria-label={range + " trending problems"}
         key={range}
       >
-        {rankings[range].map((row) => {
-          const p = problems.find((p) => p.id === row.id)!;
+        {loading ? (
+          <div style={{ padding: "16px", color: "var(--muted)", fontSize: 13 }}>Loading...</div>
+        ) : trendingProblems?.map((row: any) => {
+          const p = problems.find((p) => p.id === row.id);
+          if (!p) return null;
           return (
             <Link
               className="trending-problem"
@@ -125,7 +134,7 @@ export function PracticeTrending() {
                 <b>{p.number}</b> {p.title}
               </span>
               <small>
-                {row.learners}
+                {formatLearners(row.learners)}
                 <span className="trending-learners"> learners</span>
               </small>
             </Link>

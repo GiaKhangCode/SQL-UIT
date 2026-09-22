@@ -1,33 +1,81 @@
-# Dependencies
+# =========================
+# Node & Frontend (React/Vite)
+# =========================
 node_modules/
-
-# Build output
 dist/
+dist-ssr/
 build/
+*.tsbuildinfo
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
 # Environment variables
 .env
 .env.local
-.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+backend/.env
 
-# Keep the example environment file
+# Keep example env files
 !.env.example
+!backend/.env.example
 
-# TypeScript build info
-*.tsbuildinfo
+# npm / yarn / pnpm cache
+.npm
+.yarn/cache
+.pnpm-store
 
-# Logs
-npm-debug.log*
-yarn-debug.log*
-pnpm-debug.log*
+# Eslint / Prettier
+.eslintcache
+.stylelintcache
 
-# IDE/editor files
-.vscode/
-.idea/
+# =========================
+# Python & Backend (FastAPI)
+# =========================
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
 
-# OS files
+# Virtual Environments
+venv/
+env/
+.venv/
+.env/
+env.bak/
+venv.bak/
+backend/venv/
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Databases
+*.sqlite3
+*.db
+
+# =========================
+# OS & IDE
+# =========================
 .DS_Store
 Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
 
-# Codex temporary files
+# =========================
+# Misc Temporary files
+# =========================
 .codex-backup/
+.gemini/

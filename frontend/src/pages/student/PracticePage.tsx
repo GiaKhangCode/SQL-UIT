@@ -8,11 +8,6 @@ import {
   PracticeActivity,
   PracticeTrending,
 } from "../../components/PracticeSidebar";
-import {
-  createProblemList,
-  getFavorites,
-  getProblemLists,
-} from "../../services/studentPreferences";
 export function PracticePage() {
   const [search, setSearch] = useState("");
   const [topic, setTopic] = useState("");
@@ -26,35 +21,45 @@ export function PracticePage() {
     progress: "",
   });
   const [listsOpen, setListsOpen] = useState(true);
-  const [lists, setLists] = useState(getProblemLists);
   const [selectedList, setSelectedList] = useState("");
   const [createList, setCreateList] = useState(false);
   const [listName, setListName] = useState("");
   const [visibleCount, setVisibleCount] = useState(8);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
-  const favoriteIds = getFavorites();
-  const { data, loading, error } = useLoad(
-    async () =>
-      (
-        await studentApi.getProblems({
-          search,
-          topic,
-          difficulty,
-          progress,
-          // Load the full mock catalogue so infinite scrolling has additional rows
-          // to reveal; favoritesOnly still narrows the rendered results below.
-          includeTrending: true,
-        })
-      ).filter(
-        (p) =>
-          (!favoritesOnly || favoriteIds.includes(p.id)) &&
-          (!selectedList ||
-            lists
-              .find((list) => list.id === selectedList)
-              ?.problemIds.includes(p.id)),
-      ),
-    [search, topic, difficulty, progress, favoritesOnly, selectedList],
+
+  const { data: prefData, mutate: mutatePref } = useLoad(
+    studentApi.getPreferences,
   );
+  const { data: dashData } = useLoad(studentApi.getDashboard);
+
+  const favoriteIds = prefData?.favorites || [];
+  const lists = prefData?.customLists || [];
+
+  const {
+    data: rawProblems,
+    loading,
+    error,
+  } = useLoad(
+    async () =>
+      await studentApi.getProblems({
+        search,
+        topic,
+        difficulty,
+        progress,
+        includeTrending: true,
+      }),
+    [search, topic, difficulty, progress],
+  );
+
+  const data =
+    rawProblems?.filter(
+      (p) =>
+        (!favoritesOnly || favoriteIds.includes(p.id)) &&
+        (!selectedList ||
+          lists
+            .find((list: any) => list.id === selectedList)
+            ?.problemIds.includes(p.id)),
+    ) || [];
   useEffect(() => {
     setVisibleCount(8);
   }, [search, topic, difficulty, progress, favoritesOnly, selectedList]);
@@ -166,10 +171,12 @@ export function PracticePage() {
             </div>
           </div>
           <div className="problem-list" aria-busy={loading}>
-            {loading && data && (
-              <span className="sr-only" role="status">Updating problem results…</span>
+            {loading && rawProblems && (
+              <span className="sr-only" role="status">
+                Updating problem results…
+              </span>
             )}
-            {loading && !data ? (
+            {loading && !rawProblems ? (
               <Loading />
             ) : error ? (
               <p role="alert">{error}</p>
@@ -223,15 +230,21 @@ export function PracticePage() {
                     />
                   </Link>
                 ))}
-                <div ref={loadMoreRef} className="practice-load-more" aria-live="polite">
-                  {visibleCount < data.length ? "Loading more problems…" : `Showing all ${data.length} problems`}
+                <div
+                  ref={loadMoreRef}
+                  className="practice-load-more"
+                  aria-live="polite"
+                >
+                  {visibleCount < data.length
+                    ? "Loading more problems…"
+                    : `Showing all ${data.length} problems`}
                 </div>
               </>
             )}
           </div>
         </div>
         <aside className="practice-sidebar">
-          <PracticeActivity />
+          <PracticeActivity submissions={dashData?.submissionsPerDay || []} />
           <section className="practice-lists">
             <div className="practice-lists-heading">
               <h3>My Lists</h3>
@@ -266,7 +279,7 @@ export function PracticePage() {
                   <span>★</span> Favorite{" "}
                   <small aria-label="Private list">♙</small>
                 </button>
-                {lists.map((list) => (
+                {lists.map((list: any) => (
                   <button
                     className="custom-list-toggle"
                     key={list.id}
@@ -366,12 +379,14 @@ export function PracticePage() {
           onClose={() => setCreateList(false)}
         >
           <form
-            onSubmit={(e) => {
+            onSubmit={async (e) => {
               e.preventDefault();
               if (!listName.trim()) return;
-              setLists(
-                createProblemList(listName, data?.map((p) => p.id) || []),
+              await studentApi.createList(
+                listName,
+                data?.map((p) => p.id) || [],
               );
+              mutatePref();
               setCreateList(false);
             }}
           >

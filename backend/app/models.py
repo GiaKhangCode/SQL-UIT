@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Float, ForeignKey, Text, DateTime, JSON, Boolean
+from sqlalchemy import Column, String, Integer, Float, ForeignKey, Text, UnicodeText, DateTime, JSON, Boolean
 from sqlalchemy.orm import relationship
 import datetime
 import uuid
@@ -57,3 +57,42 @@ class ProblemDraft(Base):
     user_id = Column(String(50), ForeignKey("users.id"), nullable=False)
     problem_id = Column(String(50), ForeignKey("problems.id"), nullable=False)
     draft_query = Column(Text, nullable=True)
+
+class Favorite(Base):
+    __tablename__ = "favorites"
+    
+    user_id = Column(String(50), ForeignKey("users.id"), primary_key=True)
+    problem_id = Column(String(50), ForeignKey("problems.id"), primary_key=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class ProblemList(Base):
+    __tablename__ = "problem_lists"
+    
+    id = Column(String(50), primary_key=True, default=generate_uuid)
+    user_id = Column(String(50), ForeignKey("users.id"), nullable=False)
+    name = Column(String(255), nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class ProblemListItem(Base):
+    __tablename__ = "problem_list_items"
+    
+    list_id = Column(String(50), ForeignKey("problem_lists.id", ondelete="CASCADE"), primary_key=True)
+    problem_id = Column(String(50), ForeignKey("problems.id", ondelete="CASCADE"), primary_key=True)
+
+class AiChatSession(Base):
+    __tablename__ = "ai_chat_sessions"
+    
+    id = Column(String(50), primary_key=True, default=generate_uuid)
+    user_id = Column(String(50), ForeignKey("users.id"), nullable=False)
+    problem_id = Column(String(50), ForeignKey("problems.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+class AiChatMessage(Base):
+    __tablename__ = "ai_chat_messages"
+    
+    id = Column(String(50), primary_key=True, default=generate_uuid)
+    session_id = Column(String(50), ForeignKey("ai_chat_sessions.id", ondelete="CASCADE"), nullable=False)
+    role = Column(String(10), nullable=False) # 'user' or 'ai'
+    content = Column(UnicodeText, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)

@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine, Base
 
+import app.models # Ensure models are loaded before create_all
 # Tự động tạo bảng nếu chưa có
 # (Trong thực tế nên dùng Alembic để migration)
 Base.metadata.create_all(bind=engine)
@@ -21,10 +22,12 @@ app.add_middleware(
 def read_root():
     return {"message": "Welcome to SQL-UIT API Backend!"}
 
-from app.routers import auth, dashboard, problems, submissions
+from app.routers import auth, dashboard, problems, submissions, preferences, ai
 
 # Import routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
 app.include_router(dashboard.router, prefix="/api/student/dashboard", tags=["Dashboard"])
 app.include_router(problems.router, prefix="/api/problems", tags=["Problems"])
 app.include_router(submissions.router, prefix="/api/submissions", tags=["Submissions"])
+app.include_router(preferences.router, prefix="/api/student/preferences", tags=["Preferences"])
+app.include_router(ai.router, prefix="/api/ai", tags=["AI"])

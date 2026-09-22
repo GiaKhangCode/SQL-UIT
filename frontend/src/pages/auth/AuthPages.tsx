@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { APP_NAME } from "../../data/mockData";
-import { validEmail } from "../../services/mockAuthService";
+import { validEmail } from "../../services/authService";
 import { ThemeToggle } from "../../components/AppHeader";
 type Errors = Record<string, string>;
 function PasswordField({

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { studentApi } from "../../services/studentApi";
-import { problems, type Submission } from "../../data/mockData";
+import { type Submission } from "../../data/mockData";
 import { SubmissionDetails } from "../../components/SubmissionDetails";
 import { useLoad } from "../../components/useLoad";
 import { Empty, Loading, PageHeading, Status } from "../../components/ui";
@@ -14,6 +14,8 @@ export function SubmissionsPage() {
     () => studentApi.getSubmissions({ search, result, source }),
     [search, result, source],
   );
+  
+  const { data: problemsList } = useLoad(() => studentApi.getProblems(), []);
   return (
     <section className="page submissions-page">
       <PageHeading
@@ -83,8 +85,8 @@ export function SubmissionsPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.map((s) => {
-                  const p = problems.find((p) => p.id === s.problemId)!;
+                {data.map((s: Submission) => {
+                  const p = problemsList?.find((p: any) => p.id === s.problemId) || { number: "?", title: "Unknown problem" };
                   return (
                     <tr key={s.id}>
                       <td>
@@ -131,6 +133,7 @@ export function SubmissionsPage() {
       {selected && (
         <SubmissionDetails
           submission={selected}
+          problem={problemsList?.find((p: any) => p.id === selected.problemId) || { number: "?", title: "Unknown problem", id: selected.problemId }}
           onClose={() => setSelected(null)}
         />
       )}

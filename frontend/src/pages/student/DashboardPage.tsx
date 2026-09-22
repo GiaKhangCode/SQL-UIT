@@ -52,12 +52,76 @@ export function DashboardPage() {
           <div className="deadline-scroll" tabIndex={0} aria-label="Upcoming deadlines">
             {data.deadlines.slice(0, 3).map((item) => <Link className="dashboard-deadline-row" key={item.id} to={item.to}><time><b>{item.date.slice(5, 7) === "09" ? "SEP" : item.date.slice(5, 7)}</b><strong>{item.date.slice(8)}</strong></time><span><b>{item.title}</b><small>{item.kind} · {item.context}</small></span><em>in {Math.max(1, Number(item.date.slice(8)) - 21)} days</em></Link>)}
           </div>
-          <div className="dashboard-week"><div><b>This week</b><Link to="/assignments">Open calendar</Link></div><div className="dashboard-week-days">{[21,22,23,24,25,26,27].map((day) => <span key={day}><small>{["M","T","W","T","F","S","S"][day-21]}</small><b className={day===21 ? "today" : ""}>{day}</b>{day >= 23 && day <= 24 && <i />}</span>)}</div></div>
+          <div className="dashboard-week">
+            <div><b>This week</b><Link to="/assignments">Open calendar</Link></div>
+            <div className="dashboard-week-days">
+              {(() => {
+                const today = new Date();
+                const currentDayOfWeek = today.getDay();
+                const mondayOffset = currentDayOfWeek === 0 ? -6 : 1 - currentDayOfWeek;
+                const monday = new Date(today);
+                monday.setDate(today.getDate() + mondayOffset);
+
+                const weekDays = Array.from({ length: 7 }, (_, i) => {
+                  const d = new Date(monday);
+                  d.setDate(monday.getDate() + i);
+                  return {
+                    date: d.getDate(),
+                    fullDate: d.toISOString().split("T")[0],
+                    isToday: d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear()
+                  };
+                });
+                
+                const deadlineDates = new Set(data.deadlines.map((item: any) => item.date));
+
+                return weekDays.map((wd, i) => (
+                  <span key={i}>
+                    <small>{["M","T","W","T","F","S","S"][i]}</small>
+                    <b className={wd.isToday ? "today" : ""}>{wd.date}</b>
+                    {deadlineDates.has(wd.fullDate) && <i />}
+                  </span>
+                ));
+              })()}
+            </div>
+          </div>
         </aside>
       </div>
       <section className="activity-section dashboard-activity-card">
-        <div className="section-heading"><div><h2>SQL activity</h2><small className="muted">Mar 2 – Sep 21, 2026</small></div></div>
-        <div className="dashboard-activity-body"><div className="dashboard-activity-stats"><div className="dashboard-solved"><b>{data.solved}</b><span>problems solved</span></div><p><span>● Easy</span><strong>{data.easy}</strong></p><p><span>● Medium</span><strong>{data.medium}</strong></p><p><span>● Hard</span><strong>{data.hard}</strong></p><small>Current streak: 7 days</small></div><Activity /></div>
+        <div className="section-heading">
+          <div>
+            <h2>SQL activity</h2>
+            <small className="muted">
+              {(() => {
+                const today = new Date();
+                const sixMonthsAgo = new Date();
+                sixMonthsAgo.setDate(today.getDate() - 26 * 7);
+                return `${sixMonthsAgo.toLocaleString("default", { month: "short" })} ${sixMonthsAgo.getDate()} – ${today.toLocaleString("default", { month: "short" })} ${today.getDate()}, ${today.getFullYear()}`;
+              })()}
+            </small>
+          </div>
+        </div>
+        <div className="dashboard-activity-body">
+          <div className="dashboard-activity-stats">
+            <div className="dashboard-solved">
+              <b>{data.solved}</b>
+              <span>problems solved</span>
+            </div>
+            <p>
+              <span>● Easy</span>
+              <strong>{data.easy}</strong>
+            </p>
+            <p>
+              <span>● Medium</span>
+              <strong>{data.medium}</strong>
+            </p>
+            <p>
+              <span>● Hard</span>
+              <strong>{data.hard}</strong>
+            </p>
+            <small>Current streak: {data.currentStreak} days</small>
+          </div>
+          <Activity submissions={data.submissionsPerDay} />
+        </div>
       </section>
       <div className="quick-actions"><Link to="/practice">Browse practice →</Link><Link to="/assignments">View assignments →</Link><Link to="/contests">Explore contests →</Link></div>
     </section>

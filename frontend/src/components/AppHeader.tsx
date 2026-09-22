@@ -6,6 +6,8 @@ import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { studentApi } from "../services/studentApi";
 import { storage } from "../services/storage";
+import { useLoad } from "./useLoad";
+
 export function Brand() {
   return (
     <Link
@@ -52,7 +54,14 @@ function StudentControls() {
   const root = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement | null>(null);
-  const streak = studentApi.getLearningStreak();
+  
+  const { data } = useLoad(studentApi.getDashboard);
+  const streak = {
+    current: data?.currentStreak || 0,
+    best: data?.currentStreak || 0, // Mock best to current for now
+    complete: false // Mock complete
+  };
+
   function close() {
     setPanel(null);
     trigger.current?.focus();

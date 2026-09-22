@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 export function useLoad<T>(
   load: () => Promise<T>,
   dependencies: unknown[] = [],
@@ -6,6 +6,25 @@ export function useLoad<T>(
   const [data, setData] = useState<T>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const mutate = useCallback(async (newData?: T) => {
+    if (newData !== undefined) {
+      setData(newData);
+      return newData;
+    }
+    setLoading(true);
+    setError("");
+    try {
+      const value = await load();
+      setData(value);
+      return value;
+    } catch (err) {
+      setError("Student data could not be loaded. Please refresh to try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, dependencies);
+
   useEffect(() => {
     let active = true;
     setLoading(true);
@@ -27,5 +46,6 @@ export function useLoad<T>(
       active = false;
     };
   }, dependencies);
-  return { data, loading, error };
+  
+  return { data, loading, error, mutate };
 }

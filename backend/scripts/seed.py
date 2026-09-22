@@ -26,6 +26,20 @@ def seed_data():
         db.add(demo_user)
         print("Đã tạo User: student@demo.local")
 
+    # 1.5 Tạo Instructor mẫu
+    instructor_user = db.query(User).filter(User.email == "instructor@demo.local").first()
+    if not instructor_user:
+        instructor_user = User(
+            id="instructor-demo",
+            email="instructor@demo.local",
+            hashed_password=get_password_hash("password123"),
+            name="Giảng Viên",
+            initials="GV",
+            role="instructor"
+        )
+        db.add(instructor_user)
+        print("Đã tạo User: instructor@demo.local")
+
     # 2. Tạo Problem mẫu (p1)
     p1 = db.query(Problem).filter(Problem.id == "p1").first()
     if not p1:

@@ -1,16 +1,18 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { problems, type Submission } from "../data/mockData";
+import { type Submission } from "../data/mockData";
 import { Dialog, Status } from "./ui";
 export function SubmissionDetails({
   submission,
+  problem,
   onClose,
 }: {
   submission: Submission;
+  problem: any;
   onClose: () => void;
 }) {
   const [copy, setCopy] = useState("");
-  const p = problems.find((p) => p.id === submission.problemId)!;
+  const p = problem;
   // Read the immutable attempt snapshot, never the current draft.
   const query = submission.query;
   return (

@@ -1,18 +1,6 @@
-import {
-  assignments,
-  classes,
-  contests,
-  deadlines,
-  groups,
-  problems,
-  submissions,
-  type Progress,
-  type Submission,
-  type Verdict,
-  type DataTable,
-} from "../data/mockData";
-import { delay, storage } from "./storage";
-import { calculateStreak, demoAcceptedDays } from "./studentPreferences";
+import { apiFetch } from "./apiClient";
+import { storage } from "./storage";
+
 export type ProblemFilters = {
   includeTrending?: boolean;
   search?: string;
@@ -20,159 +8,156 @@ export type ProblemFilters = {
   difficulty?: string;
   progress?: string;
 };
+
 export type QueryResult = {
-  status: "Tabular result" | Verdict;
+  status: string;
   message: string;
-  table?: DataTable;
+  table?: any;
 };
-const attempts: Submission[] = [];
-const progress = new Map<string, Progress>();
-// Deterministic simulation: no SQL is executed and no real grading occurs.
-function evaluate(id: string, query: string, submit: boolean): QueryResult {
-  const problem = problems.find((p) => p.id === id);
-  const text = query.trim().toLowerCase();
-  if (!problem)
-    return { status: "Runtime Error", message: "This problem is unavailable." };
-  if (!text || !/\bselect\b/.test(text))
-    return {
-      status: "Runtime Error",
-      message: "The mock runner expects a SELECT statement.",
-    };
-  if (text.includes("mock:timeout"))
-    return {
-      status: "Time Limit Exceeded",
-      message:
-        "The simulated query exceeded the time limit. Review joins and filters.",
-    };
-  if (text.includes("mock:error") || text.includes("missingtable"))
-    return {
-      status: "Runtime Error",
-      message: "The mock database could not find the requested table.",
-    };
-  if (
-    submit &&
-    (!text.includes("order by") ||
-      text.includes("mock:wrong") ||
-      (id === "p4" && !text.includes("dense_rank")))
-  )
-    return {
-      status: "Wrong Answer",
-      message:
-        "The simulated result does not match the required rows, ordering or ranking.",
-    };
-  return {
-    status: submit ? "Accepted" : "Tabular result",
-    message: submit
-      ? "Mock grading complete · demonstration checks passed."
-      : "Mock preview · sample rows returned in 42 ms.",
-    table: problem.expected,
-  };
+
+export interface DailySubmission {
+  date: string;
+  count: number;
 }
+
+export interface DashboardStats {
+  solved: number;
+  easy: number;
+  medium: number;
+  hard: number;
+  continuing: any[];
+  deadlines: any[];
+  currentStreak: number;
+  submissionsPerDay: DailySubmission[];
+}
+
 export const studentApi = {
   getLearningStreak: () => {
-    const date = (value: Date) =>
-      value.toLocaleDateString("en-CA", { timeZone: "Asia/Ho_Chi_Minh" });
-    return calculateStreak(
-      [
-        ...demoAcceptedDays,
-        ...attempts
-          .filter((a) => a.result === "Accepted")
-          .map((a) => date(new Date(a.submittedAt))),
-      ],
-      date(new Date()),
+    // For now, returning a static or simple streak
+    return 0;
+  },
+
+  getDashboard: async (): Promise<DashboardStats> => {
+    return await apiFetch("/api/student/dashboard");
+  },
+
+  getProblems: async (f: ProblemFilters = {}) => {
+    let url = "/api/problems";
+    // We can add query params if the backend supports it, for now fetch all and filter in frontend or backend
+    // Since our backend doesn't take query params yet for get_problems, we filter them here
+    const problems: any[] = await apiFetch(url);
+    
+    return problems.filter(
+      (p) =>
+        (!f.search || `${p.title} ${p.number}`.toLowerCase().includes(f.search.toLowerCase())) &&
+        (!f.topic || p.topic === f.topic) &&
+        (!f.difficulty || p.difficulty === f.difficulty) &&
+        (!f.progress || p.progress === f.progress)
     );
   },
-  getDashboard: () =>
-    delay({
-      solved: 24,
-      easy: 16,
-      medium: 7,
-      hard: 1,
-      continuing: problems.filter(
-        (p) => (progress.get(p.id) || p.progress) === "In progress",
-      ),
-      deadlines,
-    }),
-  getProblems: (f: ProblemFilters = {}) =>
-    delay(
-      problems
-        .filter((p) => f.includeTrending || p.practiceListed !== false)
-        .map((p) => ({ ...p, progress: progress.get(p.id) || p.progress }))
-        .sort((a, b) => a.number.localeCompare(b.number))
-        .filter(
-          (p) =>
-            (!f.search ||
-              `${p.title} ${p.number}`
-                .toLowerCase()
-                .includes(f.search.toLowerCase())) &&
-            (!f.topic || p.topic === f.topic) &&
-            (!f.difficulty || p.difficulty === f.difficulty) &&
-            (!f.progress || p.progress === f.progress),
-        ),
-    ),
-  getProblem: (id: string) => {
-    const problem = problems.find((p) => p.id === id);
-    return delay(
-      problem
-        ? { ...problem, progress: progress.get(id) || problem.progress }
-        : undefined,
-    );
+
+  getProblem: async (id: string) => {
+    return await apiFetch(`/api/problems/${id}`);
   },
-  getAssignments: () => delay({ classes, groups, assignments, deadlines }),
-  getContests: () => delay(contests),
-  getSubmissions: (
-    f: { search?: string; result?: string; source?: string } = {},
-  ) =>
-    delay(
-      [...attempts, ...submissions].filter(
-        (s) =>
-          (!f.search ||
-            problems
-              .find((p) => p.id === s.problemId)
-              ?.title.toLowerCase()
-              .includes(f.search.toLowerCase())) &&
-          (!f.result || s.result === f.result) &&
-          (!f.source || s.source === f.source),
-      ),
-    ),
-  runQuery: (id: string, query: string, _database: string) =>
-    delay(evaluate(id, query, false), 650),
-  async submitSolution(
+
+  getAssignments: async () => {
+    // Mock for now until Assignment feature is built
+    return { classes: [], groups: [], assignments: [], deadlines: [] };
+  },
+
+  getContests: async () => {
+    // Mock for now
+    return [];
+  },
+
+
+  runQuery: async (id: string, query: string, database: string): Promise<QueryResult> => {
+    return await apiFetch(`/api/problems/${id}/run`, {
+      method: "POST",
+      body: JSON.stringify({ query, database, source: "Practice", context: "Practice" }),
+    });
+  },
+
+  submitSolution: async (
     id: string,
     query: string,
-    _database: string,
-    source: Submission["source"] = "Practice",
-    context = "Practice",
-  ) {
-    const result = await delay(evaluate(id, query, true), 750);
-    if (result.status !== "Tabular result")
-      attempts.unshift({
-        id: "local-" + Date.now(),
-        problemId: id,
-        source,
-        context,
-        result: result.status,
-        score: result.status === "Accepted" ? 100 : 0,
-        submittedAt: new Date().toISOString(),
-        query,
-        database: _database,
-      });
-    if (result.status === "Accepted") progress.set(id, "Solved");
-    return result;
+    database: string,
+    source: string = "Practice",
+    context: string = "Practice"
+  ): Promise<QueryResult> => {
+    return await apiFetch(`/api/problems/${id}/submit`, {
+      method: "POST",
+      body: JSON.stringify({ query, database, source, context }),
+    });
   },
-  resetDatabase: (id: string, _database: string) =>
-    delay(
-      problems
-        .find((p) => p.id === id)
-        ?.tables.map((t) => ({ ...t, rows: t.rows.map((r) => [...r]) })) || [],
-    ),
-  getHint: (id: string, mode: "Hint" | "AI") =>
-    delay(
-      (mode === "AI" ? "Mock AI guidance: " : "") +
-        (problems.find((p) => p.id === id)?.hint ||
-          "Break the problem into smaller steps."),
-    ),
+
+  resetDatabase: async (id: string, database: string) => {
+    // For Sandbox, nothing needs to be reset permanently for the user, just fetching the problem again
+    const problem = await apiFetch(`/api/problems/${id}`);
+    return problem.tables;
+  },
+
+  getHint: async (id: string, mode: "Hint" | "AI") => {
+    const problem = await apiFetch(`/api/problems/${id}`);
+    if (mode === "AI") {
+        return "AI guidance: " + (problem.hint || "Phân tích kỹ đề bài và các bảng dữ liệu.");
+    }
+    return problem.hint || "Không có gợi ý cho bài tập này.";
+  },
+
+  askAi: async (problemContext: any, codeDraft: string, userMessage: string, sessionId?: string) => {
+    return await apiFetch("/api/ai/chat", {
+      method: "POST",
+      body: JSON.stringify({
+        problemContext,
+        codeDraft,
+        userMessage,
+        sessionId,
+      }),
+    });
+  },
+
+  getAiChatSessions: async (problemId: string) => {
+    return await apiFetch(`/api/ai/sessions/${problemId}`);
+  },
+
+  getAiChatMessages: async (sessionId: string) => {
+    return await apiFetch(`/api/ai/sessions/messages/${sessionId}`);
+  },
+
   getDraft: (id: string) => storage.get("sql-practice:draft:" + id),
-  saveDraft: (id: string, query: string) =>
-    storage.set("sql-practice:draft:" + id, query),
+  saveDraft: (id: string, query: string) => storage.set("sql-practice:draft:" + id, query),
+
+  getPreferences: async () => {
+    return await apiFetch("/api/student/preferences");
+  },
+
+  toggleFavorite: async (problemId: string) => {
+    return await apiFetch(`/api/student/preferences/favorites/${problemId}`, {
+      method: "POST"
+    });
+  },
+
+  createList: async (name: string, problemIds: string[]) => {
+    return await apiFetch("/api/student/preferences/lists", {
+      method: "POST",
+      body: JSON.stringify({ name, problemIds })
+    });
+  },
+
+  getTrending: async (range: string) => {
+    return await apiFetch(`/api/problems/trending?range=${encodeURIComponent(range)}`);
+  },
+
+  getSubmissions: async (filters: { search?: string; result?: string; source?: string } = {}) => {
+    const params = new URLSearchParams();
+    if (filters.search) params.append("search", filters.search);
+    if (filters.result) params.append("result", filters.result);
+    if (filters.source) params.append("source", filters.source);
+    
+    const qs = params.toString();
+    const url = qs ? `/api/submissions?${qs}` : "/api/submissions";
+    
+    return await apiFetch(url);
+  }
 };

@@ -1,8 +1,8 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 import {
-  mockAuthService,
+  authService,
   type StudentSession,
-} from "../services/mockAuthService";
+} from "../services/authService";
 type Auth = {
   session: StudentSession | null;
   login: (email: string, password: string) => Promise<void>;
@@ -12,15 +12,24 @@ type Auth = {
 };
 const AuthContext = createContext<Auth | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState(mockAuthService.restoreSession);
+  const [session, setSession] = useState(authService.restoreSession);
+
+  // Background session verify
+  useEffect(() => {
+    authService.restoreSessionAsync().then(user => {
+      if (!user && session) setSession(null);
+      if (user && !session) setSession(user);
+    });
+  }, []);
+
   const auth: Auth = {
     session,
-    login: async (e, p) => setSession(await mockAuthService.login(e, p)),
+    login: async (e, p) => setSession(await authService.login(e, p)),
     register: async (n, e, p) =>
-      setSession(await mockAuthService.register(n, e, p)),
-    demoLogin: async () => setSession(await mockAuthService.demoLogin()),
+      setSession(await authService.register(n, e, p)),
+    demoLogin: async () => setSession(await authService.demoLogin()),
     logout: () => {
-      mockAuthService.logout();
+      authService.logout();
       setSession(null);
     },
   };
