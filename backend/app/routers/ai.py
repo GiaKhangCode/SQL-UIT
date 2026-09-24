@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 import os
+import httpx
 from google import genai
 from google.genai import types
 from app.schemas import AiChatRequest, AiChatResponse, AiChatSessionSchema, AiChatMessageSchema
@@ -24,9 +25,13 @@ async def chat_with_ai(
     db: Session = Depends(get_db), 
     current_user: User = Depends(get_current_user)
 ):
-    api_key = os.getenv("GEMINI_API_KEY")
+    provider = os.getenv("AI_PROVIDER", "gemini").strip().lower()
+    if provider not in {"gemini", "upstage"}:
+        raise HTTPException(status_code=500, detail="AI_PROVIDER must be 'gemini' or 'upstage'.")
+
+    api_key = os.getenv("UPSTAGE_API_KEY" if provider == "upstage" else "GEMINI_API_KEY")
     if not api_key:
-        raise HTTPException(status_code=500, detail="GEMINI_API_KEY is not configured on the server.")
+        raise HTTPException(status_code=500, detail=f"{provider.upper()}_API_KEY is not configured on the server.")
 
     try:
         # Determine session or create new one
@@ -48,8 +53,6 @@ async def chat_with_ai(
         db.add(user_msg)
         db.commit()
 
-        client = genai.Client(api_key=api_key)
-        
         # Build context
         problem = request.problem_context
         context_str = f"Problem: {problem.title}\nDescription: {problem.description}\nRequirements: {problem.requirements}\n"
@@ -62,32 +65,58 @@ async def chat_with_ai(
         # Prepare messages from DB history
         history_msgs = db.query(AiChatMessage).filter(AiChatMessage.session_id == session.id).order_by(AiChatMessage.created_at).all()
         
-        messages = []
+        history = []
         for msg in history_msgs:
             if msg.role == "user" and msg.id == user_msg.id:
                 # The latest user message gets the context injected
                 current_msg = f"Context:\n{context_str}\n\nUser Question: {msg.content}"
-                messages.append(types.Content(role="user", parts=[types.Part.from_text(text=current_msg)]))
+                history.append({"role": "user", "content": current_msg})
             else:
-                role = "model" if msg.role == "ai" else "user"
-                messages.append(types.Content(role=role, parts=[types.Part.from_text(text=msg.content)]))
-                
-        # Call Gemini API
-        response = client.models.generate_content(
-            model='gemini-3.5-flash-lite',
-            contents=messages,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_INSTRUCTION,
-            ),
-        )
+                role = "assistant" if msg.role == "ai" else "user"
+                history.append({"role": role, "content": msg.content})
+
+        if provider == "gemini":
+            client = genai.Client(api_key=api_key)
+            gemini_history = [
+                types.Content(
+                    role="model" if item["role"] == "assistant" else "user",
+                    parts=[types.Part.from_text(text=item["content"])],
+                )
+                for item in history
+            ]
+            response_text = client.models.generate_content(
+                model=os.getenv("GEMINI_MODEL", "gemini-3.5-flash-lite"),
+                contents=gemini_history,
+                config=types.GenerateContentConfig(system_instruction=SYSTEM_INSTRUCTION),
+            ).text
+        else:
+            base_url = os.getenv("UPSTAGE_BASE_URL", "https://api.upstage.ai/v1").rstrip("/")
+            model = os.getenv("UPSTAGE_MODEL", "solar-mini4")
+            payload = {
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": SYSTEM_INSTRUCTION},
+                    *history,
+                ],
+            }
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                api_response = await client.post(
+                    f"{base_url}/chat/completions",
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    json=payload,
+                )
+            api_response.raise_for_status()
+            response_text = api_response.json()["choices"][0]["message"]["content"]
         
         # Save AI response
-        ai_msg = AiChatMessage(session_id=session.id, role="ai", content=response.text)
+        ai_msg = AiChatMessage(session_id=session.id, role="ai", content=response_text)
         db.add(ai_msg)
         db.commit()
         
-        return AiChatResponse(response=response.text, session_id=session.id)
-        
+        return AiChatResponse(response=response_text, session_id=session.id)
+    except HTTPException:
+        raise
+    
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

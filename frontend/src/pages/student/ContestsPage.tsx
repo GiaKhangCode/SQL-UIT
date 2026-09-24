@@ -24,6 +24,12 @@ export function ContestsPage() {
               : "Upcoming")) &&
       c.title.toLowerCase().includes(search.toLowerCase()),
   );
+  const contestCounts = {
+    All: data.length,
+    Upcoming: data.filter((c) => c.status === "Upcoming").length,
+    Live: data.filter((c) => c.status === "Active").length,
+    Past: data.filter((c) => c.status === "Closed").length,
+  };
   function details(c: Contest) {
     navigate("/contests/" + c.id);
   }
@@ -70,7 +76,10 @@ export function ContestsPage() {
               onClick={() => setTab(t)}
               key={t}
             >
-              {t}
+              {t}{" "}
+              <span className="contest-tab-count">
+                {contestCounts[t as keyof typeof contestCounts]}
+              </span>
             </button>
           ))}
         </div>

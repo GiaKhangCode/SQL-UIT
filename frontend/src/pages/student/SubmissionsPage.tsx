@@ -1,10 +1,23 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { ChevronRight } from "lucide-react";
 import { studentApi } from "../../services/studentApi";
 import { type Submission } from "../../data/mockData";
 import { SubmissionDetails } from "../../components/SubmissionDetails";
 import { useLoad } from "../../components/useLoad";
 import { Empty, Loading, PageHeading, Status } from "../../components/ui";
+
+function submittedAtLabel(value: string, mobile = false) {
+  return new Date(value).toLocaleString("en-GB", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    day: "2-digit",
+    month: "short",
+    ...(mobile ? { year: "numeric" as const } : {}),
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export function SubmissionsPage() {
   const [selected, setSelected] = useState<Submission | null>(null);
   const [search, setSearch] = useState("");
@@ -32,6 +45,15 @@ export function SubmissionsPage() {
           />
         </label>
         <label className="field">
+          Source
+          <select value={source} onChange={(e) => setSource(e.target.value)}>
+            <option value="">All sources</option>
+            {["Practice", "Assignments", "Contests"].map((v) => (
+              <option key={v}>{v}</option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
           Result
           <select value={result} onChange={(e) => setResult(e.target.value)}>
             <option value="">All results</option>
@@ -41,15 +63,6 @@ export function SubmissionsPage() {
               "Runtime Error",
               "Time Limit Exceeded",
             ].map((v) => (
-              <option key={v}>{v}</option>
-            ))}
-          </select>
-        </label>
-        <label className="field">
-          Source
-          <select value={source} onChange={(e) => setSource(e.target.value)}>
-            <option value="">All sources</option>
-            {["Practice", "Assignments", "Contests"].map((v) => (
               <option key={v}>{v}</option>
             ))}
           </select>
@@ -68,7 +81,7 @@ export function SubmissionsPage() {
         <>
           <p className="tiny muted">{data.length} submissions</p>
           <div
-            className="table-scroll"
+            className="table-scroll submissions-desktop"
             aria-busy={loading}
             tabIndex={0}
             aria-label="Submission history"
@@ -79,14 +92,19 @@ export function SubmissionsPage() {
                   <th>SQL problem</th>
                   <th>Source</th>
                   <th>Result</th>
-                  <th>Score</th>
-                  <th>Submitted (ICT)</th>
-                  <th>Action</th>
+                  <th>Submitted ↓</th>
+                  <th>
+                    <span className="sr-only">Open submission</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {data.map((s: Submission) => {
-                  const p = problemsList?.find((p: any) => p.id === s.problemId) || { number: "?", title: "Unknown problem" };
+                  const p =
+                    problemsList?.find((p: any) => p.id === s.problemId) || {
+                      number: "?",
+                      title: "Unknown problem",
+                    };
                   return (
                     <tr key={s.id}>
                       <td>
@@ -101,22 +119,16 @@ export function SubmissionsPage() {
                       <td>
                         <Status value={s.result} />
                       </td>
-                      <td>{s.score}/100</td>
                       <td className="muted">
-                        {new Date(s.submittedAt).toLocaleString("en-GB", {
-                          timeZone: "Asia/Ho_Chi_Minh",
-                          day: "2-digit",
-                          month: "2-digit",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                        {submittedAtLabel(s.submittedAt)}
                       </td>
-                      <td>
+                      <td className="submission-open-cell">
                         <button
-                          className="text-button"
+                          className="icon-button submission-open-button"
                           onClick={() => setSelected(s)}
+                          aria-label={`View details for ${p.title}`}
                         >
-                          View details →
+                          <ChevronRight size={18} />
                         </button>
                       </td>
                     </tr>
@@ -125,15 +137,53 @@ export function SubmissionsPage() {
               </tbody>
             </table>
           </div>
-          <p className="tiny">
-            Newest first · Each row is one mock submission.
-          </p>
+          <div
+            className="submission-mobile-list"
+            aria-busy={loading}
+            aria-label="Submission history"
+          >
+            {data.map((s: Submission) => {
+              const p =
+                problemsList?.find((p: any) => p.id === s.problemId) || {
+                  number: "?",
+                  title: "Unknown problem",
+                };
+              return (
+                <button
+                  className="submission-mobile-row"
+                  key={s.id}
+                  onClick={() => setSelected(s)}
+                >
+                  <span className="submission-mobile-main">
+                    <span className="submission-mobile-problem">
+                      <b>
+                        {p.number}. {p.title}
+                      </b>
+                      <small>{s.source} · {s.context}</small>
+                    </span>
+                    <Status value={s.result} />
+                  </span>
+                  <span className="submission-mobile-meta">
+                    <small>{submittedAtLabel(s.submittedAt, true)}</small>
+                    <ChevronRight size={18} aria-hidden="true" />
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="tiny">Newest first</p>
         </>
       )}
       {selected && (
         <SubmissionDetails
           submission={selected}
-          problem={problemsList?.find((p: any) => p.id === selected.problemId) || { number: "?", title: "Unknown problem", id: selected.problemId }}
+          problem={
+            problemsList?.find((p: any) => p.id === selected.problemId) || {
+              number: "?",
+              title: "Unknown problem",
+              id: selected.problemId,
+            }
+          }
           onClose={() => setSelected(null)}
         />
       )}

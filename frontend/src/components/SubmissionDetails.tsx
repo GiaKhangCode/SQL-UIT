@@ -22,7 +22,9 @@ export function SubmissionDetails({
       onClose={onClose}
     >
       <div className="submission-detail-content">
-        <p className="tiny muted">#{submission.id} · Read-only</p>
+        <p className="tiny muted submission-detail-id">
+          #{submission.id} · Read-only
+        </p>
         <h1>
           {p.number}. {p.title}
         </h1>
@@ -35,13 +37,32 @@ export function SubmissionDetails({
         <p className="tiny">
           {submission.source} · {submission.context}
         </p>
-        <section className="submission-verdict">
-          <Status value={submission.result} />
-          <h3>Auto score {submission.score}/100</h3>
-          <p className="tiny muted">
-            Mock evaluation result. No hidden test cases or answer SQL are
-            shown.
-          </p>
+        <section
+          className="submission-evaluation"
+          aria-label="Submission evaluation"
+        >
+          <div className="submission-verdict">
+            <Status value={submission.result} />
+            <p className="tiny muted">
+              {submission.result === "Accepted"
+                ? "The automatic evaluation accepted this submission."
+                : "Automatic evaluation result"}
+            </p>
+          </div>
+          <div className="submission-score-grid">
+            <div>
+              <small>Auto score</small>
+              <strong>{submission.score}/100</strong>
+            </div>
+            <div>
+              <small>Final score</small>
+              <strong>
+                {submission.evaluatedScore === undefined
+                  ? "Pending"
+                  : `${submission.evaluatedScore}/100`}
+              </strong>
+            </div>
+          </div>
         </section>
         <section className="submitted-query">
           <div className="section-heading">
@@ -83,23 +104,16 @@ export function SubmissionDetails({
           </p>
         </section>
         <section className="instructor-evaluation">
-          <h3>
-            Instructor evaluation
-            {submission.evaluatedScore !== undefined && (
-              <span className="evaluation-score">
-                {submission.evaluatedScore}/100
-              </span>
-            )}
-          </h3>
+          <h3>Instructor comments</h3>
           <p className="tiny muted">
             {submission.feedback ||
-              "Not evaluated yet. The auto score remains separate from any future instructor score."}
+              "No instructor comments yet. The final score remains pending."}
           </p>
         </section>
       </div>
       <footer className="submission-detail-footer">
         <small className="muted">
-          Opening the problem preserves your draft.
+          Read-only submission · your problem draft is preserved.
         </small>
         <Link className="button primary" to={"/workspace/" + p.id}>
           Open problem

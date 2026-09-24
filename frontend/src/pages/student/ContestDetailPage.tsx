@@ -3,12 +3,12 @@ import { Link, useParams } from "react-router-dom";
 import { studentApi } from "../../services/studentApi";
 import { useLoad } from "../../components/useLoad";
 import { Dialog, Empty, Loading, Status } from "../../components/ui";
-import { problems } from "../../data/mockData";
+import { problems, type Submission } from "../../data/mockData";
 export function ContestDetailPage() {
   const { contestId } = useParams();
   const { data, loading, error } = useLoad(studentApi.getContests);
   const [standings, setStandings] = useState(false);
-  const { data: attempts } = useLoad(() =>
+  const { data: attempts } = useLoad<Submission[]>(() =>
     studentApi.getSubmissions({ source: "Contests" }),
   );
   if (loading) return <Loading />;
@@ -79,7 +79,7 @@ export function ContestDetailPage() {
             )}
           >
             {contest.status === "Active"
-              ? "Continue contest"
+              ? "Continue"
               : "Preview problems"}{" "}
             →
           </Link>

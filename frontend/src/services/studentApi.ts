@@ -1,5 +1,12 @@
 import { apiFetch } from "./apiClient";
 import { storage } from "./storage";
+import {
+  assignments,
+  classes,
+  contests,
+  deadlines,
+  groups,
+} from "../data/mockData";
 
 export type ProblemFilters = {
   includeTrending?: boolean;
@@ -61,13 +68,11 @@ export const studentApi = {
   },
 
   getAssignments: async () => {
-    // Mock for now until Assignment feature is built
-    return { classes: [], groups: [], assignments: [], deadlines: [] };
+    return { classes, groups, assignments, deadlines };
   },
 
   getContests: async () => {
-    // Mock for now
-    return [];
+    return contests;
   },
 
 

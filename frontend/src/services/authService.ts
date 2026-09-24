@@ -6,7 +6,7 @@ export type StudentSession = {
   name: string;
   initials: string;
   email: string;
-  role: "student" | "instructor";
+  role: "student" | "instructor" | "admin";
 };
 
 export const SESSION_KEY = "sql-practice:session:v1";
@@ -22,6 +22,23 @@ function persist(user: StudentSession, token: string) {
 
 export const authService = {
   async login(email: string, password: string) {
+    const account = email.trim().toLowerCase();
+    if (account === "teacher" || account === "admin") {
+      if (password !== "123") {
+        throw new Error(`The demo ${account} password is incorrect.`);
+      }
+      const isAdmin = account === "admin";
+      return persist(
+        {
+          id: isAdmin ? "demo-admin" : "demo-teacher",
+          name: "Huy Lai",
+          initials: "H",
+          email: account,
+          role: isAdmin ? "admin" : "instructor",
+        },
+        isAdmin ? "demo:admin" : "demo:teacher",
+      );
+    }
     if (!validEmail(email) || !password.trim()) {
       throw new Error("Enter a valid email and a password.");
     }
@@ -54,6 +71,8 @@ export const authService = {
   },
   
   async restoreSessionAsync(): Promise<StudentSession | null> {
+    const saved = authService.restoreSession();
+    if (saved?.id === "demo-teacher" || saved?.id === "demo-admin") return saved;
     const token = storage.get(TOKEN_KEY);
     if (!token) return null;
     try {

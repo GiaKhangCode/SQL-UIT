@@ -1,10 +1,10 @@
 # Figma update report — September 18, 2026
 
-The updated Figma file was reviewed through node-level design contexts, screenshots and read-only page/component inventory. Student-only scope is retained. Teacher Problem Editor, Teacher Management, Admin Management and their shared navigation variants were deliberately excluded under the existing project requirements.
+The updated Figma file was reviewed through node-level design contexts, screenshots and read-only page/component inventory. Student-only scope applied during the earlier passes. Teacher Problem Editor, Teacher Management and Admin Management screens were added in the September 23 passes below.
 
 ## Reviewed changes
 
-File: https://www.figma.com/design/A2mwI7yuWBhYWAMswSVrjw/Untitled
+File: https://www.figma.com/design/A2mwI7yuWBhYWAMswSVrjw/Web-th%E1%BB%B1c-h%C3%A0nh-SQL-UIT
 
 | Area                        | Inspected reference nodes                      |
 | --------------------------- | ---------------------------------------------- |
@@ -101,3 +101,72 @@ Reviewed new Figma Authentication v2 frames 504:112 (Sign in), 504:157 (Register
 
 ### Dashboard v2 revision
 Reviewed Figma node 19:112 and frame 506:1573 (Returning / Light v2). Dashboard now uses the v2 hierarchy: 1314px content, Continue Learning bordered list with Resume/View all actions, compact Deadlines rows with date blocks and This week strip, and a combined SQL Activity card with stats beside the heatmap. Existing mock data and routes remain the source for links and counts. Responsive tablet/mobile stacking was added. Tests and build passed; browser visual inspection remains unavailable.
+
+### Authentication recovery screens
+Reconnected to the current Figma file and reviewed its Authentication section. In addition to Sign in and Register, it contains Verify OTP (504:206), Forgot Password (504:247), and Reset Password (504:281), with dark variants 504:322 through 504:491. Added `/forgot-password`, `/verify-otp`, and `/reset-password` public routes. Forgot Password and Verify OTP use the centered form-only layout; Reset Password shares the split editor-preview layout. Sign in's Forgot password link now opens the recovery screen. Updated registration fields, password visibility controls, and placeholders to match the current frames.
+
+The backend currently has no OTP, recovery-email, or password-reset endpoints. The recovery forms validate their inputs and show a clear unavailable message on submission; they do not claim to send a code or change a password. No backend behavior was added. The excluded Dashboard, Practice, and SQL Workspace screens were not reviewed. The previously reported class/group/contest/submission screens were not changed in this pass.
+
+## Assignments, contests and submissions refresh — September 23, 2026
+
+Reconnected to the current [SQL UIT Figma file](https://www.figma.com/design/A2mwI7yuWBhYWAMswSVrjw/Web-th%E1%BB%B1c-h%C3%A0nh-SQL-UIT) and compared the requested page sections using their desktop and mobile light frames:
+
+| Screen | Reference frames |
+| --- | --- |
+| Assignments, class and assignment detail | 91:112, 91:151, 91:179, 91:208, 452:368 |
+| Contest list and detail | 91:229, 91:258, 91:279, 91:308 |
+| Submission list and detail | 135:3190, 135:3542, 138:4323, 138:4529 |
+
+`studentApi.getAssignments()` and `getContests()` now return the existing typed fixtures. Their placeholder empty arrays left the updated assignment and contest views blank and triggered most of the supplied TypeScript build errors. The contest detail submission lookup now explicitly uses the `Submission` type.
+
+The contest status tabs show counts derived from the fixture data, and the featured contests use a swipeable card row on mobile. Submission filters now follow Search, Source, Result; the desktop table matches the SQL problem, Source, Result, Submitted and chevron columns without a score column. Mobile uses compact tappable submission cards rather than a wide table. The submission drawer presents automatic and final scores separately, with an explicit pending state when there is no instructor score, keeps the submitted SQL read-only and preserves the draft when opening the problem.
+
+No test suites were run. `npm run build` passes TypeScript and Vite production bundling. Vite reports the existing 585 kB lazy Workspace chunk above its 500 kB advisory threshold. The Figma light frames were inspected; application browser screenshots were not performed, consistent with the prior Computer Use restriction. Dashboard, Practice and SQL Workspace remain excluded from this review.
+
+## Teacher interface demo — September 23, 2026
+
+Reviewed the current Teacher Problem Editor and Teacher Management canvases, including light desktop/mobile frames and the problem editor operational-state reference:
+
+| Screen | Figma frames |
+| --- | --- |
+| Problem editor | 365:113 desktop, 365:205 mobile, 368:112 operational states |
+| Assignment builder | 367:6349 desktop, 367:6377 mobile |
+| Classes and groups | 367:6405 desktop, 367:6433 mobile |
+| Results | 367:6461 desktop, 367:6489 mobile |
+| Manual review | 367:6517 desktop, 367:6545 mobile |
+| Contest builder | 500:4041 desktop |
+
+Added a role-specific Teacher area with Problems, Assignments, Classes and Results navigation. Assignment and contest builders share the Figma form layout; the assignment builder links to contest creation. Results link into manual review. Desktop uses the two-column editor and builder layouts; mobile stacks the forms, tables and grading sections to follow the reference frames. Existing theme tokens style both light and dark modes.
+
+The login accepts the demo account `teacher` with password `123` and opens `/teacher/problems`. The demo session survives refresh in local storage and skips backend session verification. Drafts, publish state and review edits are stored locally; SQL validation, publishing, class changes, score review and CSV export are frontend demo behavior, with no teacher API calls.
+
+`npm run build` passes TypeScript and Vite production bundling. The existing lazy Workspace chunk still triggers Vite's 500 kB advisory. Browser-based interaction and screenshot verification were not performed under the previously stated Computer Use restriction. No tests were run.
+
+### Teacher Figma refresh — September 24, 2026
+
+Rechecked the latest light desktop and mobile contexts for the Problem Editor (365:113, 365:205), Assignment builder (367:6349, 367:6377), Classes and groups (367:6405, 367:6433), Results (367:6461, 367:6489), Manual review (367:6517, 367:6545), and Contest builder (500:4041, 596:371). Also reviewed the Problem Editor operational states (368:112).
+
+Updated Teacher navigation to include Contests. The Problem Editor now has Private/Public visibility and a Mark as ready action. Assignment and Contest builders now expose local Hints, Comments and Leaderboard switches. Classes and groups now show class join-request counts and an approval/rejection queue. Results include attempt counts and a Review action, and Manual review lets the demo switch between attempts and move between submissions.
+
+These controls use local demo state and fixtures; no Teacher backend API was added. `npm run build` passes TypeScript and Vite production bundling. Vite retains its existing 585 kB Workspace chunk advisory. No tests were run. Browser screenshot verification was not performed under the previously stated Computer Use restriction.
+
+## Admin interface demo — September 23, 2026
+
+Reviewed the Admin Management canvas (366:5954), including the light desktop and mobile frames for:
+
+| Screen | Desktop | Mobile |
+| --- | --- | --- |
+| Users | 367:124 | 367:156 |
+| Roles and permissions | 367:188 | 367:220 |
+| Courses and classes | 367:252 | 367:284 |
+| Lecturer assignment | 367:316 | 367:348 |
+| Problem moderation | 367:380 | 367:412 |
+| System overview | 367:444 | 367:476 |
+
+Rechecked the current six desktop screens against the existing implementation. The only changed admin element was the shared navigation: its order is now Overview, Users, Courses, Practice, Moderation and Roles, with Practice opening the existing lecturer assignment screen. Updated the admin navigation label and order; page content and mobile layouts still match the reviewed frames.
+
+Added an Admin area with Users, Roles, Courses, Lecturers, Moderation and Overview routes. The pages use the Figma compact header, rule-divided tables, split detail panels, responsive mobile rows and the shared light/dark theme tokens. The demo includes local interactions for account search/role/status, adding and deactivating accounts, role scope selection, class creation/archive, lecturer assignment, moderation actions and CSV export.
+
+The login accepts `admin` with password `123` and opens `/admin/overview`. The demo session is kept locally and skips backend session verification. All admin records and actions are frontend fixtures; no backend API or persistence for admin management data was added.
+
+`npm run build` passes TypeScript and Vite production bundling. Vite continues to report the existing 585 kB lazy Workspace chunk above its 500 kB advisory threshold. No tests were run. Browser-based interaction and screenshot verification were not performed under the previously stated Computer Use restriction.

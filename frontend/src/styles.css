@@ -2,3 +2,5 @@
 @import "./styles/global.css";
 @import "./styles/components.css";
 @import "./styles/student-updates.css";
+@import "./styles/teacher.css";
+@import "./styles/admin.css";
