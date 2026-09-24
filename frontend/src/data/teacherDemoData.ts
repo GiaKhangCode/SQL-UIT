@@ -12,6 +12,7 @@ export type TeacherProblem = {
   hints: string[];
   database: string;
   schema: string;
+  seedData: string;
   seedSummary: string;
   referenceSolution: string;
   expectedColumns: string[];
@@ -41,7 +42,19 @@ CREATE TABLE Orders (
   order_id INT PRIMARY KEY,
   customer_id INT
 );`,
-    seedSummary: "12 customers / 24 orders",
+    seedData: `INSERT INTO Customers (customer_id, customer_name) VALUES
+  (1, 'An Nguyen'),
+  (2, 'Bao Tran'),
+  (3, 'Chi Le'),
+  (4, 'Ngoc Linh');
+  -- + 8 more rows
+
+INSERT INTO Orders (order_id, customer_id) VALUES
+  (101, 1),
+  (102, 1),
+  (103, 3);
+  -- + 21 more rows`,
+    seedSummary: "12 customers · 24 orders",
     referenceSolution: `SELECT c.customer_id, c.customer_name
 FROM Customers AS c
 LEFT JOIN Orders AS o
@@ -67,6 +80,7 @@ ORDER BY c.customer_id;`,
     hints: ["Group rows by category before summing their revenue."],
     database: "MySQL 8.0",
     schema: "CREATE TABLE Sales (sale_id INT, category VARCHAR(80), amount DECIMAL(10,2));",
+    seedData: "INSERT INTO Sales (sale_id, category, amount) VALUES\n  -- Demo seed rows",
     seedSummary: "24 sales across 6 categories",
     referenceSolution:
       "SELECT category, SUM(amount) AS revenue\nFROM Sales\nGROUP BY category\nORDER BY revenue DESC;",
@@ -89,7 +103,8 @@ ORDER BY c.customer_id;`,
     hints: ["Join customers to orders, aggregate, then sort and limit."],
     database: "MySQL 8.0",
     schema: "CREATE TABLE Customers (customer_id INT, customer_name VARCHAR(100));\nCREATE TABLE Orders (order_id INT, customer_id INT, amount DECIMAL(10,2));",
-    seedSummary: "12 customers / 24 orders",
+    seedData: "INSERT INTO Customers (customer_id, customer_name) VALUES\n  -- Demo seed rows",
+    seedSummary: "12 customers · 24 orders",
     referenceSolution:
       "SELECT c.customer_id, c.customer_name, SUM(o.amount) AS total_spend\nFROM Customers c JOIN Orders o USING (customer_id)\nGROUP BY c.customer_id, c.customer_name\nORDER BY total_spend DESC\nLIMIT 3;",
     expectedColumns: ["customer_id", "customer_name", "total_spend"],
@@ -104,10 +119,10 @@ ORDER BY c.customer_id;`,
 export type TeacherClass = {
   id: string;
   course: string;
+  term: string;
   students: number;
   mode: "Group work" | "Individual";
   status: "Active" | "Archived";
-  pendingJoinRequests: number;
   groups: {
     id: string;
     members: number;
@@ -119,10 +134,10 @@ export const teacherClasses: TeacherClass[] = [
   {
     id: "IS207.R11",
     course: "Web Development",
+    term: "Semester 2, 2026",
     students: 42,
     mode: "Group work",
     status: "Active",
-    pendingJoinRequests: 3,
     groups: [
       { id: "Group 01", members: 5, lastSubmission: "Sep 18 · 14:32" },
       { id: "Group 02", members: 5, lastSubmission: "Sep 18 · 12:08" },
@@ -133,10 +148,10 @@ export const teacherClasses: TeacherClass[] = [
   {
     id: "IS207.R12",
     course: "Web Development",
+    term: "Semester 1, 2026",
     students: 39,
     mode: "Individual",
     status: "Active",
-    pendingJoinRequests: 0,
     groups: [
       { id: "Group 01", members: 1, lastSubmission: "Sep 18 · 16:03" },
       { id: "Group 02", members: 1, lastSubmission: "Sep 18 · 15:22" },
@@ -145,10 +160,10 @@ export const teacherClasses: TeacherClass[] = [
   {
     id: "IS207.R13",
     course: "Database Systems",
+    term: "Semester 1, 2025",
     students: 40,
     mode: "Group work",
     status: "Active",
-    pendingJoinRequests: 1,
     groups: [
       { id: "Group 01", members: 5, lastSubmission: "Sep 17 · 11:45" },
       { id: "Group 02", members: 5, lastSubmission: "Sep 16 · 09:12" },
@@ -162,6 +177,68 @@ export const teacherRoster = [
   { name: "Minh Anh", role: "Member" },
   { name: "Duc Nguyen", role: "Member" },
 ];
+
+export type TeacherClassAssignmentProgress = {
+  id: string;
+  title: string;
+  dueDate: string;
+  submitted: number;
+  expected: number;
+  status: "In progress" | "Closed";
+};
+
+export type TeacherStudentProgress = {
+  id: string;
+  name: string;
+  submissions: number;
+  completedAssignments: number;
+};
+
+export type TeacherClassProgress = {
+  assignments: TeacherClassAssignmentProgress[];
+  students: TeacherStudentProgress[];
+};
+
+export const teacherClassProgress: Record<string, TeacherClassProgress> = {
+  "IS207.R11": {
+    assignments: [
+      { id: "r11-a1", title: "HTML and CSS foundations", dueDate: "Sep 28, 2026", submitted: 33, expected: 42, status: "In progress" },
+      { id: "r11-a2", title: "Interactive web pages", dueDate: "Oct 05, 2026", submitted: 28, expected: 42, status: "In progress" },
+      { id: "r11-a3", title: "Responsive portfolio", dueDate: "Oct 12, 2026", submitted: 18, expected: 42, status: "In progress" },
+    ],
+    students: [
+      { id: "22521234", name: "Khoa Tran", submissions: 5, completedAssignments: 2 },
+      { id: "22520987", name: "Lan Pham", submissions: 3, completedAssignments: 2 },
+      { id: "22521456", name: "Hung Vo", submissions: 1, completedAssignments: 1 },
+      { id: "22521001", name: "Mai Do", submissions: 4, completedAssignments: 3 },
+    ],
+  },
+  "IS207.R12": {
+    assignments: [
+      { id: "r12-a1", title: "HTML and CSS foundations", dueDate: "Mar 18, 2026", submitted: 32, expected: 39, status: "Closed" },
+      { id: "r12-a2", title: "Interactive web pages", dueDate: "Mar 25, 2026", submitted: 26, expected: 39, status: "Closed" },
+    ],
+    students: [
+      { id: "22521234", name: "Bao Tran", submissions: 4, completedAssignments: 2 },
+      { id: "22520987", name: "Ngoc Linh", submissions: 5, completedAssignments: 2 },
+      { id: "22521456", name: "Minh Anh", submissions: 2, completedAssignments: 1 },
+      { id: "22521001", name: "Duc Nguyen", submissions: 3, completedAssignments: 2 },
+    ],
+  },
+  "IS207.R13": {
+    assignments: [
+      { id: "r13-a1", title: "SQL foundations", dueDate: "Mar 10, 2025", submitted: 38, expected: 40, status: "Closed" },
+      { id: "r13-a2", title: "Joins and aggregation", dueDate: "Mar 17, 2025", submitted: 36, expected: 40, status: "Closed" },
+      { id: "r13-a3", title: "Database design", dueDate: "Mar 24, 2025", submitted: 31, expected: 40, status: "Closed" },
+    ],
+    students: [
+      { id: "22521234", name: "Khoa Tran", submissions: 6, completedAssignments: 3 },
+      { id: "22520987", name: "Lan Pham", submissions: 4, completedAssignments: 3 },
+      { id: "22521456", name: "Hung Vo", submissions: 5, completedAssignments: 2 },
+      { id: "22521001", name: "Mai Do", submissions: 3, completedAssignments: 2 },
+    ],
+  },
+};
 
 export type TeacherSubmission = {
   id: string;

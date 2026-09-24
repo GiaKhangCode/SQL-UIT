@@ -22,7 +22,9 @@ export function TeacherHeader() {
     navigate("/login", { replace: true });
   }
 
+  const problemActive = location.pathname.startsWith("/teacher/problems");
   const assignmentActive = location.pathname.startsWith("/teacher/assignments");
+  const contestActive = location.pathname.startsWith("/teacher/contests");
   const resultsActive = location.pathname.startsWith("/teacher/results");
 
   return (
@@ -48,14 +50,14 @@ export function TeacherHeader() {
         className={menuOpen ? "teacher-navigation open" : "teacher-navigation"}
         aria-label="Teacher navigation"
       >
-        <NavLink to="/teacher/problems">Problems</NavLink>
+        <NavLink to="/teacher/problems" className={problemActive ? "active" : undefined}>Problems</NavLink>
         <NavLink
           to="/teacher/assignments"
           className={assignmentActive ? "active" : undefined}
         >
           Assignments
         </NavLink>
-        <NavLink to="/teacher/contests/new">Contests</NavLink>
+        <NavLink to="/teacher/contests" className={contestActive ? "active" : undefined}>Contests</NavLink>
         <NavLink to="/teacher/classes">Classes</NavLink>
         <NavLink
           to="/teacher/results"

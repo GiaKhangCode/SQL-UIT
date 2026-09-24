@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { Dialog } from "../../components/ui";
 import {
   readTeacherDraft,
@@ -18,7 +17,7 @@ type BuilderDraft = {
   opens: string;
   closes: string;
   problems: BuilderProblem[];
-  studentOptions: { hints: boolean; comments: boolean; leaderboard: boolean };
+  studentOptions: { hints: boolean; comments: boolean; leaderboard: boolean; aiAllowed: boolean };
   published?: boolean;
 };
 
@@ -37,7 +36,7 @@ const assignmentSeed: BuilderDraft = {
     { id: "p11", points: 15 },
     { id: "p12", points: 15 },
   ],
-  studentOptions: { hints: true, comments: true, leaderboard: false },
+  studentOptions: { hints: true, comments: true, leaderboard: false, aiAllowed: true },
 };
 const contestSeed: BuilderDraft = {
   title: "SQL Sprint #06",
@@ -52,7 +51,7 @@ const contestSeed: BuilderDraft = {
     { id: "p11", points: 15 },
     { id: "p12", points: 15 },
   ],
-  studentOptions: { hints: false, comments: false, leaderboard: true },
+  studentOptions: { hints: false, comments: false, leaderboard: true, aiAllowed: false },
 };
 
 export function AssignmentBuilderPage() {
@@ -70,7 +69,7 @@ function BuilderPage({ contest }: { contest: boolean }) {
       ? contestSeed.studentOptions
       : assignmentSeed.studentOptions;
     const saved = readTeacherDraft<BuilderDraft>(key, contest ? contestSeed : assignmentSeed);
-    return { ...saved, studentOptions: saved.studentOptions || defaults };
+    return { ...saved, studentOptions: { ...defaults, ...saved.studentOptions } };
   });
   const [saveState, setSaveState] = useState("All changes saved");
   const [alertText, setAlertText] = useState("");
@@ -79,6 +78,26 @@ function BuilderPage({ contest }: { contest: boolean }) {
 
   function update<K extends keyof BuilderDraft>(field: K, value: BuilderDraft[K]) {
     setDraft((current) => ({ ...current, [field]: value, published: false }));
+    setSaveState("Unsaved changes");
+    setAlertText("");
+  }
+
+  function setAiAllowed(allowed: boolean) {
+    setDraft((current) => {
+      const disabledSentence = "Hints and AI assistance are disabled during the contest.";
+      const allowedSentence = "Hints are disabled during the contest. AI assistance is allowed.";
+      const instructions = contest
+        ? allowed
+          ? current.instructions.replace(disabledSentence, allowedSentence)
+          : current.instructions.replace(allowedSentence, disabledSentence)
+        : current.instructions;
+      return {
+        ...current,
+        instructions,
+        published: false,
+        studentOptions: { ...current.studentOptions, aiAllowed: allowed },
+      };
+    });
     setSaveState("Unsaved changes");
     setAlertText("");
   }
@@ -128,12 +147,6 @@ function BuilderPage({ contest }: { contest: boolean }) {
         title={contest ? "Contest builder" : "Assignment builder"}
         context={`${contest ? "Contests" : "Assignments"} / ${draft.title}`}
       >
-        <Link
-          className="teacher-builder-switch"
-          to={contest ? "/teacher/assignments" : "/teacher/contests/new"}
-        >
-          {contest ? "Build an assignment" : "Build a contest"}
-        </Link>
         <button className="button" type="button" onClick={saveDraft}>
           Save draft
         </button>
@@ -199,7 +212,6 @@ function BuilderPage({ contest }: { contest: boolean }) {
                     <th>Order / problem</th>
                     <th>Difficulty</th>
                     <th>Points</th>
-                    <th><span className="sr-only">Remove problem</span></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -214,39 +226,7 @@ function BuilderPage({ contest }: { contest: boolean }) {
                           {problem.title}
                         </td>
                         <td data-label="Difficulty">{problem.difficulty}</td>
-                        <td data-label="Points">
-                          <input
-                            aria-label={`${problem.title} points`}
-                            type="number"
-                            min="1"
-                            value={item.points}
-                            onChange={(event) =>
-                              update(
-                                "problems",
-                                draft.problems.map((row) =>
-                                  row.id === item.id
-                                    ? { ...row, points: Number(event.target.value) }
-                                    : row,
-                                ),
-                              )
-                            }
-                          />
-                        </td>
-                        <td>
-                          <button
-                            className="teacher-remove-row"
-                            type="button"
-                            onClick={() =>
-                              update(
-                                "problems",
-                                draft.problems.filter((row) => row.id !== item.id),
-                              )
-                            }
-                            aria-label={`Remove ${problem.title}`}
-                          >
-                            ×
-                          </button>
-                        </td>
+                        <td data-label="Points">{item.points}</td>
                       </tr>
                     );
                   })}
@@ -290,19 +270,22 @@ function BuilderPage({ contest }: { contest: boolean }) {
               ["hints", "Hints", "Students can open hints while solving"],
               ["comments", "Comments", "Students can comment on each problem"],
               ["leaderboard", "Leaderboard", "Show live ranking to students"],
+              ["aiAllowed", "AI assistance", draft.studentOptions.aiAllowed ? "Students can use AI assistance while solving" : "AI assistance is not allowed"],
             ] as const).map(([key, label, help]) => (
               <div className="teacher-option-row" key={key}>
                 <span><b>{label}</b><small>{help}</small></span>
                 <button
                   type="button"
                   role="switch"
-                  aria-label={label}
+                  aria-label={key === "aiAllowed" ? "Allow AI assistance" : label}
                   aria-checked={draft.studentOptions[key]}
                   className={`teacher-toggle${draft.studentOptions[key] ? " is-on" : ""}`}
-                  onClick={() => update("studentOptions", {
-                    ...draft.studentOptions,
-                    [key]: !draft.studentOptions[key],
-                  })}
+                  onClick={() => key === "aiAllowed"
+                    ? setAiAllowed(!draft.studentOptions.aiAllowed)
+                    : update("studentOptions", {
+                        ...draft.studentOptions,
+                        [key]: !draft.studentOptions[key],
+                      })}
                 ><span /></button>
               </div>
             ))}

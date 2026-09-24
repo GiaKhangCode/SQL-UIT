@@ -34,13 +34,17 @@ import { ContestsPage } from "../pages/student/ContestsPage";
 import { SubmissionsPage } from "../pages/student/SubmissionsPage";
 import { ProblemEditorPage } from "../pages/teacher/ProblemEditorPage";
 import { AssignmentBuilderPage, ContestBuilderPage } from "../pages/teacher/BuilderPages";
+import { AssignmentsListPage, ContestsListPage, ProblemLibraryPage } from "../pages/teacher/TeacherLandingPages";
 import { ClassesGroupsPage } from "../pages/teacher/ClassesGroupsPage";
 import { ManualReviewPage, ResultsDashboardPage } from "../pages/teacher/ResultsPages";
 import {
   AdminCoursesPage,
+  AdminEditClassPage,
+  AdminEditAccountPage,
+  AdminLecturerApprovalsPage,
   AdminLecturersPage,
-  AdminModerationPage,
   AdminOverviewPage,
+  AdminPracticeCatalogPage,
   AdminRolesPage,
   AdminUsersPage,
 } from "../pages/admin/AdminPages";
@@ -137,8 +141,12 @@ export function App() {
         <Route element={<TeacherRoute />}>
           <Route path="/teacher" element={<TeacherShell />}>
             <Route index element={<Navigate replace to="problems" />} />
-            <Route path="problems" element={<ProblemEditorPage />} />
-            <Route path="assignments" element={<AssignmentBuilderPage />} />
+            <Route path="problems" element={<ProblemLibraryPage />} />
+            <Route path="problems/new" element={<ProblemEditorPage />} />
+            <Route path="problems/:problemId/edit" element={<ProblemEditorPage />} />
+            <Route path="assignments" element={<AssignmentsListPage />} />
+            <Route path="assignments/new" element={<AssignmentBuilderPage />} />
+            <Route path="contests" element={<ContestsListPage />} />
             <Route path="contests/new" element={<ContestBuilderPage />} />
             <Route path="classes" element={<ClassesGroupsPage />} />
             <Route path="results" element={<ResultsDashboardPage />} />
@@ -149,10 +157,15 @@ export function App() {
           <Route path="/admin" element={<AdminShell />}>
             <Route index element={<Navigate replace to="overview" />} />
             <Route path="users" element={<AdminUsersPage />} />
+            <Route path="users/:email/edit" element={<AdminEditAccountPage />} />
+            <Route path="users/approvals" element={<AdminLecturerApprovalsPage />} />
             <Route path="roles" element={<AdminRolesPage />} />
             <Route path="courses" element={<AdminCoursesPage />} />
-            <Route path="lecturers" element={<AdminLecturersPage />} />
-            <Route path="moderation" element={<AdminModerationPage />} />
+            <Route path="courses/classes/:classId/edit" element={<AdminEditClassPage />} />
+            <Route path="courses/lecturers" element={<AdminLecturersPage />} />
+            <Route path="lecturers" element={<Navigate replace to="/admin/courses/lecturers" />} />
+            <Route path="practice" element={<AdminPracticeCatalogPage />} />
+            <Route path="moderation" element={<Navigate replace to="/admin/practice" />} />
             <Route path="overview" element={<AdminOverviewPage />} />
           </Route>
         </Route>

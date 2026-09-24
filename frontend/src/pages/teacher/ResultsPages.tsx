@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Dialog } from "../../components/ui";
 import {
   readTeacherDraft,
@@ -14,133 +14,135 @@ import { TeacherField, TeacherPageIntro, TeacherSectionTitle } from "./TeacherPa
 const reviewKey = "querylab:teacher:reviews:v1";
 type Review = { finalScore: string; feedback: string; reason: string; savedAt: string };
 
+type ActivityResult = {
+  id: string;
+  title: string;
+  type: "Assignment" | "Contest";
+  classes: string;
+  submitted: string;
+  average: string;
+  awaiting: number;
+  reviewId?: string;
+};
+
+const activityResults: ActivityResult[] = [
+  { id: "week-3", title: "Week 3 — JOIN practice", type: "Assignment", classes: "R11 · R12", submitted: "38 / 42", average: "82%", awaiting: 6, reviewId: "1042" },
+  { id: "sprint-05", title: "SQL Sprint #05", type: "Contest", classes: "R11 · R12", submitted: "57 / 84", average: "64%", awaiting: 0 },
+  { id: "week-2", title: "Week 2 — SELECT basics", type: "Assignment", classes: "R11", submitted: "42 / 42", average: "88%", awaiting: 0 },
+  { id: "sprint-04", title: "SQL Sprint #04", type: "Contest", classes: "R11 · R12", submitted: "79 / 84", average: "71%", awaiting: 3, reviewId: "1043" },
+  { id: "week-1", title: "Week 1 — Warm-up", type: "Assignment", classes: "R12", submitted: "39 / 39", average: "91%", awaiting: 0 },
+  { id: "sprint-03", title: "SQL Sprint #03", type: "Contest", classes: "R11", submitted: "40 / 42", average: "69%", awaiting: 0 },
+];
+
 export function ResultsDashboardPage() {
   const navigate = useNavigate();
-  const [classFilter, setClassFilter] = useState("IS207.R11");
-  const [assignmentFilter, setAssignmentFilter] = useState("Week 3 — JOIN practice");
-  const [statusFilter, setStatusFilter] = useState("All submissions");
+  const [searchParams] = useSearchParams();
+  const [search, setSearch] = useState(() => searchParams.get("search") || "");
+  const [classFilter, setClassFilter] = useState("All classes");
+  const [typeFilter, setTypeFilter] = useState("All types");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [selectedResultId, setSelectedResultId] = useState("");
+  const [selectedActivity, setSelectedActivity] = useState<ActivityResult | null>(null);
 
   const filtered = useMemo(
-    () =>
-      teacherSubmissions.filter((submission) => {
-        if (
-          classFilter !== "IS207.R11" ||
-          assignmentFilter !== "Week 3 — JOIN practice"
-        ) {
-          return false;
-        }
-        if (statusFilter === "Needs review" && submission.status !== "Needs review") return false;
-        if (statusFilter === "Reviewed" && submission.status !== "Accepted") return false;
-        return true;
-      }),
-    [assignmentFilter, classFilter, statusFilter],
+    () => activityResults.filter((item) =>
+      `${item.title} ${item.classes}`.toLowerCase().includes(search.toLowerCase()) &&
+      (classFilter === "All classes" || item.classes.includes(classFilter)) &&
+      (typeFilter === "All types" || item.type === typeFilter) &&
+      (statusFilter === "All" || (statusFilter === "Awaiting review" ? item.awaiting > 0 : item.awaiting === 0)),
+    ),
+    [search, classFilter, typeFilter, statusFilter],
   );
+  const selectedResult = filtered.find((item) => item.id === selectedResultId) || null;
 
-  function exportCsv() {
-    const quote = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`;
-    const rows = [
-      ["Student", "Problem", "Auto", "Final", "Status"],
-      ...filtered.map((row) => [row.student, row.problem, `${row.autoScore}/${row.maxScore}`, row.finalScore === null ? "" : `${row.finalScore}/${row.maxScore}`, row.status]),
-    ];
-    const csv = rows.map((row) => row.map(quote).join(",")).join("\r\n");
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "teacher-results-demo.csv";
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function openReview(submission: TeacherSubmission) {
-    navigate(`/teacher/results/review/${submission.id}`);
+  function openResultDetails(activity: ActivityResult) {
+    setSelectedActivity(activity);
   }
 
   return (
     <section className="teacher-page teacher-results-page">
-      <TeacherPageIntro
-        title="Results"
-        context={`${classFilter} / ${assignmentFilter}`}
-      >
-        <button className="button primary" type="button" onClick={exportCsv}>
-          Export CSV
-        </button>
-      </TeacherPageIntro>
+      <TeacherPageIntro title="Results" context="Semester 2, 2026 · 9 assignments and contests · 6 awaiting review" />
       <div className="teacher-divider" />
 
-      <div className="teacher-results-filters">
+      <div className="teacher-list-filters teacher-results-filters">
+        <TeacherField label="SEARCH">
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search assignments or contests…" />
+        </TeacherField>
         <TeacherField label="CLASS">
           <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)}>
-            <option>IS207.R11</option>
-            <option>IS207.R12</option>
-            <option>IS207.R13</option>
+            <option>All classes</option><option>R11</option><option>R12</option><option>R13</option>
           </select>
         </TeacherField>
-        <TeacherField label="ASSIGNMENT">
-          <select value={assignmentFilter} onChange={(event) => setAssignmentFilter(event.target.value)}>
-            <option>Week 3 — JOIN practice</option>
-            <option>SQL Sprint #06</option>
-            <option>Revenue by category</option>
+        <TeacherField label="TYPE">
+          <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+            <option>All types</option><option>Assignment</option><option>Contest</option>
           </select>
         </TeacherField>
         <TeacherField label="REVIEW STATUS">
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-            <option>All submissions</option>
-            <option>Needs review</option>
-            <option>Reviewed</option>
+            <option>All</option><option>Awaiting review</option><option>Reviewed</option>
           </select>
         </TeacherField>
       </div>
 
       <div className="teacher-result-metrics">
-        <div><strong>38 / 42</strong><small>Students submitted</small></div>
-        <div><strong>82%</strong><small>Average score</small></div>
         <div><strong>6</strong><small>Awaiting review</small></div>
+        <div><strong>82%</strong><small>Average score</small></div>
+        <div><strong>164</strong><small>Submissions received</small></div>
       </div>
 
-      <div className="teacher-results-table-wrap">
-        <div className="teacher-table-scroll">
-          <table className="teacher-table teacher-results-table">
-            <thead>
-              <tr>
-                <th>Student</th>
-                <th>Problem</th>
-                <th>Attempts</th>
-                <th>Auto</th>
-                <th>Final</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((submission) => (
-                <tr key={submission.id}>
-                  <td data-label="Student">{submission.student}</td>
-                  <td data-label="Problem">{submission.problem}</td>
-                  <td data-label="Attempts">{submission.attempts}</td>
-                  <td data-label="Auto">{submission.autoScore} / {submission.maxScore}</td>
-                  <td data-label="Final">{submission.finalScore === null ? "—" : `${submission.finalScore} / ${submission.maxScore}`}</td>
-                  <td data-label="Status">
-                    {submission.status === "Needs review"
-                      ? <span className="teacher-state-warning">Needs review</span>
-                      : <span className="teacher-state-success">Accepted</span>}
-                  </td>
-                  <td data-label="Actions"><button className="teacher-status-review" type="button" onClick={() => openReview(submission)}>Review</button></td>
+      <div className="teacher-list-detail-layout teacher-results-detail-layout">
+        <div className="teacher-list-detail-main teacher-results-table-wrap">
+          <div className="teacher-table-scroll">
+            <table className="teacher-table teacher-results-table teacher-activity-results-table">
+              <thead>
+                <tr>
+                  <th>ASSIGNMENT / CONTEST</th><th>TYPE</th><th>CLASSES</th><th>SUBMITTED</th><th>AVG SCORE</th><th>AWAITING REVIEW</th><th>ACTIONS</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filtered.map((item) => (
+                  <tr
+                    className={`teacher-selectable-list-row${selectedResult?.id === item.id ? " is-selected" : ""}`}
+                    key={item.id}
+                    onClick={() => setSelectedResultId(item.id)}
+                  >
+                    <td data-label="ASSIGNMENT / CONTEST"><button className="teacher-selectable-row-title teacher-list-row-title" type="button" aria-label={`Show details for ${item.title}`} onClick={(event) => { event.stopPropagation(); setSelectedResultId(item.id); }}>{item.title}</button></td>
+                    <td data-label="TYPE">{item.type}</td>
+                    <td data-label="CLASSES">{item.classes}</td>
+                    <td data-label="SUBMITTED">{item.submitted}</td>
+                    <td data-label="AVG SCORE">{item.average}</td>
+                    <td data-label="AWAITING REVIEW" className={item.awaiting ? "teacher-state-warning" : ""}>{item.awaiting}</td>
+                    <td data-label="ACTIONS" className="teacher-list-actions">
+                      <button type="button" onClick={() => openResultDetails(item)}>Open results</button>
+                    </td>
+                  </tr>
+                ))}
+                {!filtered.length && <tr><td className="teacher-empty-row" colSpan={7}>No results match these filters.</td></tr>}
+              </tbody>
+            </table>
+          </div>
         </div>
+        <aside className="teacher-list-detail-panel">
+          {selectedResult ? <>
+            <span className="teacher-detail-eyebrow">RESULT DETAILS</span>
+            <h2>{selectedResult.title}</h2>
+            <p className="muted">{selectedResult.type} · {selectedResult.classes}</p>
+            <dl className="teacher-list-detail-facts">
+              <div><dt>Submitted</dt><dd>{selectedResult.submitted}</dd></div>
+              <div><dt>Average score</dt><dd>{selectedResult.average}</dd></div>
+              <div><dt>Awaiting review</dt><dd>{selectedResult.awaiting}</dd></div>
+            </dl>
+            <button className="button primary teacher-list-detail-edit" type="button" onClick={() => openResultDetails(selectedResult)}>Edit</button>
+          </> : <p className="muted">Select a result to view its details.</p>}
+        </aside>
       </div>
       <div className="teacher-results-footer">
-        <button
-          className="button"
-          type="button"
-          onClick={() => navigate("/teacher/results/review/1042")}
-        >
-          Open manual review
-        </button>
-        <small className="muted">Showing {filtered.length} of 38 submissions · Demo data</small>
+        <small className="muted">Showing {filtered.length} of 9 items</small>
       </div>
+      {selectedActivity && <Dialog title={selectedActivity.title} onClose={() => setSelectedActivity(null)}>
+        <div className="teacher-preview-dialog"><p>{selectedActivity.type} · {selectedActivity.classes}</p><p>{selectedActivity.submitted} submitted · {selectedActivity.average} average · {selectedActivity.awaiting} awaiting review</p><div className="teacher-dialog-actions"><button className="button" type="button" onClick={() => setSelectedActivity(null)}>Close</button>{selectedActivity.reviewId && <button className="button primary" type="button" onClick={() => navigate(`/teacher/results/review/${selectedActivity.reviewId}`)}>Review a submission</button>}</div></div>
+      </Dialog>}
     </section>
   );
 }
@@ -249,7 +251,7 @@ export function ManualReviewPage() {
                   <tr key={test.test}>
                     <td data-label="Test">{test.test}</td>
                     <td data-label="Result" className={testIndex < attemptPassCount ? "teacher-state-success" : "teacher-state-failed"}>{testIndex < attemptPassCount ? "Passed" : "Failed"}</td>
-                    <td data-label="Detail">{testIndex < attemptPassCount ? test.detail : "Expected output mismatch"}</td>
+                    <td data-label="Detail">{test.detail}</td>
                   </tr>
                 ))}
               </tbody>

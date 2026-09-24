@@ -8,8 +8,7 @@ const adminLinks = [
   ["Overview", "/admin/overview"],
   ["Users", "/admin/users"],
   ["Courses", "/admin/courses"],
-  ["Practice", "/admin/lecturers"],
-  ["Moderation", "/admin/moderation"],
+  ["Practice", "/admin/practice"],
   ["Roles", "/admin/roles"],
 ] as const;
 

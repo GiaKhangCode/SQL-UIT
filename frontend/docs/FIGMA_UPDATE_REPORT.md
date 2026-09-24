@@ -170,3 +170,75 @@ Added an Admin area with Users, Roles, Courses, Lecturers, Moderation and Overvi
 The login accepts `admin` with password `123` and opens `/admin/overview`. The demo session is kept locally and skips backend session verification. All admin records and actions are frontend fixtures; no backend API or persistence for admin management data was added.
 
 `npm run build` passes TypeScript and Vite production bundling. Vite continues to report the existing 585 kB lazy Workspace chunk above its 500 kB advisory threshold. No tests were run. Browser-based interaction and screenshot verification were not performed under the previously stated Computer Use restriction.
+
+### Teacher Figma follow-up — September 24, 2026
+
+Rechecked all six Teacher screens in desktop and mobile light and dark variants, plus the Problem Editor operational states (365:113–251, 368:112, 367:6349–6559, 500:4041, 501:6286, 596:371–469). The latest Problem Editor adds a SQL seed-data editor and places Topics before Visibility. Assignment and Contest builders show a three-column problem table and use the main Teacher navigation to switch between builders. The Results screen ends at the submission count, while each result row leads to manual review. Manual review retains the test detail from its result fixture.
+
+Updated the local demo to match those changes. Seed SQL and its summary now save with the problem draft, including compatibility with drafts saved before this field existed. Removed builder actions and table controls absent from Figma, removed the extra Results shortcut, and aligned the test detail and problem table columns. Theme styling continues to use the existing light/dark tokens.
+
+`npm run build` passes TypeScript and Vite production bundling. The existing 585 kB lazy Workspace chunk advisory remains. No tests were run. Application browser screenshot verification was not performed.
+
+### Teacher landing pages and Results refresh — September 24, 2026
+
+Reviewed the updated Teacher Problem Library (596:675 desktop light, 596:828 desktop dark, 596:976 mobile light), Assignments (602:597, 602:745, 602:893), Contests (603:161, 603:331, 603:501), and Results (604:161, 604:309, 604:479) frames. Also checked the empty states for Problems (605:161), Assignments (605:317), Contests (605:495), and Classes (605:673), and the Assignment and Contest builder references (367:6349 and 500:4041).
+
+Teacher sign-in now lands on the Problem library at `/teacher/problems`; the edit form opens from New problem or Edit. Assignments and Contests now open searchable, filterable list pages, with their existing builders at `/teacher/assignments/new` and `/teacher/contests/new`. Added the empty-state layouts for all four Teacher list areas. Rebuilt Results around assignment/contest activity with class, type and review filters, summary metrics, CSV export and actions leading into the demo review flow.
+
+Added an AI assistance switch to both builder Student options. The disabled state is explicitly labeled “AI assistance is not allowed”; it defaults off for contests and on for assignments. Existing saved drafts without this field load using those defaults. Contest rule text follows the switch when toggled. Problem library edits, duplicates and deletions use browser-local demo data; assignment/contest list fixtures remain frontend-only.
+
+`npm run build` passes TypeScript and Vite production bundling. Vite reports the existing 585 kB lazy Workspace chunk above its 500 kB advisory threshold. No tests were run. Application browser screenshot verification was not performed under the previously documented Computer Use restriction.
+
+### Admin Figma refresh — September 24, 2026
+
+Rechecked the current Admin Management canvas (366:5954), including desktop and mobile frames for Users (367:124–172), Roles and permissions (367:188–236), Courses and classes (367:252–300), Lecturer assignment (367:316–364), and System overview (367:444–492). Reviewed the new Lecturer approvals and Practice catalog desktop light/dark frames, plus their available mobile light frames and the approval rejection dialog variants (594:480, 610:532, 594:5831, 610:631, 610:747–1007, 612:660–998). Problem moderation is no longer on the current canvas; Practice catalog now occupies that navigation slot.
+
+Updated Admin navigation to Overview, Users, Courses, Practice and Roles. Added the Users approval queue with lecturer approval and rejection demo actions, including the optional reason dialog; approval adds the lecturer to the demo user list. Replaced the old moderation route with a Practice catalog containing problem/topic tabs, search and filters, problem details, practice visibility, feature, comments and hints controls. Updated the role capability matrix for Practice catalog access, resized the Users/Courses filters to the reference proportions, sorted unassigned classes first, and added the overview's Needs attention table and links to approvals and lecturer assignment. The old moderation URL redirects to Practice, and the lecturer assignment route is nested under Courses.
+
+The approval queue and account list persist in local demo storage; Practice catalog edits remain frontend-only demo state. No Admin backend API was added. `npm run build` passes TypeScript and Vite production bundling. Vite reports the existing 585 kB lazy Workspace chunk above its 500 kB advisory threshold. No tests were run. Application browser screenshot verification was not performed.
+
+### Teacher classes term filter — September 24, 2026
+
+Extended the existing Teacher template's Classes & groups page so it opens with **All terms** selected and displays the full local demo class list immediately. Replaced the season-style dropdown with academic term values such as Semester 1-2025 and Semester 2-2026. The list now shows each class's course and term, supports term-aware search/filtering, and updates its class/student count and selected-class details when filtered.
+
+Terms and class records are frontend demo fixtures; no Teacher backend API was added. `npm run build` passes TypeScript and Vite production bundling. The existing 585 kB lazy Workspace chunk advisory remains. No tests or application browser screenshot comparison were performed.
+
+### Teacher Classes sections removed — September 24, 2026
+
+Removed the Join requests queue and Groups table from the Teacher Classes view, including the per-class join-request count column. The class list and class details remain. Removed the unused request fixtures and related styles. `npm run build` passes; the existing 585 kB lazy Workspace chunk advisory remains. No tests were run.
+
+### Teacher class progress detail — September 24, 2026
+
+Expanded the selected-class panel into a progress overview. Selecting a class updates its student, assignment, submission and submission-rate metrics, class assignment list with submitted counts, and a searchable student snapshot with submission and assignment-completion counts. These progress records are frontend demo fixtures; real class activity will require the Teacher API. `npm run build` passes; the existing 585 kB lazy Workspace chunk advisory remains. No tests were run.
+
+### Teacher list actions cleanup — September 24, 2026
+
+Removed Duplicate actions from the Problem library and Assignments list. Removed CSV export and Leaderboard actions from the Results page, leaving Open results as its row action. `npm run build` passes; the existing 585 kB lazy Workspace chunk advisory remains. No tests were run.
+
+### Teacher class selection follow-up — September 24, 2026
+
+Made the full class row selectable, with a keyboard-focusable class control. Selecting a row now displays a concise class summary in the right panel and reveals a **View class details** button. The button opens the assignment submission breakdown and searchable student progress in a larger details dialog. `npm run build` passes; the existing 585 kB lazy Workspace chunk advisory remains. No tests were run.
+
+### Teacher list detail panels — September 24, 2026
+
+Added selectable rows and right-side key detail panels for the Problem library, Contests and Results lists. The Problem and Contest panels link to their existing editors. The Results panel's **Edit** button opens the in-page result details dialog and does not navigate. `npm run build` passes; the existing 585 kB lazy Workspace chunk advisory remains. No tests were run.
+
+### Teacher Assignments detail panel — September 24, 2026
+
+Added selectable assignment rows and a matching right-side panel with class, problem count, due date, submission count and status. Its **Edit** button links to the existing Assignment editor. `npm run build` passes; the existing 585 kB lazy Workspace chunk advisory remains. No tests were run.
+
+### Teacher contest actions — September 24, 2026
+
+Removed **Edit** from contest row actions. The selected contest detail panel now provides **Results** and **Leaderboard** actions, while row-level Preview, Duplicate and View actions remain where applicable. Leaderboard currently shows a demo notice. `npm run build` passes; the existing 585 kB lazy Workspace chunk advisory remains. No tests were run.
+
+### Assignment and Contest detail panels — September 24, 2026
+
+Removed the Actions columns from the Assignments and Contests tables. Both lists now select the first visible item on load and show its details in the right panel. Assignment details include its classes, problem count, due date, submission progress and status, with Edit and Results actions. Contest details include classes, start time, duration, participant progress and status, with Results and Leaderboard actions. No tests were run.
+
+### Problem library actions panel — September 24, 2026
+
+Removed the Actions column from the Problem library table. Selecting the first visible or another problem displays its details and Edit/Delete controls in the right panel; the existing protection against deleting problems used by activities remains in place.
+
+### Teacher assignment actions — September 24, 2026
+
+Removed **Edit** from assignment row actions and added a **Results** button to the selected assignment detail panel beside its existing **Edit** button. Row-level **Results** remains available. `npm run build` passes; the existing 585 kB lazy Workspace chunk advisory remains. No tests were run.
