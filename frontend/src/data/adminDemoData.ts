@@ -64,9 +64,11 @@ export type AdminClass = {
   id: string;
   lecturer: string;
   students: number;
-  status: "Active" | "Draft" | "Archived";
+  status: "Active" | "Draft" | "Archived" | string;
   semester: string;
   dates: string;
+  startDate?: string;
+  endDate?: string;
 };
 
 export const adminClasses: AdminClass[] = [

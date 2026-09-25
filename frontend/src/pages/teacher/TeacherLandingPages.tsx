@@ -1,16 +1,17 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Dialog } from "../../components/ui";
 import { readTeacherDraft, saveTeacherDraft } from "../../data/teacherDemoData";
+import { teacherService } from "../../services/teacherService";
 import { TeacherField, TeacherPageIntro } from "./TeacherPageParts";
 
 type ProblemRow = {
   id: string;
   number: string;
   title: string;
-  difficulty: "Easy" | "Medium" | "Hard";
+  difficulty: "Easy" | "Medium" | "Hard" | string;
   topics: string;
-  visibility: "Public" | "Private";
+  visibility: "Public" | "Private" | string;
   usedIn: number;
   updated: string;
 };
@@ -28,13 +29,39 @@ export const teacherProblemLibrarySeed: ProblemRow[] = [
 export function ProblemLibraryPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [problems, setProblemState] = useState(() => readTeacherDraft<ProblemRow[]>(teacherProblemLibraryKey, teacherProblemLibrarySeed));
+  const [problems, setProblemState] = useState<ProblemRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const data = await teacherService.getAllProblems();
+        const mapped = data.map((p: any) => ({
+          id: p.id,
+          number: p.number || "000",
+          title: p.title,
+          difficulty: p.difficulty || "Easy",
+          topics: (p.topics && p.topics.length > 0) ? p.topics.join(" · ") : (p.topic || ""),
+          visibility: p.practiceListed ? "Public" : "Private",
+          usedIn: 0,
+          updated: "Just now"
+        }));
+        setProblemState(mapped);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
   const [search, setSearch] = useState("");
   const [difficulty, setDifficulty] = useState("All levels");
   const [topic, setTopic] = useState("All topics");
   const [visibility, setVisibility] = useState(() => searchParams.get("visibility") || "All");
   const [selectedProblemId, setSelectedProblemId] = useState("");
   const [blockedDelete, setBlockedDelete] = useState<ProblemRow | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<ProblemRow | null>(null);
   const [notice, setNotice] = useState("");
   const filtered = useMemo(() => problems.filter((problem) =>
     `${problem.title} ${problem.topics}`.toLowerCase().includes(search.toLowerCase()) &&
@@ -44,28 +71,45 @@ export function ProblemLibraryPage() {
   ), [problems, search, difficulty, topic, visibility]);
   const selectedProblem = filtered.find((problem) => problem.id === selectedProblemId) || filtered[0] || null;
 
-  function saveProblems(next: ProblemRow[]) {
-    setProblemState(next);
-    saveTeacherDraft(teacherProblemLibraryKey, next);
-  }
-
   function removeProblem(problem: ProblemRow) {
     if (problem.usedIn > 0) {
       setBlockedDelete(problem);
       return;
     }
-    saveProblems(problems.filter((item) => item.id !== problem.id));
-    setNotice(`${problem.title} was removed from the demo library.`);
+    setConfirmDelete(problem);
   }
+
+  async function executeDelete() {
+    if (!confirmDelete) return;
+    const problem = confirmDelete;
+    try {
+      await teacherService.deleteProblem(problem.id);
+      setProblemState(problems.filter((item) => item.id !== problem.id));
+      setNotice(`${problem.title} was removed from the library.`);
+      if (selectedProblemId === problem.id) {
+        setSelectedProblemId("");
+      }
+    } catch (e) {
+      setNotice(`Failed to delete ${problem.title}.`);
+    } finally {
+      setConfirmDelete(null);
+    }
+  }
+
+  const publicCount = problems.filter(p => p.visibility === "Public").length;
+  const privateCount = problems.length - publicCount;
+  const notUsedCount = problems.filter(p => p.usedIn === 0).length;
 
   return (
     <section className="teacher-page teacher-library-page">
-      <TeacherPageIntro title="Problem library" context={problems.length ? "38 problems · 14 public in Practice · 24 private" : "0 problems"}>
+      <TeacherPageIntro title="Problem library" context={problems.length ? `${problems.length} problems · ${publicCount} public in Practice · ${privateCount} private` : "0 problems"}>
         <button className="button primary" type="button" onClick={() => navigate("/teacher/problems/new")}>New problem</button>
       </TeacherPageIntro>
       <div className="teacher-divider" />
 
-      {problems.length === 0 ? (
+      {loading ? (
+        <div style={{ padding: '24px' }}>Loading problems...</div>
+      ) : problems.length === 0 ? (
         <TeacherEmptyState
           title="No problems yet"
           description="Create your first SQL problem with a schema, seed data and a reference solution. You can reuse it in any assignment or contest."
@@ -82,9 +126,9 @@ export function ProblemLibraryPage() {
           <TeacherField label="VISIBILITY"><select value={visibility} onChange={(event) => setVisibility(event.target.value)}><option>All</option><option>Public</option><option>Private</option></select></TeacherField>
         </div>
         <div className="teacher-list-summary">
-          <div><strong>38</strong><small>Problems in library</small></div>
-          <div><strong>14</strong><small>Public in Practice</small></div>
-          <div><strong>9</strong><small>Not used in any assignment</small></div>
+          <div><strong>{problems.length}</strong><small>Problems in library</small></div>
+          <div><strong>{publicCount}</strong><small>Public in Practice</small></div>
+          <div><strong>{notUsedCount}</strong><small>Not used in any assignment</small></div>
         </div>
         <div className="teacher-divider teacher-list-divider" />
         {notice && <p className="teacher-form-message" role="status">{notice}</p>}
@@ -109,7 +153,7 @@ export function ProblemLibraryPage() {
                 </tbody>
               </table>
             </div>
-            <p className="teacher-list-footer">Showing {filtered.length} of 38 problems</p>
+            <p className="teacher-list-footer">Showing {filtered.length} of {problems.length} problems</p>
           </div>
           <aside className="teacher-list-detail-panel">
             {selectedProblem ? <>
@@ -136,6 +180,17 @@ export function ProblemLibraryPage() {
           <p><strong>{blockedDelete.number} · {blockedDelete.title}</strong></p>
           <p>This problem is used in {blockedDelete.usedIn} assignment{blockedDelete.usedIn === 1 ? "" : "s"} or contest{blockedDelete.usedIn === 1 ? "" : "s"}. Remove it from those activities before deleting it.</p>
           <div className="teacher-dialog-actions"><button className="button" type="button" onClick={() => setBlockedDelete(null)}>Close</button></div>
+        </div>
+      </Dialog>}
+
+      {confirmDelete && <Dialog title="Confirm Deletion" onClose={() => setConfirmDelete(null)}>
+        <div className="teacher-preview-dialog">
+          <p>Are you sure you want to delete <strong>{confirmDelete.number} · {confirmDelete.title}</strong>?</p>
+          <p className="muted">This action cannot be undone.</p>
+          <div className="teacher-dialog-actions">
+            <button className="button" type="button" onClick={() => setConfirmDelete(null)}>Cancel</button>
+            <button className="button teacher-danger-button" type="button" onClick={executeDelete}>Delete</button>
+          </div>
         </div>
       </Dialog>}
     </section>

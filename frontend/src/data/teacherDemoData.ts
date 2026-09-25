@@ -17,6 +17,7 @@ export type TeacherProblem = {
   referenceSolution: string;
   expectedColumns: string[];
   expectedRows: (string | number)[][];
+  testCases?: { seedData: string; isHidden: boolean }[];
 };
 
 export const teacherProblems: TeacherProblem[] = [
@@ -121,8 +122,10 @@ export type TeacherClass = {
   course: string;
   term: string;
   students: number;
-  mode: "Group work" | "Individual";
-  status: "Active" | "Archived";
+  mode: "Group work" | "Individual" | string;
+  status: "Active" | "Archived" | string;
+  startDate?: string;
+  endDate?: string;
   groups: {
     id: string;
     members: number;
@@ -171,7 +174,15 @@ export const teacherClasses: TeacherClass[] = [
   },
 ];
 
-export const teacherRoster = [
+export type TeacherClassMember = {
+  id?: string;
+  name: string;
+  email?: string;
+  role: string;
+  joinedAt?: string;
+};
+
+export const teacherRoster: TeacherClassMember[] = [
   { name: "Bao Tran", role: "Group leader" },
   { name: "Ngoc Linh", role: "Member" },
   { name: "Minh Anh", role: "Member" },

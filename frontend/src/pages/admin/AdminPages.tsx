@@ -385,47 +385,136 @@ export function AdminRolesPage() {
   </div>;
 }
 
-function CourseDialog({ onClose, onCreate }: { onClose: () => void; onCreate: (id: string, course: string) => void }) {
-  const [course, setCourse] = useState("IS207 · Web Development");
-  const [id, setId] = useState("");
-  return <Dialog title="Create class" onClose={onClose} className="admin-dialog"><form className="admin-dialog-form" onSubmit={(e) => { e.preventDefault(); if (id.trim()) onCreate(id.trim(), course); }}>
-    <Field label="COURSE"><select value={course} onChange={(e) => setCourse(e.target.value)}><option>IS207 · Web Development</option><option>IS336 · ERP Planning</option><option>New course</option></select></Field>
-    <Field label="CLASS ID"><input autoFocus value={id} onChange={(e) => setId(e.target.value)} placeholder="IS207.R14" /></Field>
-    <div className="admin-dialog-actions"><button type="button" className="button" onClick={onClose}>Cancel</button><button className="button primary">Create class</button></div>
-  </form></Dialog>;
+function CourseDialog({ onClose, onCreate, lecturers }: { onClose: () => void; onCreate: (id: string, course: string, term: string, lecturer: string, startDate: string, endDate: string) => void; lecturers: string[] }) {
+  const [newClassForm, setNewClassForm] = useState({
+    id: "",
+    course: "",
+    term: "",
+    lecturer: "Unassigned",
+    startDate: "",
+    endDate: ""
+  });
+
+  return (
+    <Dialog title="Create a new class" onClose={onClose}>
+      <form className="teacher-manage-dialog" onSubmit={(e) => { e.preventDefault(); if (newClassForm.id.trim()) onCreate(newClassForm.id.trim(), newClassForm.course, newClassForm.term, newClassForm.lecturer, newClassForm.startDate, newClassForm.endDate); }}>
+        <p className="tiny muted">Set up a new class or section</p>
+        
+        <label className="teacher-field" style={{ marginTop: "1rem" }}>
+          <span>CLASS ID</span>
+          <input required autoFocus value={newClassForm.id} onChange={e => setNewClassForm({...newClassForm, id: e.target.value})} placeholder="E.g. IS207.R14" />
+        </label>
+
+        <label className="teacher-field">
+          <span>COURSE NAME</span>
+          <input required value={newClassForm.course} onChange={e => setNewClassForm({...newClassForm, course: e.target.value})} placeholder="E.g. Web Development" />
+        </label>
+
+        <label className="teacher-field">
+          <span>TERM</span>
+          <select required value={newClassForm.term} onChange={e => setNewClassForm({...newClassForm, term: e.target.value})}>
+            <option value="" disabled>Select a term...</option>
+            {Array.from({ length: 11 }, (_, i) => 2025 + i).flatMap(year => [1, 2, 3].map(sem => `Semester ${sem}, ${year}`)).map(t => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+        </label>
+        
+        <label className="teacher-field">
+          <span>LECTURER</span>
+          <select value={newClassForm.lecturer} onChange={e => setNewClassForm({...newClassForm, lecturer: e.target.value})}>
+             <option value="Unassigned">Unassigned</option>
+             {lecturers.map(l => <option key={l} value={l}>{l}</option>)}
+          </select>
+        </label>
+        
+        <div style={{ display: "flex", gap: "1rem", marginTop: "1rem" }}>
+          <label className="teacher-field" style={{ flex: 1, marginTop: 0 }}>
+            <span>START DATE</span>
+            <input required type="date" value={newClassForm.startDate} onChange={e => setNewClassForm({...newClassForm, startDate: e.target.value})} />
+          </label>
+          <label className="teacher-field" style={{ flex: 1, marginTop: 0 }}>
+            <span>END DATE</span>
+            <input required type="date" value={newClassForm.endDate} onChange={e => setNewClassForm({...newClassForm, endDate: e.target.value})} />
+          </label>
+        </div>
+        
+        <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem" }}>
+          <button type="button" className="button" onClick={onClose}>Cancel</button>
+          <button className="button primary" type="submit">Create class</button>
+        </div>
+      </form>
+    </Dialog>
+  );
 }
 
 export function AdminCoursesPage() {
   const location = useLocation();
-  const [classes, setClasses] = useState(readAdminClasses);
-  const [selectedId, setSelectedId] = useState("IS207.R12");
+  const [classes, setClasses] = useState<AdminClass[]>([]);
+  const [selectedId, setSelectedId] = useState("");
   const [query, setQuery] = useState("");
   const [semester, setSemester] = useState("All semesters");
   const [dialog, setDialog] = useState(false);
   const [notice, setNotice] = useState("");
-  const selected = classes.find((item) => item.id === selectedId) || classes[0];
-  useEffect(() => saveAdminClasses(classes), [classes]);
+  const [lecturers, setLecturers] = useState<string[]>([]);
+
+  useEffect(() => {
+    Promise.all([
+      adminService.getClasses(),
+      adminService.getUsers()
+    ]).then(([classesData, users]) => {
+      setClasses(classesData);
+      if (classesData.length > 0 && !selectedId) {
+        setSelectedId(classesData[0].id);
+      }
+      setLecturers(users.filter((user: any) => user.role.toLowerCase() === "lecturer").map((user: any) => user.name));
+    }).catch(console.error);
+  }, []);
+
+  const selected = classes.find((item) => item.id === selectedId) || null;
+  
   useEffect(() => {
     const state = location.state as { selectedId?: string; notice?: string } | null;
     if (state?.selectedId) setSelectedId(state.selectedId);
     if (state?.notice) setNotice(state.notice);
     if (state) window.history.replaceState({}, document.title);
   }, [location.state]);
+
   const visible = classes.filter((item) =>
     `${item.course} ${item.id} ${item.lecturer}`.toLowerCase().includes(query.toLowerCase()) &&
     (semester === "All semesters" || item.semester === semester));
+
   return <div className="admin-page">
     <PageIntro title="Courses & classes" sub="Academic structure / Manage class rosters and access"><button className="button primary admin-button" onClick={() => setDialog(true)}>Add class</button></PageIntro>
     <div className="admin-course-filters"><Field label="SEMESTER"><select value={semester} onChange={(event) => setSemester(event.target.value)}><option>All semesters</option><option>Semester 1, 2025</option><option>Semester 2, 2026</option></select></Field><Field label="SEARCH"><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search course or class..." /></Field></div>{notice && <Notice>{notice}</Notice>}
     <Split main={<div className="admin-table-wrap"><table className="admin-table admin-course-table"><thead><tr><th>COURSE / CLASS</th><th>LECTURER</th><th>STUDENTS</th><th>STATUS</th></tr></thead><tbody>{visible.map((item) => <tr key={item.id} className={item.id === selectedId ? "is-selected" : ""} onClick={() => setSelectedId(item.id)}><td data-label="COURSE / CLASS"><button className="admin-row-link" onClick={() => setSelectedId(item.id)}>{item.course}</button><small>{item.id}</small></td><td data-label="LECTURER" className={item.lecturer === "Unassigned" ? "admin-warning" : ""}>{item.lecturer}</td><td data-label="STUDENTS">{item.students}</td><td data-label="STATUS" className={item.status === "Active" ? "admin-success" : "admin-warning"}>{item.status}</td></tr>)}</tbody></table></div>} side={selected ? <>
-      <h2>{selected.id}</h2><h3 className="admin-detail-title">{selected.course.split(" · ")[1]}</h3><p className={selected.status === "Active" ? "admin-success" : "admin-warning"}>{selected.status}{selected.lecturer === "Unassigned" ? " · Lecturer needed" : ""}</p><div className="admin-detail-divider" />
-      <Field label="SEMESTER"><select value={selected.semester} onChange={(event) => setClasses((all) => all.map((item) => item.id === selected.id ? { ...item, semester: event.target.value } : item))}><option>Semester 1, 2025</option><option>Semester 2, 2026</option></select></Field><Field label="CLASS DATES"><input value={selected.dates} onChange={(event) => setClasses((all) => all.map((item) => item.id === selected.id ? { ...item, dates: event.target.value } : item))} /></Field><p className="admin-muted">{selected.students} enrolled students</p>
-      <div className="admin-button-stack"><Link className="button primary admin-button" to="/admin/courses/lecturers">Assign lecturer</Link><Link className="button admin-button" to={`/admin/courses/classes/${encodeURIComponent(selected.id)}/edit`}>Edit class</Link></div><div className="admin-detail-divider" /><button className="admin-danger-link" onClick={() => { const status: AdminClass["status"] = selected.status === "Archived" ? "Active" : "Archived"; setClasses((all) => all.map((item) => item.id === selected.id ? { ...item, status } : item)); setNotice(`${selected.id} ${status === "Archived" ? "archived" : "restored"}.`); }}>{selected.status === "Archived" ? "Restore class" : "Archive class"}</button>
+      <h2>{selected.id}</h2><h3 className="admin-detail-title">{selected.course.split(" · ")[1] || selected.course}</h3><p className={selected.status === "Active" ? "admin-success" : "admin-warning"}>{selected.status}{selected.lecturer === "Unassigned" ? " · Lecturer needed" : ""}</p><div className="admin-detail-divider" />
+      <Field label="SEMESTER"><select value={selected.semester} onChange={async (event) => {
+        const newSemester = event.target.value;
+        const res = await adminService.updateClass(selected.id, { semester: newSemester });
+        setClasses(all => all.map(c => c.id === selected.id ? res : c));
+      }}>
+        {Array.from({ length: 11 }, (_, i) => 2025 + i).flatMap(year => [1, 2, 3].map(sem => `Semester ${sem}, ${year}`)).map(t => (
+          <option key={t} value={t}>{t}</option>
+        ))}
+      </select></Field>
+      <Field label="CLASS DATES"><input readOnly value={selected.startDate && selected.endDate ? `${selected.startDate} – ${selected.endDate}` : selected.dates} /></Field><p className="admin-muted">{selected.students} enrolled students</p>
+      <div className="admin-button-stack"><Link className="button primary admin-button" to="/admin/courses/lecturers" state={{ selectedId: selected.id }}>Assign lecturer</Link><Link className="button admin-button" to={`/admin/courses/classes/${encodeURIComponent(selected.id)}/edit`}>Edit class</Link></div><div className="admin-detail-divider" />
+      <button className="admin-danger-link" onClick={async () => { 
+        const status = selected.status === "Archived" ? "Active" : "Archived"; 
+        const res = await adminService.updateClass(selected.id, { status });
+        setClasses((all) => all.map((item) => item.id === selected.id ? res : item)); 
+        setNotice(`${selected.id} ${status === "Archived" ? "archived" : "restored"}.`); 
+      }}>{selected.status === "Archived" ? "Restore class" : "Archive class"}</button>
     </> : <h2>Class details</h2>} />
-    {dialog && <CourseDialog onClose={() => setDialog(false)} onCreate={(id, course) => {
+    {dialog && <CourseDialog lecturers={lecturers} onClose={() => setDialog(false)} onCreate={async (id, course, term, lecturer, startDate, endDate) => {
       if (classes.some((item) => item.id.toLowerCase() === id.toLowerCase())) { setDialog(false); setNotice(`A class with ID ${id} already exists.`); return; }
-      const item: AdminClass = { id, course, lecturer: "Unassigned", students: 0, status: "Draft", semester: "Semester 2, 2026", dates: "Sep 07 – Nov 28, 2026" };
-      setClasses((all) => [...all, item]); setSelectedId(id); setDialog(false); setNotice(`${id} was added as a draft class.`);
+      try {
+        const item = await adminService.createClass({ id, course, semester: term, lecturerName: lecturer, startDate: startDate, endDate: endDate });
+        setClasses((all) => [...all, item]); setSelectedId(id); setDialog(false); setNotice(`${id} was added as a draft class.`);
+      } catch (err) {
+        console.error("Failed to create class", err);
+      }
     }} />}
   </div>;
 }
@@ -434,26 +523,52 @@ export function AdminEditClassPage() {
   const { classId: routeId = "" } = useParams();
   const classId = decodeURIComponent(routeId);
   const navigate = useNavigate();
-  const record = readAdminClasses().find((item) => item.id === classId);
-  const [course, setCourse] = useState(record?.course ?? "IS207 · Web Development");
-  const [semester, setSemester] = useState(record?.semester ?? "Semester 2, 2026");
-  const [dates, setDates] = useState(record?.dates ?? "");
-  const [lecturer, setLecturer] = useState(record?.lecturer ?? "Unassigned");
-  const [status, setStatus] = useState<AdminClass["status"]>(record?.status ?? "Draft");
+  const [record, setRecord] = useState<AdminClass | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [course, setCourse] = useState("IS207 · Web Development");
+  const [semester, setSemester] = useState("Semester 2, 2026");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [lecturer, setLecturer] = useState("Unassigned");
+  const [status, setStatus] = useState<AdminClass["status"]>("Draft");
   const [notice, setNotice] = useState("");
-  const lecturers = readAdminUsers().filter((user) => user.role === "Lecturer").map((user) => user.name);
+  const [lecturers, setLecturers] = useState<string[]>([]);
 
+  useEffect(() => {
+    Promise.all([
+      adminService.getClasses(),
+      adminService.getUsers()
+    ]).then(([classes, users]) => {
+      const cls = classes.find(c => c.id === classId);
+      if (cls) {
+        setRecord(cls);
+        setCourse(cls.course);
+        setSemester(cls.semester);
+        setStartDate(cls.startDate || "");
+        setEndDate(cls.endDate || "");
+        setLecturer(cls.lecturer);
+        setStatus(cls.status as AdminClass["status"]);
+      }
+      setLecturers(users.filter((user: any) => user.role.toLowerCase() === "lecturer").map((user: any) => user.name));
+      setLoading(false);
+    }).catch(console.error);
+  }, [classId]);
+
+  if (loading) return <div className="admin-page"><PageIntro title="Loading..." sub="Courses & classes" /></div>;
   if (!record) return <div className="admin-page"><PageIntro title="Class not found" sub="Courses & classes" /><p className="admin-muted">This class may have been removed.</p><Link className="button admin-button" to="/admin/courses">Back to courses</Link></div>;
+  
   const currentRecord = record;
 
-  function save(event: FormEvent) {
+  async function save(event: FormEvent) {
     event.preventDefault();
-    if (!dates.trim()) { setNotice("Class dates are required."); return; }
-    const next = readAdminClasses().map((item) => item.id === currentRecord.id
-      ? { ...item, course, semester, dates: dates.trim(), lecturer, status }
-      : item);
-    saveAdminClasses(next);
-    navigate("/admin/courses", { state: { selectedId: currentRecord.id, notice: `${currentRecord.id} class details saved.` } });
+    if (!startDate.trim() || !endDate.trim()) { setNotice("Class dates are required."); return; }
+    try {
+      await adminService.updateClass(currentRecord.id, { course, semester, lecturerName: lecturer, status, startDate, endDate });
+      navigate("/admin/courses", { state: { selectedId: currentRecord.id, notice: `${currentRecord.id} class details saved.` } });
+    } catch (err) {
+      console.error(err);
+      setNotice("Failed to save class details.");
+    }
   }
 
   return <div className="admin-page">
@@ -461,11 +576,18 @@ export function AdminEditClassPage() {
     <form className="admin-edit-form admin-class-form" onSubmit={save}>
       <h2>Class details</h2><p className="admin-muted">Update the course, term, instructor, and enrollment status for this class.</p>
       <Field label="CLASS ID"><input value={currentRecord.id} readOnly /><small className="admin-muted">Class IDs stay fixed so existing student work keeps its link.</small></Field>
-      <Field label="COURSE"><select value={course} onChange={(event) => setCourse(event.target.value)}><option>IS207 · Web Development</option><option>IS336 · ERP Planning</option></select></Field>
-      <Field label="SEMESTER"><select value={semester} onChange={(event) => setSemester(event.target.value)}><option>Semester 1, 2025</option><option>Semester 2, 2026</option></select></Field>
+      <Field label="COURSE"><input value={course} onChange={(event) => setCourse(event.target.value)} /></Field>
+      <Field label="SEMESTER"><select value={semester} onChange={(event) => setSemester(event.target.value)}>
+        {Array.from({ length: 11 }, (_, i) => 2025 + i).flatMap(year => [1, 2, 3].map(sem => `Semester ${sem}, ${year}`)).map(t => (
+          <option key={t} value={t}>{t}</option>
+        ))}
+      </select></Field>
       <Field label="LECTURER"><select value={lecturer} onChange={(event) => setLecturer(event.target.value)}><option>Unassigned</option>{Array.from(new Set([...lecturers, record.lecturer].filter((name) => name !== "Unassigned"))).map((name) => <option key={name}>{name}</option>)}</select></Field>
       <Field label="CLASS STATUS"><select value={status} onChange={(event) => setStatus(event.target.value as AdminClass["status"])}><option>Draft</option><option>Active</option><option>Archived</option></select></Field>
-      <Field label="CLASS DATES"><input value={dates} onChange={(event) => setDates(event.target.value)} placeholder="Sep 07 – Nov 28, 2026" required /></Field>
+      <div style={{ display: "flex", gap: "1rem" }}>
+        <div style={{ flex: 1 }}><Field label="START DATE"><input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} required /></Field></div>
+        <div style={{ flex: 1 }}><Field label="END DATE"><input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} required /></Field></div>
+      </div>
       <p className="admin-muted">{currentRecord.students} enrolled students. Archiving keeps rosters and submissions available to admins.</p>
       {notice && <Notice>{notice}</Notice>}
       <div className="admin-edit-actions"><Link className="button admin-button" to="/admin/courses">Cancel</Link><button className="button primary admin-button">Save class</button></div>
@@ -474,18 +596,53 @@ export function AdminEditClassPage() {
 }
 
 export function AdminLecturersPage() {
-  const [assignments, setAssignments] = useState(() => [...readAdminClasses()].sort((a, b) => Number(b.lecturer === "Unassigned") - Number(a.lecturer === "Unassigned")));
-  const [selectedId, setSelectedId] = useState("IS207.R12");
-  const [lecturer, setLecturer] = useState("Huy Lai");
+  const location = useLocation();
+  const state = location.state as { selectedId?: string } | null;
+  const initialSelectedId = state?.selectedId || "";
+  
+  const [assignments, setAssignments] = useState<AdminClass[]>([]);
+  const [selectedId, setSelectedId] = useState(initialSelectedId);
+  const [lecturer, setLecturer] = useState("Unassigned");
   const [notice, setNotice] = useState("");
-  const selected = assignments.find((item) => item.id === selectedId) || assignments[0];
-  const lecturers = readAdminUsers().filter((user) => user.role === "Lecturer").map((user) => user.name);
-  useEffect(() => saveAdminClasses(assignments), [assignments]);
+  const [lecturers, setLecturers] = useState<string[]>([]);
+  
+  useEffect(() => {
+    Promise.all([
+      adminService.getClasses(),
+      adminService.getUsers()
+    ]).then(([classes, users]) => {
+      const sorted = [...classes].sort((a, b) => Number(b.lecturer === "Unassigned") - Number(a.lecturer === "Unassigned"));
+      setAssignments(sorted);
+      if (sorted.length > 0 && !selectedId) {
+        setSelectedId(sorted[0].id);
+        setLecturer(sorted[0].lecturer);
+      } else if (selectedId) {
+        const cls = sorted.find(c => c.id === selectedId);
+        if (cls) setLecturer(cls.lecturer);
+      }
+      setLecturers(users.filter((user: any) => user.role.toLowerCase() === "lecturer").map((user: any) => user.name));
+    }).catch(console.error);
+  }, []);
+
+  const selected = assignments.find((item) => item.id === selectedId);
+
   return <div className="admin-page">
-    <PageIntro title="Lecturer assignment" sub={`Class ownership / ${selected.semester}`}><button className="button primary admin-button" onClick={() => { setAssignments((all) => all.map((item) => item.id === selectedId ? { ...item, lecturer } : item)); setNotice(`${lecturer} assigned to ${selectedId}.`); }}>Save assignment</button></PageIntro>{notice && <Notice>{notice}</Notice>}
-    <Split main={<div className="admin-table-wrap"><table className="admin-table admin-lecturer-table"><thead><tr><th>CLASS</th><th>CURRENT LECTURER</th><th>EFFECTIVE</th></tr></thead><tbody>{assignments.map((item) => <tr key={item.id} className={item.id === selectedId ? "is-selected" : ""} onClick={() => { setSelectedId(item.id); setLecturer(item.lecturer === "Unassigned" ? "Huy Lai" : item.lecturer); }}><td data-label="CLASS"><b>{item.id}</b></td><td data-label="CURRENT LECTURER" className={item.lecturer === "Unassigned" ? "admin-warning" : ""}>{item.lecturer}</td><td data-label="EFFECTIVE">{item.lecturer === "Unassigned" ? "Not set" : "Sep 07, 2026"}</td></tr>)}</tbody></table></div>} side={<>
-      <h2>Assign {selected.id}</h2><p className="admin-muted">{selected.course.split(" · ")[1]} · {selected.semester} · {selected.students} students</p><Field label="LECTURER"><select value={lecturer} onChange={(e) => setLecturer(e.target.value)}>{Array.from(new Set([...lecturers, "Unassigned"])).map((name) => <option key={name}>{name}</option>)}</select></Field><Field label="EFFECTIVE DATE"><input type="text" defaultValue="Sep 21, 2026" /></Field><Field label="NOTE"><textarea defaultValue={`Primary lecturer for ${selected.semester}`} /></Field><div className="admin-detail-divider" /><h3 className="admin-subheading">Access preview</h3><p className="admin-muted">{lecturer} can manage assignments, view class results and review student submissions from the effective date.</p>
-    </>} />
+    <PageIntro title="Lecturer assignment" sub={`Class ownership / ${selected?.semester || ""}`}>
+      <button className="button primary admin-button" disabled={!selected} onClick={async () => {
+        if (!selected) return;
+        try {
+          const updated = await adminService.updateClass(selectedId, { lecturer_name: lecturer });
+          setAssignments((all) => all.map((item) => item.id === selectedId ? updated : item));
+          setNotice(`${lecturer} assigned to ${selectedId}.`);
+        } catch (err) {
+          console.error(err);
+          setNotice("Failed to assign lecturer.");
+        }
+      }}>Save assignment</button>
+    </PageIntro>{notice && <Notice>{notice}</Notice>}
+    <Split main={<div className="admin-table-wrap"><table className="admin-table admin-lecturer-table"><thead><tr><th>CLASS</th><th>CURRENT LECTURER</th><th>EFFECTIVE</th></tr></thead><tbody>{assignments.map((item) => <tr key={item.id} className={item.id === selectedId ? "is-selected" : ""} onClick={() => { setSelectedId(item.id); setLecturer(item.lecturer === "Unassigned" ? "Huy Lai" : item.lecturer); }}><td data-label="CLASS"><b>{item.id}</b></td><td data-label="CURRENT LECTURER" className={item.lecturer === "Unassigned" ? "admin-warning" : ""}>{item.lecturer}</td><td data-label="EFFECTIVE">{item.lecturer === "Unassigned" ? "Not set" : "Sep 07, 2026"}</td></tr>)}</tbody></table></div>} side={selected ? <>
+      <h2>Assign {selected.id}</h2><p className="admin-muted">{selected.course.split(" · ")[1] || selected.course} · {selected.semester} · {selected.students} students</p><Field label="LECTURER"><select value={lecturer} onChange={(e) => setLecturer(e.target.value)}>{Array.from(new Set([...lecturers, "Unassigned"])).map((name) => <option key={name}>{name}</option>)}</select></Field><Field label="EFFECTIVE DATE"><input readOnly type="text" defaultValue="Sep 21, 2026" /></Field><Field label="NOTE"><textarea readOnly defaultValue={`Primary lecturer for ${selected.semester}`} /></Field><div className="admin-detail-divider" /><h3 className="admin-subheading">Access preview</h3><p className="admin-muted">{lecturer} can manage assignments, view class results and review student submissions from the effective date.</p>
+    </> : <h2>No class selected</h2>} />
   </div>;
 }
 

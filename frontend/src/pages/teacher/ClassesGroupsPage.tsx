@@ -1,26 +1,51 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Dialog } from "../../components/ui";
 import {
-  teacherClasses,
   teacherClassProgress,
-  teacherRoster,
   type TeacherClass,
+  type TeacherClassMember,
 } from "../../data/teacherDemoData";
 import { TeacherField, TeacherPageIntro } from "./TeacherPageParts";
+import { teacherService } from "../../services/teacherService";
 
 export function ClassesGroupsPage() {
-  const [classes, setClasses] = useState(teacherClasses);
+  const [classes, setClasses] = useState<TeacherClass[]>([]);
   const [term, setTerm] = useState("All terms");
   const [search, setSearch] = useState("");
   const [selectedClassId, setSelectedClassId] = useState("");
   const [studentSearch, setStudentSearch] = useState("");
   const [classDetailsOpen, setClassDetailsOpen] = useState(false);
-  const [dialog, setDialog] = useState<"members" | null>(null);
-  const [members, setMembers] = useState(teacherRoster);
-  const [newMember, setNewMember] = useState("");
+  const [dialog, setDialog] = useState<"members" | "create_class" | null>(null);
+  const [members, setMembers] = useState<TeacherClassMember[]>([]);
+  const [draftMembers, setDraftMembers] = useState<TeacherClassMember[]>([]);
+  const [availableStudents, setAvailableStudents] = useState<TeacherClassMember[]>([]);
+  const [newMemberId, setNewMemberId] = useState("");
   const [saved, setSaved] = useState(false);
   const [emptyStateNotice, setEmptyStateNotice] = useState("");
+  
+  const [newClassForm, setNewClassForm] = useState({
+    id: "",
+    course: "",
+    term: "",
+    mode: "Individual",
+    startDate: "",
+    endDate: ""
+  });
+
+  useEffect(() => {
+    teacherService.getClasses().then(setClasses).catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    if (dialog === "members" && selectedClassId) {
+      teacherService.getClassMembers(selectedClassId).then(data => {
+        setMembers(data);
+        setDraftMembers(data);
+      }).catch(console.error);
+      teacherService.getAllStudents().then(setAvailableStudents).catch(console.error);
+    }
+  }, [dialog, selectedClassId]);
 
   const termOptions = useMemo(
     () => Array.from(new Set(classes.map((classInfo) => classInfo.term))).sort((a, b) => {
@@ -56,26 +81,59 @@ export function ClassesGroupsPage() {
   }
 
   function addMember() {
-    const name = newMember.trim();
-    if (name) {
-      setMembers((current) => [...current, { name, role: "Member" }]);
-      setNewMember("");
-      setSaved(false);
+    if (newMemberId) {
+      const student = availableStudents.find(s => s.id === newMemberId);
+      if (student) {
+        setDraftMembers((current) => [...current, { ...student, role: "Member" }]);
+        setNewMemberId("");
+        setSaved(false);
+      }
     }
   }
 
-  function createFirstClass() {
-    const firstClass: TeacherClass = {
-      id: "IS207.R14",
-      course: "IS207 · New class",
-      term: "Semester 2, 2026",
-      students: 0,
+  async function saveMembers() {
+    if (!selectedClassId) return;
+    try {
+      const originalIds = new Set(members.map(m => m.id));
+      const draftIds = new Set(draftMembers.map(m => m.id));
+
+      const toAdd = draftMembers.filter(m => !originalIds.has(m.id));
+      const toRemove = members.filter(m => !draftIds.has(m.id));
+
+      await Promise.all([
+        ...toAdd.map(m => teacherService.addClassMember(selectedClassId, { student_id: m.id! })),
+        ...toRemove.map(m => teacherService.removeClassMember(selectedClassId, m.id!))
+      ]);
+      
+      setMembers(draftMembers);
+      setSaved(true);
+    } catch (err) {
+      console.error("Failed to save members", err);
+    }
+  }
+
+  async function createClassSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newClassForm.id || !newClassForm.course || !newClassForm.term) return;
+    
+    teacherService.createClass(newClassForm).then((created) => {
+      setClasses((curr) => [...curr, created]);
+      setSelectedClassId(created.id);
+      setDialog(null);
+      setNewClassForm({ id: "", course: "", term: "", mode: "Individual", startDate: "", endDate: "" });
+    }).catch(console.error);
+  }
+
+  function openCreateClass() {
+    setNewClassForm({
+      id: "",
+      course: "",
+      term: "",
       mode: "Individual",
-      status: "Active",
-      groups: [],
-    };
-    setClasses([firstClass]);
-    setSelectedClassId(firstClass.id);
+      startDate: "",
+      endDate: ""
+    });
+    setDialog("create_class");
   }
 
   return (
@@ -84,12 +142,17 @@ export function ClassesGroupsPage() {
         title="Classes & groups"
         context={`${term} · ${visibleClasses.length} ${visibleClasses.length === 1 ? "class" : "classes"}`}
       >
-        {classes.length ? <button className="button primary" type="button" disabled={!selectedClass} onClick={() => setDialog("members")}>Manage members</button> : <button className="button primary" type="button" onClick={createFirstClass}>New class</button>}
+        <button className="button primary" type="button" onClick={openCreateClass}>New class</button>
+        {classes.length > 0 && (
+          <button className="button" type="button" disabled={!selectedClass} onClick={() => setDialog("members")}>
+            Manage members
+          </button>
+        )}
       </TeacherPageIntro>
       <div className="teacher-divider" />
 
       {classes.length === 0 ? <div className="teacher-empty-state">
-        <div><h2>No classes yet</h2><p>Create a class to invite students and organize groups.</p><div className="teacher-empty-actions"><button className="button primary" type="button" onClick={createFirstClass}>New class</button><button className="button" type="button" onClick={() => setEmptyStateNotice("Class list import is ready for the demo.")}>Import class list</button></div>{emptyStateNotice && <p className="teacher-form-message" role="status">{emptyStateNotice}</p>}</div>
+        <div><h2>No classes yet</h2><p>Create a class to invite students and organize groups.</p><div className="teacher-empty-actions"><button className="button primary" type="button" onClick={openCreateClass}>New class</button><button className="button" type="button" onClick={() => setEmptyStateNotice("Class list import is ready for the demo.")}>Import class list</button></div>{emptyStateNotice && <p className="teacher-form-message" role="status">{emptyStateNotice}</p>}</div>
       </div> : <>
       <div className="teacher-class-filters">
         <TeacherField label="ACADEMIC TERM">
@@ -192,7 +255,7 @@ export function ClassesGroupsPage() {
           <div className="teacher-manage-dialog">
             <p className="tiny muted">{selectedClass.id} · {selectedClass.students} enrolled students</p>
             <div className="teacher-member-list">
-              {members.map((member) => (
+              {draftMembers.map((member) => (
                 <div key={member.name}>
                   <span>{member.name}<small>{member.role}</small></span>
                   <button
@@ -200,7 +263,7 @@ export function ClassesGroupsPage() {
                     type="button"
                     aria-label={`Remove ${member.name}`}
                     onClick={() => {
-                      setMembers((current) => current.filter((item) => item.name !== member.name));
+                      setDraftMembers((current) => current.filter((item) => item.id !== member.id));
                       setSaved(false);
                     }}
                   >×</button>
@@ -208,14 +271,55 @@ export function ClassesGroupsPage() {
               ))}
             </div>
             <div className="teacher-add-member-form">
-              <label className="teacher-field">
-                <span>ADD A STUDENT</span>
-                <input value={newMember} onChange={(event) => setNewMember(event.target.value)} placeholder="Student name" />
+              <label className="teacher-field" style={{ width: "100%" }}>
+                <span>SEARCH & ADD STUDENT</span>
+                <input 
+                  value={newMemberId} 
+                  onChange={(event) => setNewMemberId(event.target.value)} 
+                  placeholder="Type name or email to search..."
+                />
               </label>
-              <button className="button" type="button" onClick={addMember}>Add</button>
             </div>
-            {saved && <p className="teacher-form-message" role="status">Changes saved for this demo session.</p>}
-            <button className="button primary" type="button" onClick={() => setSaved(true)}>Save members</button>
+            {newMemberId.trim().length > 0 && (
+              <div className="teacher-member-search-results" style={{ marginTop: "0.5rem", border: "1px solid var(--border)", borderRadius: "6px", maxHeight: "150px", overflowY: "auto" }}>
+                {availableStudents
+                  .filter(s => 
+                    s.name.toLowerCase().includes(newMemberId.toLowerCase()) || 
+                    s.email?.toLowerCase().includes(newMemberId.toLowerCase())
+                  )
+                  .map(student => {
+                    const isAdded = draftMembers.some(m => m.id === student.id);
+                    return (
+                      <div key={student.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.5rem", borderBottom: "1px solid var(--border)" }}>
+                        <span style={{ fontSize: "0.875rem" }}>{student.name} <span className="muted">({student.email})</span></span>
+                        <button 
+                          className="button" 
+                          type="button"
+                          style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                          disabled={isAdded}
+                          onClick={() => {
+                            setDraftMembers((current) => [...current, { ...student, role: "Member" }]);
+                            setNewMemberId("");
+                            setSaved(false);
+                          }}
+                        >
+                          {isAdded ? "Added" : "Add"}
+                        </button>
+                      </div>
+                    );
+                  })}
+                {availableStudents.filter(s => 
+                    s.name.toLowerCase().includes(newMemberId.toLowerCase()) || 
+                    s.email?.toLowerCase().includes(newMemberId.toLowerCase())
+                ).length === 0 && (
+                  <div style={{ padding: "0.5rem", fontSize: "0.875rem", color: "var(--muted)" }}>No students found.</div>
+                )}
+              </div>
+            )}
+            <div style={{ marginTop: "1rem" }}>
+              {saved && <p className="teacher-form-message" role="status">Changes saved.</p>}
+              <button className="button primary" type="button" onClick={saveMembers}>Save members</button>
+            </div>
           </div>
         </Dialog>
       )}
@@ -227,6 +331,11 @@ export function ClassesGroupsPage() {
         >
           <div className="teacher-class-detail-dialog-content">
             <p className="muted">{selectedClass.course} · {selectedClass.term} · {selectedClass.mode}</p>
+            {(selectedClass.startDate && selectedClass.endDate) && (
+              <p className="muted" style={{ fontSize: "0.85rem", marginTop: "-0.5rem" }}>
+                {selectedClass.startDate} to {selectedClass.endDate}
+              </p>
+            )}
             <div className="teacher-class-metrics">
               <div><span>STUDENTS</span><strong>{selectedClass.students}</strong></div>
               <div><span>ASSIGNMENTS</span><strong>{assignments.length}</strong></div>
@@ -292,6 +401,47 @@ export function ClassesGroupsPage() {
               </div>
             </section>
           </div>
+        </Dialog>
+      )}
+
+      {dialog === "create_class" && (
+        <Dialog title="Create a new class" onClose={() => setDialog(null)}>
+          <form className="teacher-manage-dialog" onSubmit={createClassSubmit}>
+            <p className="tiny muted">Set up a new class or section</p>
+            
+            <label className="teacher-field" style={{ marginTop: "1rem" }}>
+              <span>CLASS ID</span>
+              <input required value={newClassForm.id} onChange={e => setNewClassForm({...newClassForm, id: e.target.value})} placeholder="E.g. IS207.R14" />
+            </label>
+
+            <label className="teacher-field">
+              <span>COURSE NAME</span>
+              <input required value={newClassForm.course} onChange={e => setNewClassForm({...newClassForm, course: e.target.value})} placeholder="E.g. Web Development" />
+            </label>
+
+            <label className="teacher-field">
+              <span>TERM</span>
+              <select required value={newClassForm.term} onChange={e => setNewClassForm({...newClassForm, term: e.target.value})}>
+                <option value="" disabled>Select a term...</option>
+                {Array.from({ length: 11 }, (_, i) => 2025 + i).flatMap(year => [1, 2, 3].map(sem => `Semester ${sem}, ${year}`)).map(t => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </label>
+
+            <div style={{ display: "flex", gap: "1rem" }}>
+              <label className="teacher-field" style={{ flex: 1 }}>
+                <span>START DATE</span>
+                <input required type="date" value={newClassForm.startDate} onChange={e => setNewClassForm({...newClassForm, startDate: e.target.value})} />
+              </label>
+              <label className="teacher-field" style={{ flex: 1 }}>
+                <span>END DATE</span>
+                <input required type="date" value={newClassForm.endDate} onChange={e => setNewClassForm({...newClassForm, endDate: e.target.value})} />
+              </label>
+            </div>
+            
+            <button className="button primary" style={{ marginTop: "1rem" }} type="submit">Create class</button>
+          </form>
         </Dialog>
       )}
     </section>

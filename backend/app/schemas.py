@@ -56,32 +56,55 @@ class ProblemBase(CamelModel):
     id: str
     number: str
     title: str
-    topic: str
+    topic: Optional[str] = None
+    topics: Optional[List[str]] = None
     difficulty: str
     practice_listed: bool
+    database_type: Optional[str] = "SQL Server"
 
 class ProblemListResponse(ProblemBase):
     progress: Optional[str] = None
+
+class TestCaseSchema(CamelModel):
+    tables: List[DataTable]
+    expected: DataTable
+    is_hidden: bool = False
 
 class ProblemDetailResponse(ProblemBase):
     description: str
     requirements: str
     hint: Optional[str] = None
-    tables: List[DataTable]
-    expected: DataTable
+    schema_sql: Optional[str] = Field(default="", alias="schema")
+    seed_data: Optional[str] = Field(default="", alias="seedData")
+    reference_solution: Optional[str] = Field(default="", alias="referenceSolution")
+    test_cases: Optional[List[Any]] = Field(default=None, alias="testCases")
     progress: Optional[str] = None
+
+class TestCaseCreate(CamelModel):
+    schema_sql: Optional[str] = Field(default="", alias="schema")
+    seed_data: str = Field(..., alias="seedData")
+    is_hidden: bool = False
 
 class ProblemCreate(CamelModel):
     number: str
     title: str
-    topic: str
     difficulty: str
-    practice_listed: bool = True
-    description: str
+    visibility: str = "Private"
+    topics: str
+    statement: str = Field(..., alias="statement")
     requirements: str
-    hint: Optional[str] = None
-    tables: List[DataTable]
-    expected: DataTable
+    hints: List[str] = Field(default_factory=list)
+    database: str = "SQL Server"
+    schema_sql: str = Field(default="", alias="schema")
+    seed_data: str = Field(default="", alias="seedData")
+    reference_solution: str = Field(..., alias="referenceSolution")
+    test_cases: Optional[List[TestCaseCreate]] = Field(default=None, alias="testCases")
+
+class ProblemValidateRequest(CamelModel):
+    database: str = "SQL Server"
+    schema_sql: str = Field(default="", alias="schema")
+    seed_data: str = Field(default="", alias="seedData")
+    reference_solution: str = Field(..., alias="referenceSolution")
 
 class QueryRequest(CamelModel):
     query: str
@@ -185,3 +208,71 @@ class AdminUserCreate(BaseModel):
     email: str
     role: str
     password: str
+
+class AdminClassResponse(CamelModel):
+    id: str
+    course: str
+    lecturer: str
+    students: int
+    status: str
+    semester: str
+    dates: str
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
+class AdminClassCreate(CamelModel):
+    id: str
+    course: str
+    semester: str
+    lecturer_name: str
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
+class AdminClassUpdate(CamelModel):
+    course: Optional[str] = None
+    semester: Optional[str] = None
+    dates: Optional[str] = None
+    lecturer_name: Optional[str] = None
+    status: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
+# ========================
+# Pydantic models cho Teacher Classes
+# ========================
+class ClassCreate(CamelModel):
+    id: str
+    course: str
+    term: str
+    mode: str = "Individual"
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
+class ClassUpdate(CamelModel):
+    course: Optional[str] = None
+    term: Optional[str] = None
+    status: Optional[str] = None
+    mode: Optional[str] = None
+
+class ClassResponse(CamelModel):
+    id: str
+    course: str
+    term: str
+    instructor_id: str
+    mode: str
+    status: str
+    students: int = 0
+    groups: List[Any] = Field(default_factory=list)
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
+class ClassMemberResponse(CamelModel):
+    id: str
+    name: str
+    email: str
+    role: str
+    joined_at: datetime
+
+class ClassMemberAdd(CamelModel):
+    student_id: str
+

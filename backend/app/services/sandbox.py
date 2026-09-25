@@ -39,11 +39,11 @@ def infer_sql_type(sample_val: Any) -> str:
     else:
         return "VARCHAR(MAX)"
 
-def seed_sandbox_data(db: Session, problem: Problem):
+def seed_sandbox_data(db: Session, tables: list):
     """ Tạo các bảng tạm (Local Temp Tables) và nạp dữ liệu """
     # SQL Server tự động xóa bảng tạm khi Session trả về Connection Pool 
     # (Nhờ cơ chế sp_reset_connection của ODBC)
-    for table_data in problem.tables:
+    for table_data in tables:
         name = table_data.get("name")
         cols = table_data.get("columns", [])
         rows = table_data.get("rows", [])
@@ -117,43 +117,131 @@ def compare_results(actual: Dict[str, Any], expected: Dict[str, Any]) -> Tuple[b
             
     return True, "Chính xác hoàn toàn!"
 
-def run_sandbox(db: Session, problem: Problem, query: str, is_submit: bool) -> Dict[str, Any]:
-    """ Hàm chính điều phối Sandbox """
+def rewrite_setup_script(script: str) -> str:
+    if not script or not script.strip(): return ""
     try:
-        # Bước 1: Rewrite Query
+        statements = sqlglot.parse(script, read="tsql")
+    except Exception as e:
+        raise SandboxError(f"Lỗi cú pháp SQL trong setup: {str(e)}")
+
+    forbidden = (exp.Drop, exp.Alter, exp.Delete, exp.Update, exp.Command, exp.Commit, exp.Rollback)
+    
+    rewritten_statements = []
+    for parsed in statements:
+        if not parsed: continue
+        for node in parsed.walk():
+            if isinstance(node, forbidden):
+                raise SandboxError(f"Không được phép: {type(node).__name__.upper()} trong setup")
+                
+        for table in parsed.find_all(exp.Table):
+            if table.name and not table.name.startswith("#"):
+                table.set("this", f"#{table.name}")
+                
+        rewritten_statements.append(parsed.sql(dialect="tsql"))
+        
+    return ";\n".join(rewritten_statements)
+
+def seed_sandbox_data_scripts(db: Session, schema_sql: str, seed_data: str):
+    # Drop existing temp tables first if needed, but we don't know the names ahead of time here unless we parse it.
+    # We assume a fresh session or that script has DROP TABLE IF EXISTS.
+    # Wait, the user might not write DROP TABLE IF EXISTS. Let's rely on the connection being fresh or we can just parse table names and drop them.
+    try:
+        parsed_schema = sqlglot.parse(schema_sql, read="tsql")
+        for stmt in parsed_schema:
+            if not stmt: continue
+            for table in stmt.find_all(exp.Table):
+                if table.name:
+                    tbl_name = table.name if table.name.startswith("#") else f"#{table.name}"
+                    db.execute(text(f"DROP TABLE IF EXISTS {tbl_name}"))
+    except:
+        pass # Ignore drop errors
+
+    rewritten_schema = rewrite_setup_script(schema_sql)
+    rewritten_seed = rewrite_setup_script(seed_data)
+    
+    if rewritten_schema:
+        db.execute(text(rewritten_schema))
+    if rewritten_seed:
+        db.execute(text(rewritten_seed))
+
+def run_validate_sandbox(db: Session, schema_sql: str, seed_data: str, query: str) -> Dict[str, Any]:
+    try:
+        seed_sandbox_data_scripts(db, schema_sql, seed_data)
+        rewritten_query = rewrite_query(query)
+        result = execute_query(db, rewritten_query)
+        return {
+            "status": "Success",
+            "message": "Validated successfully.",
+            "table": result
+        }
+    except SandboxError as e:
+        return {"status": "Error", "message": str(e)}
+    except Exception as e:
+        return {"status": "Error", "message": f"Validation failed: {str(e)}"}
+
+def run_sandbox(db: Session, problem: Problem, query: str, is_submit: bool) -> Dict[str, Any]:
+    try:
         rewritten_query = rewrite_query(query)
         
-        # Bước 2: Seed dữ liệu vào Temp Tables
-        seed_sandbox_data(db, problem)
-        
-        # Bước 3: Chạy truy vấn
-        actual_result = execute_query(db, rewritten_query)
-        
-        # Bước 4: Chấm điểm (Nếu là Submit)
-        if is_submit:
-            expected_result = problem.expected
-            is_correct, msg = compare_results(actual_result, expected_result)
+        test_cases = []
+        if problem.test_cases and len(problem.test_cases) > 0:
+            test_cases = problem.test_cases
+        elif problem.tables and problem.expected:
+            test_cases = [{"tables": problem.tables, "expected": problem.expected, "is_hidden": False}]
+        else:
+            raise SandboxError("Bài tập chưa có dữ liệu test case.")
+
+        if not is_submit:
+            visible_cases = [tc for tc in test_cases if getattr(tc, 'is_hidden', tc.get('is_hidden', False)) == False]
+            if not visible_cases:
+                visible_cases = [test_cases[0]]
+            test_cases_to_run = visible_cases[:1]
+        else:
+            test_cases_to_run = test_cases
             
-            status = "Accepted" if is_correct else "Wrong Answer"
+        last_table = None
+        
+        for idx, tc in enumerate(test_cases_to_run):
+            if isinstance(tc, dict):
+                seed_sandbox_data(db, tc.get("tables", []))
+                expected = tc.get("expected", {})
+            else:
+                script_obj = tc.scripts[0] if tc.scripts else None
+                if not script_obj:
+                    raise SandboxError(f"Test case {tc.id} thiếu script.")
+                seed_sandbox_data_scripts(db, script_obj.create_script, script_obj.insert_script)
+                
+                # We need to run expected_query to get expected results
+                rewritten_expected = rewrite_query(tc.expected_query)
+                expected = execute_query(db, rewritten_expected)
+            
+            actual_result = execute_query(db, rewritten_query)
+            last_table = actual_result
+            
+            is_correct, msg = compare_results(actual_result, expected)
+            if not is_correct:
+                status = "Wrong Answer" if is_submit else "Tabular result"
+                msg_prefix = f"Test case {idx + 1} sai: " if len(test_cases) > 1 and is_submit else ""
+                return {
+                    "status": status,
+                    "message": msg_prefix + msg if is_submit else "Chạy thử thành công nhưng kết quả khác đáp án.",
+                    "table": actual_result
+                }
+
+        if is_submit:
             return {
-                "status": status,
-                "message": msg if not is_correct else "Chúc mừng! Đáp án chính xác.",
-                "table": actual_result
+                "status": "Accepted",
+                "message": "Chúc mừng! Đáp án chính xác tất cả test cases.",
+                "table": last_table
             }
         else:
             return {
                 "status": "Tabular result",
                 "message": "Chạy thử thành công.",
-                "table": actual_result
+                "table": last_table
             }
             
     except SandboxError as e:
-        return {
-            "status": "Runtime Error",
-            "message": str(e)
-        }
+        return {"status": "Runtime Error", "message": str(e)}
     except Exception as e:
-        return {
-            "status": "Runtime Error",
-            "message": f"Lỗi hệ thống không xác định: {str(e)}"
-        }
+        return {"status": "Runtime Error", "message": f"Lỗi hệ thống không xác định: {str(e)}"}

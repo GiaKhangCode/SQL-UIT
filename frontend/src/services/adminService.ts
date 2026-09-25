@@ -29,4 +29,22 @@ export const adminService = {
       body: JSON.stringify(data),
     });
   },
+
+  async getClasses(): Promise<any[]> {
+    return apiFetch("/api/admin/classes");
+  },
+
+  async createClass(data: any): Promise<any> {
+    return apiFetch("/api/admin/classes", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateClass(id: string, data: any): Promise<any> {
+    return apiFetch(`/api/admin/classes/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
 };
