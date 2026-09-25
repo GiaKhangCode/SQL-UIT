@@ -15,7 +15,11 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     name = Column(String(255), nullable=False)
     initials = Column(String(10), nullable=False)
-    role = Column(String(50), default="student")  # student, instructor
+    role = Column(String(50), default="student")  # student, instructor, admin
+    status = Column(String(50), default="Active") # Active, Inactive, Pending
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    last_active = Column(DateTime, default=datetime.datetime.utcnow)
+    department = Column(String(255), nullable=True)
 
 class Problem(Base):
     __tablename__ = "problems"

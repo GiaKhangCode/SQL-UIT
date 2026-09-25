@@ -160,3 +160,28 @@ class AiChatSessionSchema(CamelModel):
     problem_id: str
     created_at: datetime
     updated_at: datetime
+
+# ========================
+# Pydantic models cho Admin
+# ========================
+class AdminUserResponse(CamelModel):
+    id: str
+    name: str
+    email: str
+    role: str
+    status: str
+    last_active: str
+    joined: str
+    detail: str
+
+class AdminUserUpdate(BaseModel):
+    name: str
+    email: str
+    role: str
+    status: str
+
+class AdminUserCreate(BaseModel):
+    name: str
+    email: str
+    role: str
+    password: str

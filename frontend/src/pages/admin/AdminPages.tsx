@@ -21,8 +21,8 @@ import {
   type AdminPracticeProblem,
   type AdminRoleName,
   type AdminRolePolicy,
-  type AdminUser,
 } from "../../data/adminDemoData";
+import { adminService, type AdminUser } from "../../services/adminService";
 
 function PageIntro({ title, sub, children }: { title: string; sub: string; children?: ReactNode }) {
   return <div className="admin-page-intro"><div><h1>{title}</h1><p>{sub}</p></div>{children && <div className="admin-page-actions">{children}</div>}</div>;
@@ -44,48 +44,105 @@ function AddUserDialog({ onClose, onAdd }: { onClose: () => void; onAdd: (user: 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<AdminUser["role"]>("Student");
-  function submit(event: FormEvent) {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!name.trim() || !email.trim()) return;
-    onAdd({ name: name.trim(), email: email.trim(), role, status: "Active", lastActive: "Never", joined: "Sep 23, 2026", detail: "New demo account" });
+    if (!name.trim() || !email.trim() || !password.trim()) return;
+    setLoading(true);
+    setError("");
+    try {
+      const newUser = await adminService.createUser({ name: name.trim(), email: email.trim(), role, password });
+      onAdd(newUser);
+    } catch (err: any) {
+      setError(err.message || "Failed to create user");
+    } finally {
+      setLoading(false);
+    }
   }
+
   return <Dialog title="Add user" onClose={onClose} className="admin-dialog"><form onSubmit={submit} className="admin-dialog-form">
-    <Field label="NAME"><input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" /></Field>
-    <Field label="EMAIL"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.edu" /></Field>
+    <Field label="NAME"><input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" required /></Field>
+    <Field label="EMAIL"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.edu" required /></Field>
+    <Field label="PASSWORD"><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" required minLength={8} /></Field>
     <Field label="ROLE"><select value={role} onChange={(e) => setRole(e.target.value as AdminUser["role"])}><option>Student</option><option>Lecturer</option><option>Admin</option></select></Field>
-    <div className="admin-dialog-actions"><button type="button" className="button" onClick={onClose}>Cancel</button><button className="button primary">Add user</button></div>
+    {error && <p className="admin-warning" style={{ margin: 0 }}>{error}</p>}
+    <div className="admin-dialog-actions"><button type="button" className="button" onClick={onClose} disabled={loading}>Cancel</button><button className="button primary" disabled={loading}>{loading ? "Adding..." : "Add user"}</button></div>
   </form></Dialog>;
 }
 
 export function AdminUsersPage() {
   const location = useLocation();
-  const [users, setUsers] = useState(readAdminUsers);
-  const [selectedEmail, setSelectedEmail] = useState(() => readAdminUsers()[0]?.email || "");
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [selectedEmail, setSelectedEmail] = useState("");
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("All roles");
   const [statusFilter, setStatusFilter] = useState("Active");
   const [dialog, setDialog] = useState(false);
   const [notice, setNotice] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [pendingRole, setPendingRole] = useState<string | null>(null);
   const pendingRequestCount = readAdminLecturerRequests().length;
+  
   const selected = users.find((user) => user.email === selectedEmail) || users[0];
-  useEffect(() => saveAdminUsers(users), [users]);
+  
+  useEffect(() => {
+    adminService.getUsers().then(data => {
+      setUsers(data);
+      if (data.length > 0 && !selectedEmail) {
+        setSelectedEmail(data[0].email);
+      }
+      setLoading(false);
+    }).catch(err => {
+      setNotice("Failed to load users.");
+      setLoading(false);
+    });
+  }, []);
+
   useEffect(() => {
     const state = location.state as { selectedEmail?: string; notice?: string } | null;
     if (state?.selectedEmail) setSelectedEmail(state.selectedEmail);
     if (state?.notice) setNotice(state.notice);
     if (state) window.history.replaceState({}, document.title);
   }, [location.state]);
+
+  useEffect(() => {
+    setPendingRole(null);
+  }, [selectedEmail]);
+
   const filtered = useMemo(() => users.filter((user) => {
     const matchesQuery = `${user.name} ${user.email}`.toLowerCase().includes(query.toLowerCase());
     return matchesQuery && (roleFilter === "All roles" || user.role === roleFilter) && (statusFilter === "All statuses" || user.status === statusFilter);
   }), [users, query, roleFilter, statusFilter]);
+
+  async function handleUpdateRole(userToUpdate: AdminUser, newRole: string) {
+    try {
+      const updated = await adminService.updateUser(userToUpdate.email, { ...userToUpdate, role: newRole });
+      setUsers(all => all.map(u => u.email === updated.email ? updated : u));
+    } catch (err: any) {
+      setNotice(err.message || "Failed to update role");
+    }
+  }
+
+  async function handleToggleStatus(userToUpdate: AdminUser) {
+    const newStatus = userToUpdate.status === "Inactive" ? "Active" : "Inactive";
+    try {
+      const updated = await adminService.updateUser(userToUpdate.email, { ...userToUpdate, status: newStatus });
+      setUsers(all => all.map(u => u.email === updated.email ? updated : u));
+    } catch (err: any) {
+      setNotice(err.message || "Failed to update status");
+    }
+  }
+
   function exportCsv() {
     const csv = ["Name,Email,Role,Status", ...users.map((u) => [u.name, u.email, u.role, u.status].join(","))].join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
     const link = document.createElement("a"); link.href = url; link.download = "querylab-users.csv"; link.click(); URL.revokeObjectURL(url);
   }
   return <div className="admin-page">
-    <PageIntro title="Users" sub={`People & access / ${users.length === 5 ? "1,248" : (1243 + users.length).toLocaleString()} accounts`}>
+    <PageIntro title="Users" sub={`People & access / ${users.length.toLocaleString()} accounts`}>
       <button className="button admin-button" onClick={exportCsv}>Export CSV</button><button className="button primary admin-button" onClick={() => setDialog(true)}>Add user</button>
     </PageIntro>
     {pendingRequestCount > 0 && <div className="admin-pending-banner"><span>{pendingRequestCount} lecturer registrations are awaiting approval. Lecturer access stays locked until approved.</span><Link className="text-button" to="/admin/users/approvals">Review requests →</Link></div>}
@@ -101,15 +158,18 @@ export function AdminUsersPage() {
           <td data-label="NAME / EMAIL"><button className="admin-row-link" onClick={() => setSelectedEmail(user.email)}>{user.name}</button><small>{user.email}</small></td><td data-label="ROLE">{user.role}</td><td data-label="STATUS" className={user.status === "Active" ? "admin-success" : ""}>{user.status}</td><td data-label="LAST ACTIVE">{user.lastActive}</td>
         </tr>)}
       </tbody></table></div>
-      <p className="admin-table-footer">Showing {filtered.length} of {users.length === 5 ? "1,248" : (1243 + users.length).toLocaleString()} accounts</p>
+      <p className="admin-table-footer">Showing {filtered.length} of {users.length.toLocaleString()} accounts</p>
     </>} side={selected ? <>
       <h2>Account details</h2><h3 className="admin-detail-title">{selected.name}</h3><p className="admin-muted">{selected.email}</p><div className="admin-detail-divider" />
-      <Field label="ROLE"><select value={selected.role} onChange={(e) => setUsers((all) => all.map((u) => u.email === selected.email ? { ...u, role: e.target.value as AdminUser["role"] } : u))}><option>Student</option><option>Lecturer</option><option>Admin</option></select></Field>
+      <Field label="ROLE"><select value={pendingRole ?? selected.role} onChange={(e) => setPendingRole(e.target.value)}><option>Student</option><option>Lecturer</option><option>Admin</option></select></Field>
+      {pendingRole && pendingRole !== selected.role && (
+        <button className="button primary admin-button" style={{ marginBottom: "1rem" }} onClick={() => { handleUpdateRole(selected, pendingRole); setPendingRole(null); }}>Save role</button>
+      )}
       <p className={selected.status === "Active" ? "admin-success admin-detail-status" : "admin-warning admin-detail-status"}>{selected.status} · Joined {selected.joined}</p><p className="admin-muted">{selected.detail}</p>
       <div className="admin-button-stack"><Link className="button admin-button" to={`/admin/users/${encodeURIComponent(selected.email)}/edit`}>Edit account</Link></div>
-      <div className="admin-detail-divider" /><button className="admin-danger-link" onClick={() => setUsers((all) => all.map((u) => u.email === selected.email ? { ...u, status: u.status === "Inactive" ? "Active" : "Inactive" } : u))}>{selected.status === "Inactive" ? "Reactivate account" : "Deactivate account"}</button><p className="admin-muted">Blocks future sign-in. Existing classes and submissions are retained.</p>
+      <div className="admin-detail-divider" /><button className="admin-danger-link" onClick={() => handleToggleStatus(selected)}>{selected.status === "Inactive" ? "Reactivate account" : "Deactivate account"}</button><p className="admin-muted">Blocks future sign-in. Existing classes and submissions are retained.</p>
     </> : <><h2>Account details</h2><p className="admin-muted">Select an account to review its access.</p></>} />
-    {dialog && <AddUserDialog onClose={() => setDialog(false)} onAdd={(user) => { setUsers((all) => [...all, user]); setSelectedEmail(user.email); setDialog(false); setNotice(`${user.name} was added to the demo account list.`); }} />}
+    {dialog && <AddUserDialog onClose={() => setDialog(false)} onAdd={(user) => { setUsers((all) => [...all, user]); setSelectedEmail(user.email); setDialog(false); setNotice(`${user.name} was added successfully.`); }} />}
   </div>;
 }
 
@@ -117,28 +177,57 @@ export function AdminEditAccountPage() {
   const { email: encodedEmail = "" } = useParams();
   const email = decodeURIComponent(encodedEmail);
   const navigate = useNavigate();
-  const user = readAdminUsers().find((account) => account.email === email);
-  const [name, setName] = useState(user?.name ?? "");
-  const [accountEmail, setAccountEmail] = useState(user?.email ?? "");
-  const [role, setRole] = useState<AdminUser["role"]>(user?.role ?? "Student");
-  const [status, setStatus] = useState<AdminUser["status"]>(user?.status ?? "Active");
+  
+  const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
+  const [name, setName] = useState("");
+  const [accountEmail, setAccountEmail] = useState("");
+  const [role, setRole] = useState<AdminUser["role"]>("Student");
+  const [status, setStatus] = useState<AdminUser["status"]>("Active");
   const [notice, setNotice] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  if (!user) return <div className="admin-page"><PageIntro title="Account not found" sub="People & access" /><p className="admin-muted">This account may have been removed or its email has changed.</p><Link className="button admin-button" to="/admin/users">Back to users</Link></div>;
-  const currentUser = user;
+  useEffect(() => {
+    adminService.getUsers().then(users => {
+      const found = users.find(u => u.email === email);
+      if (found) {
+        setCurrentUser(found);
+        setName(found.name);
+        setAccountEmail(found.email);
+        setRole(found.role);
+        setStatus(found.status);
+      }
+      setLoading(false);
+    });
+  }, [email]);
 
-  function save(event: FormEvent) {
+  if (loading) return <div className="admin-page"><PageIntro title="Loading account..." sub="People & access" /></div>;
+  if (!currentUser) return <div className="admin-page"><PageIntro title="Account not found" sub="People & access" /><p className="admin-muted">This account may have been removed or its email has changed.</p><Link className="button admin-button" to="/admin/users">Back to users</Link></div>;
+
+  async function save(event: FormEvent) {
     event.preventDefault();
+    if (!currentUser) return;
     const nextName = name.trim();
     const nextEmail = accountEmail.trim().toLowerCase();
     if (!nextName || !nextEmail) { setNotice("Name and email are required."); return; }
-    const users = readAdminUsers();
-    if (nextEmail !== currentUser.email && users.some((account) => account.email.toLowerCase() === nextEmail)) { setNotice("An account with this email already exists."); return; }
-    saveAdminUsers(users.map((account) => account.email === currentUser.email ? { ...account, name: nextName, email: nextEmail, role, status } : account));
-    navigate("/admin/users", { state: { selectedEmail: nextEmail, notice: `Account updated for ${nextName}.` } });
+    
+    setSaving(true);
+    try {
+      await adminService.updateUser(currentUser.email, {
+        name: nextName,
+        email: nextEmail,
+        role,
+        status
+      });
+      navigate("/admin/users", { state: { selectedEmail: nextEmail, notice: `Account updated for ${nextName}.` } });
+    } catch (err: any) {
+      setNotice(err.message || "Failed to update account.");
+      setSaving(false);
+    }
   }
 
   function resetAccess() {
+    if (!currentUser) return;
     setNotice(`A demo access reset was prepared for ${currentUser.email}. No email was sent.`);
   }
 
@@ -153,7 +242,7 @@ export function AdminEditAccountPage() {
         <Field label="ROLE"><select value={role} onChange={(event) => setRole(event.target.value as AdminUser["role"])}><option>Student</option><option>Lecturer</option><option>Admin</option></select></Field>
         <Field label="ACCOUNT STATUS"><select value={status} onChange={(event) => setStatus(event.target.value as AdminUser["status"])}><option>Active</option><option>Inactive</option><option>Pending</option></select></Field>
         {notice && <Notice>{notice}</Notice>}
-        <div className="admin-edit-actions"><Link className="button admin-button" to="/admin/users">Cancel</Link><button className="button primary admin-button">Save changes</button></div>
+        <div className="admin-edit-actions"><Link className="button admin-button" to="/admin/users">Cancel</Link><button className="button primary admin-button" disabled={saving}>{saving ? "Saving..." : "Save changes"}</button></div>
       </form>
       <aside className="admin-edit-access"><h2>Access management</h2><p className="admin-muted">Prepare an access reset for this account. In this demo, no email is sent.</p><p><strong>{currentUser.email}</strong></p><button type="button" className="button admin-button" onClick={resetAccess}>Reset access</button></aside>
     </div>

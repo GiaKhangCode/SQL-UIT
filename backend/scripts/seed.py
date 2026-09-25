@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import json
 from passlib.context import CryptContext
 from app.database import SessionLocal, engine, Base
@@ -39,6 +43,20 @@ def seed_data():
         )
         db.add(instructor_user)
         print("Đã tạo User: instructor@demo.local")
+
+    # 1.6 Tạo Admin mẫu
+    admin_user = db.query(User).filter(User.email == "admin@demo.local").first()
+    if not admin_user:
+        admin_user = User(
+            id="admin-demo",
+            email="admin@demo.local",
+            hashed_password=get_password_hash("123"),
+            name="Quản Trị Viên",
+            initials="AD",
+            role="admin"
+        )
+        db.add(admin_user)
+        print("Đã tạo User: admin@demo.local")
 
     # 2. Tạo Problem mẫu (p1)
     p1 = db.query(Problem).filter(Problem.id == "p1").first()
