@@ -47,7 +47,7 @@ def get_student_assignments(db: Session = Depends(get_db), current_user: User = 
         a_problems = db.query(AssignmentProblem).filter(AssignmentProblem.assignment_id == a.id).order_by(AssignmentProblem.order_index).all()
         p_ids = [ap.problem_id for ap in a_problems]
         
-        subs = db.query(Submission).filter(Submission.user_id == current_user.id, Submission.problem_id.in_(p_ids)).all()
+        subs = db.query(Submission).filter(Submission.user_id == current_user.id, Submission.problem_id.in_(p_ids), Submission.context == a.id).all()
         solved_count = len(set([s.problem_id for s in subs if s.result == "Accepted"]))
         attempted_count = len(set([s.problem_id for s in subs]))
         
@@ -66,7 +66,8 @@ def get_student_assignments(db: Session = Depends(get_db), current_user: User = 
             "date": a.closes.strftime("%Y-%m-%d") if a.closes else "",
             "time": a.closes.strftime("%H:%M") if a.closes else "",
             "status": status,
-            "problemIds": p_ids
+            "problemIds": p_ids,
+            "isContest": a.is_contest
         })
         
         if a.closes and status != "Solved":
@@ -104,8 +105,9 @@ def get_student_assignments(db: Session = Depends(get_db), current_user: User = 
             
     problems_db = db.query(Problem).filter(Problem.id.in_(list(all_p_ids))).all() if all_p_ids else []
     problems_res = []
+    assignment_ids_list = [a["id"] for a in assignments_res]
     for p in problems_db:
-        sub = db.query(Submission).filter(Submission.user_id == current_user.id, Submission.problem_id == p.id).order_by(Submission.submitted_at.desc()).first()
+        sub = db.query(Submission).filter(Submission.user_id == current_user.id, Submission.problem_id == p.id, Submission.context.in_(assignment_ids_list)).order_by(Submission.submitted_at.desc()).first()
         progress = "Not started"
         if sub:
             progress = "Solved" if sub.result == "Accepted" else "In progress"

@@ -318,7 +318,11 @@ export function ManualReviewPage() {
           <div className="teacher-review-history">
             <TeacherSectionTitle title="Saved review" />
             {submission.finalScore !== null ? (
-              <p className="tiny muted">Saved in database<br />Final Score: {submission.finalScore}</p>
+              <p className="tiny muted">
+                Saved in database<br />
+                Final Score: {submission.finalScore}<br />
+                {submission.feedback && <>Feedback: {submission.feedback}</>}
+              </p>
             ) : (
               <p className="tiny muted">No manual changes yet.<br />Your saved review will update the student's score.</p>
             )}
@@ -329,7 +333,7 @@ export function ManualReviewPage() {
         <Dialog title="Review saved" onClose={() => setDialogOpen(false)}>
           <p className="tiny">The score has been updated in the database.</p>
           <div className="teacher-dialog-actions">
-            <button className="button primary" type="button" onClick={() => setDialogOpen(false)}>Continue</button>
+            <button className="button primary" type="button" onClick={() => { setDialogOpen(false); navigate("/teacher/results"); }}>Continue</button>
           </div>
         </Dialog>
       )}

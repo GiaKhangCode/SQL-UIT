@@ -23,7 +23,7 @@ export function ContestDetailPage() {
     attempts?.some(
       (s) =>
         s.problemId === id &&
-        s.context === contest.title &&
+        s.context === contest.id &&
         s.result === "Accepted",
     ),
   );
@@ -33,7 +33,7 @@ export function ContestDetailPage() {
     "?source=" +
     (contest.status === "Active" ? "Contests" : "Practice") +
     "&context=" +
-    encodeURIComponent(contest.title) +
+    encodeURIComponent(contest.id) +
     (contest.status === "Active" ? "&contest=" + contest.id : "");
   return (
     <section className="page contest-detail-page">

@@ -19,12 +19,12 @@ def get_trending(range: str = "Week", db: Session = Depends(get_db)):
         Problem.number,
         Problem.title,
         func.count(func.distinct(Submission.user_id)).label("learners")
-    ).join(Problem, Problem.id == Submission.problem_id)
+    ).join(Problem, Problem.id == Submission.problem_id).filter(Problem.practice_listed == True)
     
     if range == "Week":
         start_date = datetime.datetime.utcnow() - datetime.timedelta(days=7)
         query = query.filter(Submission.submitted_at >= start_date)
-    elif range == "Month" or range == "Sep 2026": 
+    elif range == "Month": 
         start_date = datetime.datetime.utcnow() - datetime.timedelta(days=30)
         query = query.filter(Submission.submitted_at >= start_date)
         
@@ -53,9 +53,13 @@ def get_problems(db: Session = Depends(get_db), current_user: User = Depends(get
             .join(ClassEnrollment, ClassEnrollment.class_id == AssignmentClass.class_id)\
             .filter(ClassEnrollment.student_id == current_user.id).subquery()
             
+        submitted_pids_query = db.query(Submission.problem_id)\
+            .filter(Submission.user_id == current_user.id).subquery()
+            
         problems = db.query(Problem).filter(
             (Problem.practice_listed == True) | 
-            (Problem.id.in_(assigned_pids_query))
+            (Problem.id.in_(assigned_pids_query)) |
+            (Problem.id.in_(submitted_pids_query))
         ).all()
         
     # Progress cho current_user
@@ -244,9 +248,10 @@ def delete_problem(problem_id: str, db: Session = Depends(get_db), current_user:
     if p.creator_id and p.creator_id != current_user.id:
         raise HTTPException(status_code=403, detail="You don't have permission to delete this problem.")
         
-    from app.models import ProblemTopic, TestCase, TestCaseScript, Submission, ProblemDraft, Favorite, ProblemListItem, AiChatSession
+    from app.models import ProblemTopic, TestCase, TestCaseScript, Submission, ProblemDraft, Favorite, ProblemListItem, AiChatSession, AssignmentProblem
     
     # Delete related dependencies to avoid foreign key constraints
+    db.query(AssignmentProblem).filter(AssignmentProblem.problem_id == problem_id).delete()
     db.query(Submission).filter(Submission.problem_id == problem_id).delete()
     db.query(ProblemDraft).filter(ProblemDraft.problem_id == problem_id).delete()
     db.query(Favorite).filter(Favorite.problem_id == problem_id).delete()
@@ -364,11 +369,30 @@ def submit_query(problem_id: str, request: QueryRequest, db: Session = Depends(g
     if not p:
         raise HTTPException(status_code=404, detail="Problem not found")
         
+    max_score = 100
+    if request.source in ["Assignments", "Contests"] and request.context:
+        from app.models import Assignment, AssignmentProblem
+        assignment = db.query(Assignment).filter(Assignment.id == request.context).first()
+        if assignment:
+            if current_user.role != "instructor":
+                now = datetime.datetime.utcnow()
+                if assignment.opens and now < assignment.opens:
+                    raise HTTPException(status_code=403, detail="Bài tập/Kỳ thi chưa được mở.")
+                if assignment.closes and now > assignment.closes:
+                    raise HTTPException(status_code=403, detail="Bài tập/Kỳ thi đã hết hạn nộp bài.")
+                    
+            ap = db.query(AssignmentProblem).filter(
+                AssignmentProblem.assignment_id == assignment.id,
+                AssignmentProblem.problem_id == p.id
+            ).first()
+            if ap:
+                max_score = ap.points
+                
     result = run_sandbox(db, p, request.query, is_submit=True)
     
     # Save submission
     status = result["status"]
-    score = 100 if status == "Accepted" else 0
+    score = max_score if status == "Accepted" else 0
     
     sub = Submission(
         id=str(uuid.uuid4()),

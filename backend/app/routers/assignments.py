@@ -58,14 +58,26 @@ def create_assignment(assignment: AssignmentCreate, db: Session = Depends(get_db
     db.commit()
     db.refresh(new_assignment)
     
+    from app.models import ActivityLog
+    action_text = f"Created {'contest' if assignment.is_contest else 'assignment'} '{assignment.title}'"
+    log = ActivityLog(
+        id=str(uuid.uuid4()),
+        action=action_text,
+        user_id=current_user.id
+    )
+    db.add(log)
+    db.commit()
+    
     return get_assignment(assignment_id, db, current_user)
 
 @router.get("", response_model=List[AssignmentResponse])
 def get_assignments(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role == "instructor":
         assignments = db.query(Assignment).filter(Assignment.instructor_id == current_user.id).all()
-    else:
+    elif current_user.role == "admin":
         assignments = db.query(Assignment).all()
+    else:
+        raise HTTPException(status_code=403, detail="Sinh viên không có quyền gọi API quản lý này.")
         
     res = []
     now = datetime.datetime.utcnow()
@@ -105,7 +117,8 @@ def get_assignments(db: Session = Depends(get_db), current_user: User = Depends(
         if student_ids and problem_ids:
             submitted_students_query = db.query(Submission.user_id).filter(
                 Submission.user_id.in_(student_ids),
-                Submission.problem_id.in_(problem_ids)
+                Submission.problem_id.in_(problem_ids),
+                Submission.context == a.id
             ).distinct().all()
             submitted_students = len(submitted_students_query)
         else:
@@ -116,13 +129,15 @@ def get_assignments(db: Session = Depends(get_db), current_user: User = Depends(
         if submitted_students > 0:
             avg_score_query = db.query(func.avg(Submission.score)).filter(
                 Submission.user_id.in_(student_ids),
-                Submission.problem_id.in_(problem_ids)
+                Submission.problem_id.in_(problem_ids),
+                Submission.context == a.id
             ).scalar()
             avg_score = int(avg_score_query) if avg_score_query else 0
             
             awaiting_query = db.query(Submission).filter(
                 Submission.user_id.in_(student_ids),
                 Submission.problem_id.in_(problem_ids),
+                Submission.context == a.id,
                 Submission.evaluated_score == None
             )
             awaiting = awaiting_query.count()
@@ -174,6 +189,19 @@ def get_assignment(assignment_id: str, db: Session = Depends(get_db), current_us
         
     classes = db.query(AssignmentClass).filter(AssignmentClass.assignment_id == a.id).all()
     class_ids = [c.class_id for c in classes]
+    
+    if current_user.role == "student":
+        if not a.published:
+            raise HTTPException(status_code=403, detail="Bài tập này chưa được công bố.")
+        if class_ids:
+            from app.models import ClassEnrollment
+            enrollment = db.query(ClassEnrollment).filter(
+                ClassEnrollment.student_id == current_user.id,
+                ClassEnrollment.class_id.in_(class_ids)
+            ).first()
+            if not enrollment:
+                raise HTTPException(status_code=403, detail="Bạn không thuộc lớp được giao bài tập này.")
+                
     problems = db.query(AssignmentProblem).filter(AssignmentProblem.assignment_id == a.id).order_by(AssignmentProblem.order_index).all()
     problems_list = [{"id": p.problem_id, "points": p.points} for p in problems]
     
@@ -204,7 +232,8 @@ def get_assignment(assignment_id: str, db: Session = Depends(get_db), current_us
     if student_ids and problem_ids:
         submitted_students_query = db.query(Submission.user_id).filter(
             Submission.user_id.in_(student_ids),
-            Submission.problem_id.in_(problem_ids)
+            Submission.problem_id.in_(problem_ids),
+            Submission.context == a.id
         ).distinct().all()
         submitted_students = len(submitted_students_query)
     else:
@@ -214,13 +243,15 @@ def get_assignment(assignment_id: str, db: Session = Depends(get_db), current_us
     if submitted_students > 0:
         avg_score_query = db.query(func.avg(Submission.score)).filter(
             Submission.user_id.in_(student_ids),
-            Submission.problem_id.in_(problem_ids)
+            Submission.problem_id.in_(problem_ids),
+            Submission.context == a.id
         ).scalar()
         avg_score = int(avg_score_query) if avg_score_query else 0
         
         awaiting_query = db.query(Submission).filter(
             Submission.user_id.in_(student_ids),
             Submission.problem_id.in_(problem_ids),
+            Submission.context == a.id,
             Submission.evaluated_score == None
         )
         awaiting = awaiting_query.count()
@@ -308,6 +339,16 @@ def update_assignment(assignment_id: str, assignment: AssignmentCreate, db: Sess
     db.commit()
     db.refresh(a)
     
+    from app.models import ActivityLog
+    action_text = f"Updated {'contest' if assignment.is_contest else 'assignment'} '{assignment.title}'"
+    log = ActivityLog(
+        id=str(uuid.uuid4()),
+        action=action_text,
+        user_id=current_user.id
+    )
+    db.add(log)
+    db.commit()
+    
     return get_assignment(assignment_id, db, current_user)
 
 @router.delete("/{assignment_id}")
@@ -322,9 +363,21 @@ def delete_assignment(assignment_id: str, db: Session = Depends(get_db), current
     if current_user.role == "instructor" and a.instructor_id != current_user.id:
         raise HTTPException(status_code=403, detail="You do not have permission to delete this assignment.")
         
+    title = a.title
+    is_contest = a.is_contest
+    
     db.query(AssignmentClass).filter(AssignmentClass.assignment_id == assignment_id).delete()
     db.query(AssignmentProblem).filter(AssignmentProblem.assignment_id == assignment_id).delete()
     db.delete(a)
+    
+    from app.models import ActivityLog
+    action_text = f"Deleted {'contest' if is_contest else 'assignment'} '{title}'"
+    log = ActivityLog(
+        id=str(uuid.uuid4()),
+        action=action_text,
+        user_id=current_user.id
+    )
+    db.add(log)
     db.commit()
     
     return {"message": "Deleted successfully"}
@@ -336,6 +389,9 @@ def get_assignment_submissions(assignment_id: str, db: Session = Depends(get_db)
     a = db.query(Assignment).filter(Assignment.id == assignment_id).first()
     if not a:
         raise HTTPException(status_code=404, detail="Assignment not found")
+        
+    if current_user.role != "instructor" or a.instructor_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Bạn không có quyền xem danh sách bài nộp của Assignment này.")
         
     classes = db.query(AssignmentClass).filter(AssignmentClass.assignment_id == a.id).all()
     class_ids = [c.class_id for c in classes]
@@ -354,7 +410,8 @@ def get_assignment_submissions(assignment_id: str, db: Session = Depends(get_db)
         
     subs = db.query(Submission).filter(
         Submission.user_id.in_(student_ids),
-        Submission.problem_id.in_(problem_ids)
+        Submission.problem_id.in_(problem_ids),
+        Submission.context == a.id
     ).order_by(Submission.submitted_at.desc()).all()
     
     result = []

@@ -34,7 +34,7 @@ export function AssignmentWorkPage() {
       <div className="section-heading"><h2>Problems</h2><small className="muted">{items.length} problem{items.length === 1 ? "" : "s"} · {solved} solved</small></div>
       {items.map((p: any, i: number) => {
         const progress = work.status === "Solved" ? "Solved" : p.progress;
-        const to = "/workspace/" + p.id + "?source=Assignments&context=" + encodeURIComponent(work.title);
+        const to = "/workspace/" + p.id + "?source=Assignments&context=" + encodeURIComponent(work.id);
         return <article className="assignment-problem-row" key={p.id}>
           <span className="assignment-problem-number">{String(i + 1).padStart(2, "0")}</span>
           <div><h3>{p.title}</h3><p>{p.topic} · {p.difficulty}</p></div>

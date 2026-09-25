@@ -148,6 +148,7 @@ class TeacherSubmissionResponse(CamelModel):
     query: str
     reference_solution: Optional[str] = Field(alias="referenceSolution", default=None)
     submitted_at: str = Field(alias="submittedAt")
+    feedback: Optional[str] = None
 
 class TeacherSubmissionSummary(CamelModel):
     id: str

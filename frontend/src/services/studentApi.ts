@@ -18,6 +18,7 @@ export type ProblemFilters = {
   topic?: string;
   difficulty?: string;
   progress?: string;
+  includePrivate?: boolean;
 };
 
 export type QueryResult = {
@@ -78,7 +79,7 @@ export const studentApi = {
     
     return problems.filter(
       (p) =>
-        p.practiceListed === true &&
+        (f.includePrivate ? true : p.practiceListed === true) &&
         (!f.search || `${p.title} ${p.number}`.toLowerCase().includes(f.search.toLowerCase())) &&
         (!f.topic || (Array.isArray(p.topics) ? p.topics : String(p.topic || "").split(",")).some((topic: string) => topic.trim() === f.topic)) &&
         (!f.difficulty || p.difficulty === f.difficulty) &&
@@ -91,25 +92,23 @@ export const studentApi = {
   },
 
   getAssignments: async (): Promise<StudentAssignments> => {
-    const [enrolled, catalog] = await Promise.all([
-      apiFetch("/api/student/assignments") as Promise<StudentAssignments>,
-      apiFetch("/api/assignments") as Promise<any[]>,
-    ]);
-    const contestIds = new Set(catalog.filter(item => item.isContest).map(item => item.id));
+    const enrolled = (await apiFetch("/api/student/assignments")) as StudentAssignments;
     return {
       ...enrolled,
-      assignments: enrolled.assignments.filter(item => !contestIds.has(item.id)).map(localizeSchedule),
+      assignments: enrolled.assignments.filter((item: any) => !item.isContest).map(localizeSchedule),
       deadlines: (enrolled.deadlines || []).map(localizeSchedule),
     };
   },
 
   getContests: async (): Promise<Contest[]> => {
-    const [assignments, enrolled] = await Promise.all([
-      apiFetch("/api/assignments") as Promise<any[]>,
-      apiFetch("/api/student/assignments") as Promise<StudentAssignments>,
-    ]);
-    const enrolledIds = new Set(enrolled.assignments.map(item => item.id));
-    return assignments.filter(item => item.isContest && item.published && enrolledIds.has(item.id)).map(item => {
+    const enrolled = (await apiFetch("/api/student/assignments")) as StudentAssignments;
+    const contestIds = enrolled.assignments.filter((item: any) => item.isContest).map(item => item.id);
+    
+    const contests = await Promise.all(
+      contestIds.map(id => apiFetch(`/api/assignments/${encodeURIComponent(id)}`))
+    );
+    
+    return contests.map((item: any) => {
       return {
         id: item.id, title: item.title,
         status: item.status === "Scheduled" ? "Upcoming" : item.status === "Closed" ? "Closed" : "Active",

@@ -18,7 +18,7 @@ export function SubmissionsPage() {
     [search, result, source],
   );
   
-  const { data: problemsList } = useLoad(() => studentApi.getProblems(), []);
+  const { data: problemsList } = useLoad(() => studentApi.getProblems({ includePrivate: true }), []);
   return (
     <section className="page submissions-page">
       <PageHeading
