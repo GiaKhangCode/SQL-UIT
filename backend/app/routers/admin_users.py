@@ -120,6 +120,13 @@ def create_admin_user(
         department=""
     )
     db.add(new_user)
+    
+    # Log activity
+    log = models.ActivityLog(
+        user_id=admin_user.id,
+        action=f"Created {user_create.role} account for {new_user.email}"
+    )
+    db.add(log)
     db.commit()
     db.refresh(new_user)
     
@@ -136,3 +143,54 @@ def create_admin_user(
         joined=joined,
         detail=new_user.department or ""
     )
+
+@router.get("/lecturer-requests", response_model=List[schemas.LecturerRequestResponse])
+def get_lecturer_requests(db: Session = Depends(get_db), admin_user: models.User = Depends(check_admin_role)):
+    users = db.query(models.User).filter(
+        models.User.role == "instructor",
+        models.User.status == "Pending"
+    ).all()
+    results = []
+    for u in users:
+        submitted = u.created_at.strftime("%b %d, %Y") if getattr(u, 'created_at', None) else "Unknown"
+        results.append(schemas.LecturerRequestResponse(
+            id=u.id,
+            name=u.name,
+            email=u.email,
+            department=getattr(u, 'department', '') or "",
+            submitted=submitted
+        ))
+    return results
+
+@router.post("/lecturer-requests/{user_id}/approve")
+def approve_lecturer_request(user_id: str, db: Session = Depends(get_db), admin_user: models.User = Depends(check_admin_role)):
+    user = db.query(models.User).filter(models.User.id == user_id, models.User.status == "Pending").first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Request not found")
+    user.status = "Active"
+    
+    # Log activity
+    log = models.ActivityLog(
+        user_id=admin_user.id,
+        action=f"Approved lecturer request for {user.email}"
+    )
+    db.add(log)
+    db.commit()
+    return {"message": "Approved"}
+
+@router.post("/lecturer-requests/{user_id}/reject")
+def reject_lecturer_request(user_id: str, db: Session = Depends(get_db), admin_user: models.User = Depends(check_admin_role)):
+    user = db.query(models.User).filter(models.User.id == user_id, models.User.status == "Pending").first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Request not found")
+    
+    # Log activity
+    log = models.ActivityLog(
+        user_id=admin_user.id,
+        action=f"Rejected lecturer request for {user.email}"
+    )
+    db.add(log)
+    
+    db.delete(user)
+    db.commit()
+    return {"message": "Rejected"}

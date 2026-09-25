@@ -17,6 +17,8 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
     user = db.query(User).filter(User.email == form_data.username).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
+    if user.status == "Pending":
+        raise HTTPException(status_code=403, detail="Tài khoản của bạn đang chờ phê duyệt.")
     token = create_access_token(data={"sub": user.email})
     return {"access_token": token, "token_type": "bearer"}
 
@@ -61,11 +63,39 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     token = create_access_token(data={"sub": new_user.email})
     return {"access_token": token, "token_type": "bearer", "user": new_user}
 
+from app.schemas import LecturerRegisterRequest
+
+@router.post("/register-lecturer")
+def register_lecturer(user: LecturerRegisterRequest, db: Session = Depends(get_db)):
+    db_user = db.query(User).filter(User.email == user.email).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+        
+    parts = user.name.strip().split()
+    initials = "".join([p[0] for p in parts[:2]]).upper() if parts else "LC"
+    
+    new_user = User(
+        id=str(uuid.uuid4()),
+        email=user.email,
+        name=user.name,
+        initials=initials,
+        hashed_password=get_password_hash(user.password),
+        role="instructor",
+        status="Pending",
+        department=user.department
+    )
+    db.add(new_user)
+    db.commit()
+    
+    return {"message": "Registration successful, awaiting approval."}
+
 @router.post("/login", response_model=TokenWithUser)
 def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == login_data.email).first()
     if not user or not verify_password(login_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
+    if user.status == "Pending":
+        raise HTTPException(status_code=403, detail="Tài khoản của bạn đang chờ phê duyệt.")
         
     token = create_access_token(data={"sub": user.email})
     return {"access_token": token, "token_type": "bearer", "user": user}

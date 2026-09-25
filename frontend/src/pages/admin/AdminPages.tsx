@@ -23,6 +23,7 @@ import {
   type AdminRolePolicy,
 } from "../../data/adminDemoData";
 import { adminService, type AdminUser } from "../../services/adminService";
+import { studentApi } from "../../services/studentApi";
 
 function PageIntro({ title, sub, children }: { title: string; sub: string; children?: ReactNode }) {
   return <div className="admin-page-intro"><div><h1>{title}</h1><p>{sub}</p></div>{children && <div className="admin-page-actions">{children}</div>}</div>;
@@ -84,7 +85,7 @@ export function AdminUsersPage() {
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(true);
   const [pendingRole, setPendingRole] = useState<string | null>(null);
-  const pendingRequestCount = readAdminLecturerRequests().length;
+  const [pendingRequestCount, setPendingRequestCount] = useState(0);
   
   const selected = users.find((user) => user.email === selectedEmail) || users[0];
   
@@ -99,6 +100,10 @@ export function AdminUsersPage() {
       setNotice("Failed to load users.");
       setLoading(false);
     });
+
+    adminService.getLecturerRequests().then(requests => {
+      setPendingRequestCount(requests.length);
+    }).catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -254,7 +259,7 @@ function RejectLecturerDialog({
   onClose,
   onReject,
 }: {
-  request: AdminLecturerRequest;
+  request: any;
   onClose: () => void;
   onReject: (reason: string) => void;
 }) {
@@ -274,32 +279,42 @@ function RejectLecturerDialog({
 }
 
 export function AdminLecturerApprovalsPage() {
-  const [requests, setRequests] = useState(readAdminLecturerRequests);
-  const [selectedEmail, setSelectedEmail] = useState(() => readAdminLecturerRequests()[0]?.email || "");
-  const [rejecting, setRejecting] = useState<AdminLecturerRequest | null>(null);
+  const [requests, setRequests] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedEmail, setSelectedEmail] = useState("");
+  const [rejecting, setRejecting] = useState<any | null>(null);
   const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    adminService.getLecturerRequests().then(data => {
+      setRequests(data);
+      if (data.length > 0) setSelectedEmail(data[0].email);
+      setLoading(false);
+    }).catch(err => {
+      console.error(err);
+      setLoading(false);
+    });
+  }, []);
+
   const selected = requests.find((request) => request.email === selectedEmail) || requests[0];
 
-  function resolveRequest(request: AdminLecturerRequest, approved: boolean, reason = "") {
-    const next = requests.filter((item) => item.email !== request.email);
-    setRequests(next);
-    setSelectedEmail(next[0]?.email || "");
-    saveAdminLecturerRequests(next);
-    if (approved && !readAdminUsers().some((user) => user.email === request.email)) {
-      saveAdminUsers([...readAdminUsers(), {
-        name: request.name,
-        email: request.email,
-        role: "Lecturer",
-        status: "Active",
-        lastActive: "Never",
-        joined: request.submitted,
-        detail: `Teaching access approved for ${request.department}`,
-      }]);
+  async function resolveRequest(request: any, approved: boolean, reason = "") {
+    try {
+      if (approved) {
+        await adminService.approveLecturerRequest(request.id);
+        setNotice(`${request.name} was approved as a lecturer.`);
+      } else {
+        await adminService.rejectLecturerRequest(request.id);
+        setNotice(`${request.name}'s request was rejected.${reason ? ` Reason sent: ${reason}` : ""}`);
+      }
+      const next = requests.filter((item) => item.email !== request.email);
+      setRequests(next);
+      setSelectedEmail(next[0]?.email || "");
+      setRejecting(null);
+    } catch (err: any) {
+      setNotice(err.message || "Action failed.");
+      setRejecting(null);
     }
-    setRejecting(null);
-    setNotice(approved
-      ? `${request.name} was approved as a lecturer in this demo.`
-      : `${request.name}'s request was rejected in this demo.${reason ? ` Reason sent: ${reason}` : ""}`);
   }
 
   return <div className="admin-page">
@@ -662,16 +677,71 @@ function PracticePreviewDialog({ problem, onClose }: { problem: AdminPracticePro
 }
 
 export function AdminPracticeCatalogPage() {
-  const [problems, setProblems] = useState(readAdminPracticeProblems);
-  const [selectedTitle, setSelectedTitle] = useState(() => readAdminPracticeProblems()[0]?.title || "");
+  const [problems, setProblems] = useState<AdminPracticeProblem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedTitle, setSelectedTitle] = useState("");
   const [activeTab, setActiveTab] = useState<"Problems" | "Topics">("Problems");
   const [query, setQuery] = useState("");
   const [difficulty, setDifficulty] = useState("All levels");
   const [visibility, setVisibility] = useState("All");
   const [notice, setNotice] = useState("");
   const [previewing, setPreviewing] = useState<AdminPracticeProblem | null>(null);
+
+  useEffect(() => {
+    studentApi.getProblems().then(data => {
+      const mapped: AdminPracticeProblem[] = data.map((p: any) => ({
+        id: p.id,
+        title: p.title,
+        topics: p.topics ? p.topics.join(" · ") : (p.topic || ""),
+        difficulty: p.difficulty,
+        solvedBy: p.solvedBy || 0,
+        status: p.practiceListed ? "Visible" : "Hidden",
+        author: "Instructor",
+        published: "Recently",
+        database: p.databaseType || "SQL Server",
+        attempted: p.attempted || 0,
+        acceptance: p.acceptance || 0,
+        submissions: p.submissions || 0,
+        comments: false,
+        hints: false,
+        note: "",
+        featured: false,
+        description: "",
+        schemaPreview: "",
+        expectedColumns: ""
+      }));
+      setProblems(mapped);
+      if (mapped.length > 0) {
+        setSelectedTitle(mapped[0].title);
+      }
+      setLoading(false);
+    }).catch(err => {
+      console.error(err);
+      setNotice("Failed to load problems.");
+      setLoading(false);
+    });
+  }, []);
+
   const selected = problems.find((problem) => problem.title === selectedTitle) || problems[0];
-  useEffect(() => saveAdminPracticeProblems(problems), [problems]);
+
+  useEffect(() => {
+    if (selected && selected.id && !selected.description) {
+      studentApi.getProblem(selected.id as string).then(data => {
+        setProblems(current => current.map(p => {
+          if (p.id === selected.id) {
+            return {
+              ...p,
+              description: data.description || "",
+              schemaPreview: data.schema || "",
+              expectedColumns: "", 
+            };
+          }
+          return p;
+        }));
+      }).catch(console.error);
+    }
+  }, [selected]);
+
   const list = useMemo(() => problems.filter((problem) =>
     `${problem.title} ${problem.author} ${problem.topics}`.toLowerCase().includes(query.toLowerCase()) &&
     (difficulty === "All levels" || problem.difficulty === difficulty) &&
@@ -681,11 +751,30 @@ export function AdminPracticeCatalogPage() {
     setProblems((current) => current.map((problem) => problem.title === selected.title ? { ...problem, ...patch } : problem));
   }
 
+  const computedTopics = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const p of problems) {
+      if (!p.topics) continue;
+      const parts = p.topics.split(" · ");
+      for (const t of parts) {
+        if (!t.trim()) continue;
+        counts[t.trim()] = (counts[t.trim()] || 0) + 1;
+      }
+    }
+    return Object.entries(counts)
+      .map(([name, count]) => ({ name, problems: count }))
+      .sort((a, b) => b.problems - a.problems);
+  }, [problems]);
+
+  if (loading) {
+    return <div className="admin-page"><PageIntro title="Loading catalog..." sub="Public problems shown to students" /></div>;
+  }
+
   return <div className="admin-page">
-    <PageIntro title="Practice catalog" sub="Public problems shown to students / 38 problems" />
+    <PageIntro title="Practice catalog" sub={`Public problems shown to students / ${problems.length} problems`} />
     <div className="admin-section-tabs" role="tablist" aria-label="Practice catalog sections">
-      <button type="button" role="tab" aria-selected={activeTab === "Problems"} className={activeTab === "Problems" ? "active" : ""} onClick={() => setActiveTab("Problems")}>Problems (38)</button>
-      <button type="button" role="tab" aria-selected={activeTab === "Topics"} className={activeTab === "Topics" ? "active" : ""} onClick={() => setActiveTab("Topics")}>Topics (12)</button>
+      <button type="button" role="tab" aria-selected={activeTab === "Problems"} className={activeTab === "Problems" ? "active" : ""} onClick={() => setActiveTab("Problems")}>Problems ({problems.length})</button>
+      <button type="button" role="tab" aria-selected={activeTab === "Topics"} className={activeTab === "Topics" ? "active" : ""} onClick={() => setActiveTab("Topics")}>Topics ({computedTopics.length})</button>
     </div>
     {notice && <Notice>{notice}</Notice>}
     {activeTab === "Problems" && <div className="admin-practice-filters">
@@ -698,7 +787,7 @@ export function AdminPracticeCatalogPage() {
         <td data-label="PROBLEM"><button className="admin-row-link" type="button" onClick={() => setSelectedTitle(problem.title)}>{problem.title}</button></td><td data-label="TOPICS">{problem.topics}</td><td data-label="DIFFICULTY">{problem.difficulty}</td><td data-label="SOLVED BY">{problem.solvedBy} students</td><td data-label="STATUS" className={problem.status === "Visible" ? "admin-success" : ""}>{problem.status}</td>
       </tr>)}
       {!list.length && <tr><td colSpan={5} className="admin-muted">No practice problems match these filters.</td></tr>}
-    </tbody></table></div> : <div className="admin-table-wrap"><table className="admin-table admin-practice-topic-table"><thead><tr><th>TOPIC</th><th>PROBLEMS</th></tr></thead><tbody>{adminPracticeTopics.map((topic) => <tr key={topic.name} onClick={() => { setQuery(topic.name); setActiveTab("Problems"); }}><td data-label="TOPIC"><button className="admin-row-link" type="button" onClick={() => { setQuery(topic.name); setActiveTab("Problems"); }}>{topic.name}</button></td><td data-label="PROBLEMS">{topic.problems}</td></tr>)}</tbody></table></div>} side={selected ? <>
+    </tbody></table></div> : <div className="admin-table-wrap"><table className="admin-table admin-practice-topic-table"><thead><tr><th>TOPIC</th><th>PROBLEMS</th></tr></thead><tbody>{computedTopics.map((topic) => <tr key={topic.name} onClick={() => { setQuery(topic.name); setActiveTab("Problems"); }}><td data-label="TOPIC"><button className="admin-row-link" type="button" onClick={() => { setQuery(topic.name); setActiveTab("Problems"); }}>{topic.name}</button></td><td data-label="PROBLEMS">{topic.problems}</td></tr>)}</tbody></table></div>} side={selected ? <>
       <h2>Practice details</h2><h3 className="admin-detail-title">{selected.title}</h3><p className="admin-muted">Made Public by {selected.author} · {selected.published}</p><p className="admin-accent">{selected.difficulty} · {selected.topics} · {selected.database}</p>
       <div className="admin-detail-divider" /><h3 className="admin-subheading">Student activity</h3><p className="admin-muted">{selected.attempted} students attempted<br />{selected.acceptance}% acceptance rate<br />{selected.submissions.toLocaleString()} submissions</p>
       <div className="admin-detail-divider" /><h3 className="admin-subheading">Practice settings</h3>
@@ -715,23 +804,60 @@ export function AdminPracticeCatalogPage() {
 
 export function AdminOverviewPage() {
   const [notice, setNotice] = useState("");
+  const [stats, setStats] = useState({ users: 0, classes: 0, pendingRequests: 0, unassignedClasses: 0, submissionsToday: 0, gradingErrors: 0 });
+  const [activities, setActivities] = useState<any[]>([]);
+  const [errors, setErrors] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      adminService.getOverviewStats(),
+      adminService.getActivities(),
+      adminService.getErrors()
+    ]).then(([statsData, activitiesData, errorsData]) => {
+      setStats({
+        users: statsData.users,
+        classes: statsData.classes,
+        pendingRequests: statsData.pendingRequests,
+        unassignedClasses: statsData.unassignedClasses,
+        submissionsToday: statsData.submissionsToday,
+        gradingErrors: statsData.gradingErrors
+      });
+      setActivities(activitiesData);
+      setErrors(errorsData);
+      setLoading(false);
+    }).catch(err => {
+      console.error(err);
+      setNotice("Failed to load overview data.");
+      setLoading(false);
+    });
+  }, []);
+
+  if (loading) {
+    return <div className="admin-page"><PageIntro title="Loading overview..." sub="Activity & service health" /></div>;
+  }
+
   return <div className="admin-page">
-    <PageIntro title="System overview" sub="Sep 18, 2026 / Activity & service health"><button className="button primary admin-button" onClick={() => setNotice("Recent activity view is current through 14:42 today.")}>View activity</button></PageIntro>{notice && <Notice>{notice}</Notice>}
-    <div className="admin-metrics"><div><strong>1,248</strong><small>Total users</small></div><div><strong>36</strong><small>Active classes</small></div><div><strong>421</strong><small>Submissions today</small></div><div><strong className="admin-warning">2</strong><small>Grading errors</small></div></div>
+    <PageIntro title="System overview" sub="System Activity & service health"><button className="button primary admin-button" onClick={() => setNotice("Recent activity view is current through 14:42 today.")}>View activity</button></PageIntro>{notice && <Notice>{notice}</Notice>}
+    <div className="admin-metrics"><div><strong>{stats.users.toLocaleString()}</strong><small>Total users</small></div><div><strong>{stats.classes}</strong><small>Active classes</small></div><div><strong>{stats.submissionsToday.toLocaleString()}</strong><small>Submissions today</small></div><div><strong className={stats.gradingErrors > 0 ? "admin-warning" : ""}>{stats.gradingErrors}</strong><small>Grading errors</small></div></div>
     <Split main={<>
       <section className="admin-attention">
         <h2 className="admin-section-heading">Needs attention</h2>
         <table className="admin-table admin-attention-table"><thead><tr><th>ITEM</th><th>COUNT</th><th>ACTION</th></tr></thead><tbody>
-          <tr><td data-label="ITEM">Lecturer registrations</td><td data-label="COUNT" className="admin-warning">{readAdminLecturerRequests().length} pending</td><td data-label="ACTION"><Link to="/admin/users/approvals">Review approvals →</Link></td></tr>
-          <tr><td data-label="ITEM">Classes without a lecturer</td><td data-label="COUNT" className="admin-warning">{readAdminClasses().filter((item) => item.status !== "Archived" && item.lecturer === "Unassigned").length} class</td><td data-label="ACTION"><Link to="/admin/courses/lecturers">Assign lecturer →</Link></td></tr>
+          <tr><td data-label="ITEM">Lecturer registrations</td><td data-label="COUNT" className={stats.pendingRequests > 0 ? "admin-warning" : ""}>{stats.pendingRequests} pending</td><td data-label="ACTION"><Link to="/admin/users/approvals">Review approvals →</Link></td></tr>
+          <tr><td data-label="ITEM">Classes without a lecturer</td><td data-label="COUNT" className={stats.unassignedClasses > 0 ? "admin-warning" : ""}>{stats.unassignedClasses} class(es)</td><td data-label="ACTION"><Link to="/admin/courses/lecturers">Assign lecturer →</Link></td></tr>
         </tbody></table>
       </section>
       <section className="admin-recent-activity">
         <h2 className="admin-section-heading">Recent activity</h2>
-        <table className="admin-table admin-activity-table"><thead><tr><th>ACTION</th><th>BY</th><th>TIME</th></tr></thead><tbody>{adminActivity.map((item) => <tr key={item.action}><td>{item.action}</td><td>{item.by}</td><td>{item.time}</td></tr>)}</tbody></table>
+        <table className="admin-table admin-activity-table"><thead><tr><th>ACTION</th><th>BY</th><th>TIME</th></tr></thead><tbody>
+          {activities.length > 0 ? activities.map((item) => <tr key={item.id}><td>{item.action}</td><td>{item.by}</td><td>{item.time}</td></tr>) : <tr><td colSpan={3} className="admin-muted">No recent activity</td></tr>}
+        </tbody></table>
       </section>
     </>} side={<>
-      <h2>Grading health</h2><p className="admin-health">Operational</p><p className="admin-muted">419 graded / 2 need attention</p><div className="admin-detail-divider" /><h3 className="admin-subheading">Recent errors</h3><p className="admin-warning admin-error">#104 · Execution timeout<br />Revenue by category</p><p className="admin-warning admin-error">#1051 · Database unavailable<br />Top customers</p><button className="button admin-button" onClick={() => setNotice("Recent grading errors are listed in this demo overview.")}>Review errors</button>
+      <h2>Grading health</h2><p className={stats.gradingErrors === 0 ? "admin-health" : "admin-health admin-warning"}>{stats.gradingErrors === 0 ? "Operational" : "Needs Attention"}</p><p className="admin-muted">{stats.submissionsToday} submitted today / {stats.gradingErrors} need attention</p><div className="admin-detail-divider" /><h3 className="admin-subheading">Recent errors</h3>
+      {errors.length > 0 ? errors.map(err => <p key={err.id} className="admin-warning admin-error">#{err.id.substring(0, 8)} · {err.errorType}<br />{err.problemTitle}</p>) : <p className="admin-muted">No errors recently</p>}
+      <button className="button admin-button" onClick={() => setNotice("Recent grading errors are listed in this demo overview.")}>Review errors</button>
     </>} />
   </div>;
 }

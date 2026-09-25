@@ -47,4 +47,32 @@ export const adminService = {
       body: JSON.stringify(data),
     });
   },
+
+  async getLecturerRequests(): Promise<any[]> {
+    return apiFetch("/api/admin/users/lecturer-requests");
+  },
+
+  async approveLecturerRequest(id: string): Promise<any> {
+    return apiFetch(`/api/admin/users/lecturer-requests/${encodeURIComponent(id)}/approve`, {
+      method: "POST"
+    });
+  },
+
+  async rejectLecturerRequest(id: string): Promise<any> {
+    return apiFetch(`/api/admin/users/lecturer-requests/${encodeURIComponent(id)}/reject`, {
+      method: "POST"
+    });
+  },
+
+  async getOverviewStats(): Promise<any> {
+    return apiFetch("/api/admin/overview/stats");
+  },
+
+  async getActivities(): Promise<any[]> {
+    return apiFetch("/api/admin/overview/activities");
+  },
+
+  async getErrors(): Promise<any[]> {
+    return apiFetch("/api/admin/overview/errors");
+  }
 };

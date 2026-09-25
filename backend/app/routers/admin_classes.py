@@ -79,6 +79,13 @@ def create_admin_class(
         created_at=datetime.utcnow()
     )
     db.add(new_class)
+    
+    # Log activity
+    log = models.ActivityLog(
+        user_id=current_user.id,
+        action=f"Created class {new_class.id}"
+    )
+    db.add(log)
     db.commit()
     db.refresh(new_class)
     
@@ -130,6 +137,12 @@ def update_admin_class(
                 # For simplicity, we just ignore if not found
                 pass
                 
+    # Log activity
+    log = models.ActivityLog(
+        user_id=current_user.id,
+        action=f"Updated class {c.id}"
+    )
+    db.add(log)
     db.commit()
     db.refresh(c)
     

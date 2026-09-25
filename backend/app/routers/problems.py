@@ -58,6 +58,7 @@ def get_problems(db: Session = Depends(get_db), current_user: User = Depends(get
             (Problem.id.in_(assigned_pids_query))
         ).all()
         
+    # Progress cho current_user
     subs = db.query(Submission.problem_id, Submission.result).filter(Submission.user_id == current_user.id).all()
     
     status_map = {}
@@ -69,10 +70,38 @@ def get_problems(db: Session = Depends(get_db), current_user: User = Depends(get
         else:
             status_map[problem_id] = "In progress"
 
+    # Tính toán stats
+    from sqlalchemy import func, case
+    stats_query = db.query(
+        Submission.problem_id,
+        func.count(Submission.id).label("total_subs"),
+        func.count(func.distinct(Submission.user_id)).label("attempted"),
+        func.count(func.distinct(case((Submission.result == 'Accepted', Submission.user_id), else_=None))).label("solved_by"),
+        func.sum(case((Submission.result == 'Accepted', 1), else_=0)).label("accepted_subs")
+    ).group_by(Submission.problem_id).all()
+
+    stats_map = {}
+    for r in stats_query:
+        problem_id, total_subs, attempted, solved_by, accepted_subs = r
+        acceptance = int((accepted_subs / total_subs * 100)) if total_subs > 0 else 0
+        stats_map[problem_id] = {
+            "submissions": total_subs,
+            "attempted": attempted,
+            "solved_by": solved_by,
+            "acceptance": acceptance
+        }
+
     result_list = []
     for p in problems:
         resp = ProblemListResponse.model_validate(p)
         resp.progress = status_map.get(p.id)
+        
+        p_stats = stats_map.get(p.id, {"submissions": 0, "attempted": 0, "solved_by": 0, "acceptance": 0})
+        resp.submissions = p_stats["submissions"]
+        resp.attempted = p_stats["attempted"]
+        resp.solved_by = p_stats["solved_by"]
+        resp.acceptance = p_stats["acceptance"]
+        
         result_list.append(resp)
     
     return result_list

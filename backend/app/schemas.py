@@ -17,6 +17,12 @@ class UserCreate(BaseModel):
     name: str
     password: str
 
+class LecturerRegisterRequest(BaseModel):
+    email: str
+    name: str
+    password: str
+    department: str
+
 class UserResponse(UserBase):
     id: str
 
@@ -64,6 +70,10 @@ class ProblemBase(CamelModel):
 
 class ProblemListResponse(ProblemBase):
     progress: Optional[str] = None
+    solved_by: int = Field(default=0, alias="solvedBy")
+    attempted: int = 0
+    acceptance: int = 0
+    submissions: int = 0
 
 class TestCaseSchema(CamelModel):
     tables: List[DataTable]
@@ -220,6 +230,13 @@ class AdminUserResponse(CamelModel):
     joined: str
     detail: str
 
+class LecturerRequestResponse(CamelModel):
+    id: str
+    name: str
+    email: str
+    department: str
+    submitted: str
+
 class AdminUserUpdate(BaseModel):
     name: str
     email: str
@@ -242,6 +259,25 @@ class AdminClassResponse(CamelModel):
     dates: str
     start_date: Optional[str] = None
     end_date: Optional[str] = None
+
+class OverviewStats(CamelModel):
+    users: int
+    classes: int
+    pending_requests: int
+    unassigned_classes: int
+    submissions_today: int
+    grading_errors: int
+
+class ActivityLogResponse(CamelModel):
+    id: str
+    action: str
+    by: str
+    time: str
+
+class GradingErrorResponse(CamelModel):
+    id: str
+    problem_title: str
+    error_type: str
 
 class AdminClassCreate(CamelModel):
     id: str

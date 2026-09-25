@@ -219,7 +219,9 @@ export function LoginPage() {
           {busy ? "Signing in…" : "Sign in"}
         </button>
         <p className="auth-switch">
-          New here? <Link to="/register">Create an account</Link>
+          New student? <Link to="/register">Create an account</Link>
+          <br />
+          Want to teach? <Link to="/register-lecturer">Register as Lecturer</Link>
         </p>
       </form>
     </AuthLayout>
@@ -485,9 +487,96 @@ export function RegisterPage() {
         <button className="button primary full" disabled={busy}>
           {busy ? "Creating your account…" : "Continue"}
         </button>
-        <p className="auth-switch">
+        <p className="auth-switch" style={{ marginBottom: "0.5rem" }}>
           Already have an account? <Link to="/login">Sign in</Link>
         </p>
+        <p className="auth-switch">
+          Want to teach? <Link to="/register-lecturer">Register as Lecturer</Link>
+        </p>
+      </form>
+    </AuthLayout>
+  );
+}
+
+export function RegisterLecturerPage() {
+  const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
+  const [department, setDepartment] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [errors, setErrors] = useState<Errors>({});
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+  const [success, setSuccess] = useState(false);
+  
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    if (busy) return;
+    const next: Errors = {};
+    if (!name.trim()) next.name = "Enter your full name.";
+    if (!department.trim()) next.department = "Enter your department.";
+    if (!validEmail(email.trim())) next.email = "Enter a valid email address.";
+    if (password.length < 8) next.password = "Use at least 8 characters.";
+    if (!confirm || confirm !== password) next.confirm = "Passwords must match.";
+    
+    setErrors(next);
+    setMessage("");
+    if (Object.keys(next).length) return;
+    setBusy(true);
+    try {
+      const { authService } = await import("../../services/authService");
+      await authService.registerLecturer(name, email, password, department);
+      setSuccess(true);
+    } catch (e) {
+      setMessage(e instanceof Error ? e.message : "Registration failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (success) {
+    return (
+      <AuthLayout register title="Request Submitted" subtitle="Your lecturer account request is awaiting approval." showTeacherNote={false}>
+        <div style={{ textAlign: "center", margin: "2rem 0" }}>
+          <p style={{ marginBottom: "2rem" }}>An administrator will review your request. You will be able to log in once it has been approved.</p>
+          <button className="button primary full" onClick={() => navigate("/login")}>Back to Sign in</button>
+        </div>
+      </AuthLayout>
+    );
+  }
+
+  return (
+    <AuthLayout register title="Register as Lecturer" subtitle="Submit a request to become a lecturer on QueryLab." showTeacherNote={false}>
+      <form onSubmit={(e) => void submit(e)} noValidate>
+        <label className="field" htmlFor="reg-name">
+          Full Name
+          <input id="reg-name" type="text" placeholder="Nguyen Van A" value={name} onChange={(e) => setName(e.target.value)} aria-invalid={!!errors.name} />
+          {errors.name && <small className="field-error">{errors.name}</small>}
+        </label>
+        
+        <label className="field" htmlFor="reg-department">
+          Department / Faculty
+          <input id="reg-department" type="text" placeholder="Computer Science" value={department} onChange={(e) => setDepartment(e.target.value)} aria-invalid={!!errors.department} />
+          {errors.department && <small className="field-error">{errors.department}</small>}
+        </label>
+        
+        <label className="field" htmlFor="reg-email">
+          Email
+          <input id="reg-email" type="email" autoComplete="email" placeholder="name@example.edu.vn" value={email} onChange={(e) => setEmail(e.target.value)} aria-invalid={!!errors.email} />
+          {errors.email && <small className="field-error">{errors.email}</small>}
+        </label>
+        
+        <PasswordField id="reg-password" label="Password" value={password} onChange={setPassword} error={errors.password} autoComplete="new-password" placeholder="Create a password" />
+        <p className="password-requirements">At least 8 characters.</p>
+        
+        <PasswordField id="reg-confirm" label="Confirm password" value={confirm} onChange={setConfirm} error={errors.confirm} autoComplete="new-password" placeholder="Re-enter your password" />
+        
+        {message && <p role="alert" className="form-message">{message}</p>}
+        
+        <button className="button primary full" disabled={busy}>{busy ? "Submitting…" : "Submit Request"}</button>
+        <p className="auth-switch" style={{ marginBottom: "0.5rem" }}>Already have an account? <Link to="/login">Sign in</Link></p>
+        <p className="auth-switch">Are you a student? <Link to="/register">Register as Student</Link></p>
       </form>
     </AuthLayout>
   );

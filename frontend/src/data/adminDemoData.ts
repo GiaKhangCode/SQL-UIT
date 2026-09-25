@@ -108,6 +108,7 @@ export const adminProblems = [
 ];
 
 export type AdminPracticeProblem = {
+  id?: string;
   title: string;
   topics: string;
   difficulty: "Easy" | "Medium" | "Hard";

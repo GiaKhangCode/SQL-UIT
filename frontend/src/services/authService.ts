@@ -64,6 +64,17 @@ export const authService = {
     });
     return persist(data.user, data.access_token);
   },
+
+  async registerLecturer(name: string, email: string, password: string, department: string) {
+    if (!name.trim() || !validEmail(email) || password.length < 8 || !department.trim()) {
+      throw new Error("Check the registration fields.");
+    }
+    const data = await apiFetch("/api/auth/register-lecturer", {
+      method: "POST",
+      body: JSON.stringify({ name, email, password, department }),
+    });
+    return data; // Returns { message: "..." }
+  },
   
   logout() {
     storage.remove(SESSION_KEY);
