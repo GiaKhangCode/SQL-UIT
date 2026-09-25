@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Dialog } from "../../components/ui";
+import { Dialog, Loading } from "../../components/ui";
 import { teacherService } from "../../services/teacherService";
 import { ClassPicker, TeacherField, TeacherPageIntro, TeacherSectionTitle } from "./TeacherPageParts";
+import { toDateTimeLocal } from "../../utils/serverDateTime";
 
 type BuilderProblem = { id: string; points: number };
 type BuilderDraft = {
@@ -18,7 +19,7 @@ type BuilderDraft = {
 };
 
 const assignmentSeed: BuilderDraft = {
-  title: "New Assignment",
+  title: "",
   classIds: [],
   format: "Individual",
   instructions: "",
@@ -29,7 +30,7 @@ const assignmentSeed: BuilderDraft = {
   published: false,
 };
 const contestSeed: BuilderDraft = {
-  title: "New Contest",
+  title: "",
   classIds: [],
   format: "Individual",
   instructions: "Hints and AI assistance are disabled during the contest.",
@@ -56,7 +57,13 @@ function BuilderPage({ contest }: { contest: boolean }) {
   const [draft, setDraft] = useState<BuilderDraft | null>(null);
   const [availableClasses, setAvailableClasses] = useState<any[]>([]);
   const [allProblems, setAllProblems] = useState<any[]>([]);
-  const [saveState, setSaveState] = useState("All changes saved");
+  const [classesLoading, setClassesLoading] = useState(true);
+  const [classesError, setClassesError] = useState("");
+  const [problemsLoading, setProblemsLoading] = useState(true);
+  const [problemsError, setProblemsError] = useState("");
+  const [draftError, setDraftError] = useState("");
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [saveState, setSaveState] = useState("");
   const [alertText, setAlertText] = useState("");
   const [addProblemOpen, setAddProblemOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -67,7 +74,9 @@ function BuilderPage({ contest }: { contest: boolean }) {
         const data = await teacherService.getClasses();
         setAvailableClasses(data);
       } catch (e) {
-        console.error("Failed to load classes", e);
+        setClassesError(e instanceof Error ? e.message : "Could not load classes.");
+      } finally {
+        setClassesLoading(false);
       }
     }
     fetchClasses();
@@ -77,7 +86,9 @@ function BuilderPage({ contest }: { contest: boolean }) {
         const data = await teacherService.getAllProblems();
         setAllProblems(data);
       } catch (e) {
-        console.error("Failed to load problems", e);
+        setProblemsError(e instanceof Error ? e.message : "Could not load problems.");
+      } finally {
+        setProblemsLoading(false);
       }
     }
     fetchProblems();
@@ -90,28 +101,26 @@ function BuilderPage({ contest }: { contest: boolean }) {
     async function fetchAssignment() {
       try {
         const data = await teacherService.getAssignment(id!);
-        // format opens/closes to local datetime string format for input type="datetime-local"
-        const formatDatetime = (dt: string) => dt ? new Date(dt).toISOString().slice(0, 16) : "";
         setDraft({
           title: data.title,
           classIds: data.classIds || [],
           format: data.format as "Group work" | "Individual",
           instructions: data.instructions || "",
-          opens: formatDatetime(data.opens),
-          closes: formatDatetime(data.closes),
+          opens: toDateTimeLocal(data.opens),
+          closes: toDateTimeLocal(data.closes),
           problems: data.problemList || [],
           studentOptions: data.studentOptions || (contest ? contestSeed.studentOptions : assignmentSeed.studentOptions),
           published: data.published
         });
       } catch (e) {
-        console.error("Failed to load assignment", e);
+        setDraftError(e instanceof Error ? e.message : "Could not load this activity.");
       }
     }
     fetchAssignment();
   }, [id, isNew, contest]);
 
   if (!draft) {
-    return <div style={{ padding: "24px" }}>Loading...</div>;
+    return <div className="teacher-page">{draftError ? <div className="empty-state" role="alert">{draftError}</div> : <Loading label="Loading builder…" />}</div>;
   }
 
   function update<K extends keyof BuilderDraft>(field: K, value: BuilderDraft[K]) {
@@ -143,7 +152,9 @@ function BuilderPage({ contest }: { contest: boolean }) {
   const totalPoints = draft.problems.reduce((sum, item) => sum + item.points, 0);
   const scheduleValid =
     !!draft.opens && !!draft.closes && new Date(draft.opens) < new Date(draft.closes);
+  const durationMinutes = scheduleValid ? Math.round((new Date(draft.closes).getTime() - new Date(draft.opens).getTime()) / 60000) : 0;
   const readyToPublish =
+    !!draft.title.trim() &&
     draft.classIds.length > 0 &&
     draft.problems.length > 0 &&
     draft.problems.every((item) => item.points > 0) &&
@@ -151,14 +162,18 @@ function BuilderPage({ contest }: { contest: boolean }) {
 
   const selectedClassesData = availableClasses.filter(c => draft.classIds.includes(c.id));
   const studentCount = selectedClassesData.reduce((sum, c) => sum + (c.students || 0), 0);
-  const groupCount = selectedClassesData.reduce((sum, c) => sum + (c.groups?.length || 0), 0);
-
   async function saveToServer(isPublished: boolean) {
+    if (saveBusy) return;
+    if (!draft || !draft.title.trim() || !scheduleValid) {
+      setAlertText("Add a title and valid start and end times before saving.");
+      return;
+    }
     if (isPublished && !readyToPublish) {
       setAlertText("Select a class, add scored problems, and check the schedule before publishing.");
       return;
     }
     
+    setSaveBusy(true);
     setSaveState("Saving to server...");
     try {
       const payload = {
@@ -188,7 +203,9 @@ function BuilderPage({ contest }: { contest: boolean }) {
         navigate(contest ? "/teacher/contests" : "/teacher/assignments");
       }
     } catch (e) {
-      setSaveState("Failed to save to server");
+      setSaveState(e instanceof Error ? e.message : "Could not save to server.");
+    } finally {
+      setSaveBusy(false);
     }
   }
 
@@ -215,12 +232,12 @@ function BuilderPage({ contest }: { contest: boolean }) {
     <section className="teacher-page teacher-builder-page">
       <TeacherPageIntro
         title={contest ? "Contest builder" : "Assignment builder"}
-        context={`${contest ? "Contests" : "Assignments"} / ${draft.title}`}
+        context={`${contest ? "Contests" : "Assignments"} / ${draft.title || "New activity"}`}
       >
-        <button className="button" type="button" onClick={saveDraft}>
-          Save draft
+        <button className="button" type="button" onClick={saveDraft} disabled={saveBusy || !draft.title.trim() || !scheduleValid}>
+          {saveBusy ? "Saving…" : "Save draft"}
         </button>
-        <button className="button primary" type="button" onClick={publishDraft}>
+        <button className="button primary" type="button" onClick={publishDraft} disabled={saveBusy || !readyToPublish}>
           Publish
         </button>
       </TeacherPageIntro>
@@ -242,6 +259,9 @@ function BuilderPage({ contest }: { contest: boolean }) {
                 <ClassPicker
                   selected={draft.classIds}
                   onChange={(classes) => update("classIds", classes)}
+                  classes={availableClasses}
+                  loading={classesLoading}
+                  error={classesError}
                 />
               </div>
               <TeacherField label={contest ? "FORMAT" : "WORK MODE"}>
@@ -259,9 +279,7 @@ function BuilderPage({ contest }: { contest: boolean }) {
             <TeacherField label={contest ? "OPEN TO" : "ASSIGNED TO"}>
               <div className="teacher-readonly-field">
                 {draft.classIds.length} {draft.classIds.length === 1 ? "class" : "classes"}
-                {contest
-                  ? ` · ${studentCount} students`
-                  : ` · ${groupCount} groups / ${studentCount} students`}
+                {classesLoading ? " · loading student count" : classesError ? " · student count unavailable" : ` · ${studentCount} student${studentCount === 1 ? "" : "s"}`}
               </div>
             </TeacherField>
             <TeacherField label={contest ? "RULES" : "INSTRUCTIONS"}>
@@ -275,13 +293,14 @@ function BuilderPage({ contest }: { contest: boolean }) {
 
           <div className="teacher-builder-problems">
             <TeacherSectionTitle title="Problems & points" />
+            {problemsError && <p className="teacher-state-failed" role="alert">{problemsError}</p>}
             <div className="teacher-table-scroll">
               <table className="teacher-table teacher-problem-points-table">
                 <thead>
                   <tr>
                     <th>Order / problem</th>
                     <th>Difficulty</th>
-                    <th>Points</th>
+                    <th>Points / order</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -297,7 +316,7 @@ function BuilderPage({ contest }: { contest: boolean }) {
                           {problem.title}
                         </td>
                         <td data-label="Difficulty">{problem.difficulty}</td>
-                        <td data-label="Points">{item.points}</td>
+                        <td data-label="Points / order" className="builder-points-actions"><input type="number" min="1" aria-label={`Points for ${problem.title}`} value={item.points} onChange={event => update("problems", draft.problems.map(row => row.id === item.id ? { ...row, points: Number(event.target.value) } : row))} /><button type="button" aria-label={`Move ${problem.title} up`} disabled={index === 0} onClick={() => { const next = [...draft.problems]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; update("problems", next); }}>↑</button><button type="button" aria-label={`Move ${problem.title} down`} disabled={index === draft.problems.length - 1} onClick={() => { const next = [...draft.problems]; [next[index], next[index + 1]] = [next[index + 1], next[index]]; update("problems", next); }}>↓</button><button type="button" aria-label={`Remove ${problem.title}`} onClick={() => update("problems", draft.problems.filter(row => row.id !== item.id))}>×</button></td>
                       </tr>
                     );
                   })}
@@ -307,9 +326,10 @@ function BuilderPage({ contest }: { contest: boolean }) {
             <button
               className="button teacher-small-button"
               type="button"
+              disabled={problemsLoading || !!problemsError}
               onClick={() => setAddProblemOpen(true)}
             >
-              Add from library
+              {problemsLoading ? "Loading library…" : "Add from library"}
             </button>
           </div>
         </section>
@@ -332,7 +352,7 @@ function BuilderPage({ contest }: { contest: boolean }) {
               />
             </TeacherField>
             <p className="teacher-timezone">
-              Timezone · Asia/Ho_Chi_Minh{contest ? " · Duration 90 min" : ""}
+              Timezone · Asia/Ho_Chi_Minh{contest && durationMinutes > 0 ? ` · Duration ${durationMinutes} min` : ""}
             </p>
           </div>
           <div className="teacher-student-options">
@@ -364,7 +384,7 @@ function BuilderPage({ contest }: { contest: boolean }) {
           <div className="teacher-publish-checklist">
             <TeacherSectionTitle title="Before publishing" />
             <p className="teacher-total-points">
-              {draft.problems.length} problems · {totalPoints} points
+              {draft.problems.length} problem{draft.problems.length === 1 ? "" : "s"} · {totalPoints} points
             </p>
             <ul>
               <li className={draft.classIds.length ? "is-valid" : ""}>
@@ -379,7 +399,7 @@ function BuilderPage({ contest }: { contest: boolean }) {
             </ul>
             <p className="teacher-draft-visibility">
               {draft.published
-                ? "Published to the local demo preview."
+                ? "Published — available to assigned students."
                 : "Draft — students cannot see this yet."}
             </p>
             <button
@@ -408,7 +428,7 @@ function BuilderPage({ contest }: { contest: boolean }) {
                   Add
                 </button>
               </div>
-            )) : <p className="tiny muted">All demo problems are already included.</p>}
+            )) : <p className="tiny muted">All available problems are already included.</p>}
           </div>
         </Dialog>
       )}
@@ -428,7 +448,7 @@ function BuilderPage({ contest }: { contest: boolean }) {
                 return <li key={item.id}>{problem.title} · {item.points} points</li>;
               })}
             </ul>
-            <p className="tiny muted">Preview only · saved to this browser for the demo.</p>
+            <p className="tiny muted">Preview of the current form. Save to apply changes.</p>
           </div>
         </Dialog>
       )}

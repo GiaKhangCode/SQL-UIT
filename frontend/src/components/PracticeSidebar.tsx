@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { problems } from "../data/mockData";
 import { Activity } from "./Activity";
 import { DailySubmission, studentApi } from "../services/studentApi";
 import { useLoad } from "./useLoad";
@@ -94,7 +93,7 @@ export function PracticeActivity({ submissions = [] }: { submissions?: DailySubm
 export function PracticeTrending() {
   const [range, setRange] = useState<Range>("Week");
   
-  const { data: trendingProblems, loading } = useLoad(
+  const { data: trendingProblems, loading, error } = useLoad(
     async () => await studentApi.getTrending(range),
     [range]
   );
@@ -120,8 +119,12 @@ export function PracticeTrending() {
         key={range}
       >
         {loading ? (
-          <div style={{ padding: "16px", color: "var(--muted)", fontSize: 13 }}>Loading...</div>
-        ) : trendingProblems?.map((row: any) => {
+          <p className="muted" role="status">Loading trending problems…</p>
+        ) : error ? (
+          <p className="muted" role="alert">Could not load trending problems.</p>
+        ) : !trendingProblems?.length ? (
+          <p className="muted">No trending problems for this period.</p>
+        ) : trendingProblems.map((row: any) => {
           return (
             <Link
               className="trending-problem"

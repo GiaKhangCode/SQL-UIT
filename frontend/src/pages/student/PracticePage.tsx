@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { problems } from "../../data/mockData";
 import { studentApi } from "../../services/studentApi";
 import { useLoad } from "../../components/useLoad";
-import { Dialog, Empty, Loading, Status } from "../../components/ui";
+import { Dialog, Empty, ErrorState, Loading, Status } from "../../components/ui";
 import {
   PracticeActivity,
   PracticeTrending,
@@ -24,13 +23,20 @@ export function PracticePage() {
   const [selectedList, setSelectedList] = useState("");
   const [createList, setCreateList] = useState(false);
   const [listName, setListName] = useState("");
+  const [listError, setListError] = useState("");
+  const [listBusy, setListBusy] = useState(false);
   const [visibleCount, setVisibleCount] = useState(8);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
 
-  const { data: prefData, mutate: mutatePref } = useLoad(
+  const { data: prefData, loading: prefLoading, error: prefError, mutate: mutatePref } = useLoad(
     studentApi.getPreferences,
   );
-  const { data: dashData } = useLoad(studentApi.getDashboard);
+  const { data: dashData, loading: dashLoading, error: dashError } = useLoad(studentApi.getDashboard);
+  const { data: catalogData } = useLoad(studentApi.getProblems);
+  const topics = [...new Set((catalogData || []).flatMap((problem) =>
+    (Array.isArray(problem.topics) ? problem.topics : String(problem.topic || "").split(","))
+      .map((value: string) => value.trim()).filter(Boolean),
+  ))].sort();
 
   const favoriteIds = prefData?.favorites || [];
   const lists = prefData?.customLists || [];
@@ -102,7 +108,7 @@ export function PracticePage() {
               Topic
               <select value={topic} onChange={(e) => setTopic(e.target.value)}>
                 <option value="">All</option>
-                {[...new Set(problems.map((p) => p.topic))].map((t) => (
+                {topics.map((t) => (
                   <option key={t}>{t}</option>
                 ))}
               </select>
@@ -145,32 +151,29 @@ export function PracticePage() {
                 ? " · " + [topic, difficulty, progress].filter(Boolean).length
                 : ""}
             </button>
-            <div>
-              <button
-                className="button"
-                aria-label="Show all practice problems"
-                aria-pressed={!favoritesOnly && !selectedList}
-                onClick={() => {
-                  setFavoritesOnly(false);
-                  setSelectedList("");
-                }}
-              >
-                ✎
-              </button>
-              <button
-                className="button"
-                aria-label="Show favorite problems"
-                aria-pressed={favoritesOnly}
-                onClick={() => {
-                  setFavoritesOnly((value) => !value);
-                  setSelectedList("");
-                }}
-              >
-                ☆
-              </button>
-            </div>
+            <select
+              className="practice-mobile-list-select"
+              aria-label="Choose problem list"
+              value={favoritesOnly ? "favorites" : selectedList ? `list:${selectedList}` : ""}
+              onChange={(event) => {
+                if (event.target.value === "create") {
+                  setListName("");
+                  setListError("");
+                  setCreateList(true);
+                  return;
+                }
+                setFavoritesOnly(event.target.value === "favorites");
+                setSelectedList(event.target.value.startsWith("list:") ? event.target.value.slice(5) : "");
+              }}
+            >
+              <option value="">All problems</option>
+              <option value="favorites" disabled={prefLoading || !!prefError}>Saved</option>
+              {lists.map((list: any) => <option key={list.id} value={`list:${list.id}`}>{list.name}</option>)}
+              <option value="create">+ New list</option>
+            </select>
           </div>
           <div className="problem-list" aria-busy={loading}>
+            {prefError && (favoritesOnly || selectedList) && <p role="alert">Could not load saved problems and lists.</p>}
             {loading && rawProblems && (
               <span className="sr-only" role="status">
                 Updating problem results…
@@ -179,11 +182,11 @@ export function PracticePage() {
             {loading && !rawProblems ? (
               <Loading />
             ) : error ? (
-              <p role="alert">{error}</p>
+              <ErrorState title="Could not load problems" message={error} onRetry={() => window.location.reload()} />
             ) : !data?.length ? (
               <Empty
                 title={
-                  problems.length
+                  catalogData?.length
                     ? "No matching problems"
                     : "No problems available"
                 }
@@ -211,23 +214,14 @@ export function PracticePage() {
                     <span className="problem-number muted">{p.number}</span>
                     <b>{p.title}</b>
                     <div className="problem-details">
-                      <span className="problem-topic">{p.topic}</span>
+                      <span className="problem-topic">{Array.isArray(p.topics) && p.topics.length ? p.topics.join(" · ") : p.topic || "—"}</span>
                       <span
                         className={"difficulty " + p.difficulty.toLowerCase()}
                       >
                         {p.difficulty}
                       </span>
                     </div>
-                    <Status
-                      value={p.progress}
-                      tone={
-                        p.progress === "In progress"
-                          ? p.topic === "GROUP BY"
-                            ? "warning"
-                            : "neutral"
-                          : undefined
-                      }
-                    />
+                    <Status value={p.progress} />
                   </Link>
                 ))}
                 <div
@@ -237,14 +231,14 @@ export function PracticePage() {
                 >
                   {visibleCount < data.length
                     ? "Loading more problems…"
-                    : `Showing all ${data.length} problems`}
+                    : `Showing all ${data.length} problem${data.length === 1 ? "" : "s"}`}
                 </div>
               </>
             )}
           </div>
         </div>
         <aside className="practice-sidebar">
-          <PracticeActivity submissions={dashData?.submissionsPerDay || []} />
+          {dashLoading ? <Loading label="Loading activity…" /> : dashError ? <p role="alert">Could not load activity.</p> : <PracticeActivity submissions={dashData?.submissionsPerDay || []} />}
           <section className="practice-lists">
             <div className="practice-lists-heading">
               <h3>My Lists</h3>
@@ -252,6 +246,7 @@ export function PracticePage() {
                 aria-label="Create problem list"
                 onClick={() => {
                   setListName("");
+                  setListError("");
                   setCreateList(true);
                 }}
               >
@@ -271,6 +266,7 @@ export function PracticePage() {
                 <button
                   className="favorite-list-toggle"
                   aria-pressed={favoritesOnly}
+                  disabled={prefLoading || !!prefError}
                   onClick={() => {
                     setFavoritesOnly((value) => !value);
                     setSelectedList("");
@@ -295,6 +291,8 @@ export function PracticePage() {
                     <small>{list.problemIds.length}</small>
                   </button>
                 ))}
+                {prefLoading && <p className="tiny muted" role="status">Loading saved lists…</p>}
+                {prefError && <p className="tiny muted" role="alert">Could not load saved lists.</p>}
               </div>
             )}
           </section>
@@ -312,13 +310,7 @@ export function PracticePage() {
               {
                 label: "Topic",
                 key: "topic" as const,
-                values: [
-                  ...new Set(
-                    problems
-                      .filter((p) => p.practiceListed !== false)
-                      .map((p) => p.topic),
-                  ),
-                ],
+                values: topics,
               },
               {
                 label: "Difficulty",
@@ -382,12 +374,17 @@ export function PracticePage() {
             onSubmit={async (e) => {
               e.preventDefault();
               if (!listName.trim()) return;
-              await studentApi.createList(
-                listName,
-                data?.map((p) => p.id) || [],
-              );
-              mutatePref();
-              setCreateList(false);
+              setListBusy(true);
+              setListError("");
+              try {
+                await studentApi.createList(listName, data?.map((p) => p.id) || []);
+                mutatePref();
+                setCreateList(false);
+              } catch (error) {
+                setListError(error instanceof Error ? error.message : "Could not create the list.");
+              } finally {
+                setListBusy(false);
+              }
             }}
           >
             <label className="field">
@@ -400,9 +397,10 @@ export function PracticePage() {
               />
             </label>
             <p className="tiny muted">
-              Save the current {data?.length || 0} problem results as a private
-              local list.
+              Save the current {data?.length || 0} problem results to a private
+              list in your account.
             </p>
+            {listError && <p role="alert" className="field-error">{listError}</p>}
             <div className="dialog-actions">
               <button
                 className="button"
@@ -413,7 +411,7 @@ export function PracticePage() {
               </button>
               <button
                 className="button primary"
-                disabled={!listName.trim() || loading}
+                disabled={!listName.trim() || loading || listBusy}
                 type="submit"
               >
                 Create list

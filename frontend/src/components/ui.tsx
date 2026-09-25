@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
-import type { DataTable } from "../data/mockData";
+import type { DataTable } from "../data/models";
 export function Status({
   value,
   tone: explicitTone,
@@ -44,6 +44,23 @@ export function Empty({
     <div className="empty-state">
       <h3>{title}</h3>
       {children && <p>{children}</p>}
+    </div>
+  );
+}
+export function ErrorState({
+  title,
+  message,
+  onRetry,
+}: {
+  title: string;
+  message: string;
+  onRetry?: () => void;
+}) {
+  return (
+    <div className="empty-state" role="alert">
+      <h2>{title}</h2>
+      <p>{message}</p>
+      {onRetry && <button className="button" type="button" onClick={onRetry}>Try again</button>}
     </div>
   );
 }

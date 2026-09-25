@@ -1,13 +1,14 @@
 import { Link, useLocation } from "react-router-dom";
 import { studentApi } from "../../services/studentApi";
 import { useLoad } from "../../components/useLoad";
-import { Loading } from "../../components/ui";
+import { ErrorState, Loading } from "../../components/ui";
 import { Activity } from "../../components/Activity";
+import { formatLocalDate } from "../../utils/serverDateTime";
 export function DashboardPage() {
   const { data, loading, error } = useLoad(studentApi.getDashboard);
   const location = useLocation();
-  if (loading) return <Loading />;
-  if (error || !data) return <p role="alert">{error}</p>;
+  if (loading) return <section className="page dashboard-page"><Loading label="Loading dashboard…" /></section>;
+  if (error || !data) return <section className="page dashboard-page"><ErrorState title="Dashboard unavailable" message={error || "Could not load dashboard."} onRetry={() => window.location.reload()} /></section>;
   return (
     <section className="page dashboard-page">
       {(location.state as { welcome?: boolean } | null)?.welcome && (
@@ -31,10 +32,7 @@ export function DashboardPage() {
                 <div className="continue-row" key={p.id}>
                   <div>
                     <b>{p.title}</b>
-                    <small>
-                      {p.topic} · {p.difficulty} · Saved{" "}
-                      {["2 hours ago", "yesterday", "2 days ago"][i]}
-                    </small>
+                    <small>{p.topic} · {p.difficulty}</small>
                   </div>
                   <Link
                     className={"dashboard-resume" + (i === 0 ? " primary" : "")}
@@ -44,13 +42,15 @@ export function DashboardPage() {
                   </Link>
                 </div>
               ))}
+              {!data.continuing.length && <div className="empty-state"><h3>No work in progress</h3><p>Browse Practice to start a SQL problem.</p></div>}
             </div>
           </section>
         </div>
         <aside className="dashboard-deadlines deadline-panel">
           <div className="dashboard-deadlines-heading"><h2>Deadlines</h2><span>{Math.min(3, data.deadlines.length)} upcoming</span></div>
           <div className="deadline-scroll" tabIndex={0} aria-label="Upcoming deadlines">
-            {data.deadlines.slice(0, 3).map((item) => <Link className="dashboard-deadline-row" key={item.id} to={item.to}><time><b>{item.date.slice(5, 7) === "09" ? "SEP" : item.date.slice(5, 7)}</b><strong>{item.date.slice(8)}</strong></time><span><b>{item.title}</b><small>{item.kind} · {item.context}</small></span><em>in {Math.max(1, Number(item.date.slice(8)) - 21)} days</em></Link>)}
+            {data.deadlines.slice(0, 3).map((item) => <Link className="dashboard-deadline-row" key={item.id} to={item.to}><time><b>{new Date(item.date + "T00:00:00").toLocaleString("en-US", { month: "short" }).toUpperCase()}</b><strong>{item.date.slice(8)}</strong></time><span><b>{item.title}</b><small>{item.kind} · {item.context}</small></span><em>{item.time}</em></Link>)}
+            {data.deadlinesError ? <p className="tiny muted" role="alert">{data.deadlinesError}</p> : !data.deadlines.length && <p className="tiny muted">No upcoming deadlines.</p>}
           </div>
           <div className="dashboard-week">
             <div><b>This week</b><Link to="/assignments">Open calendar</Link></div>
@@ -67,7 +67,7 @@ export function DashboardPage() {
                   d.setDate(monday.getDate() + i);
                   return {
                     date: d.getDate(),
-                    fullDate: d.toISOString().split("T")[0],
+                    fullDate: formatLocalDate(d),
                     isToday: d.getDate() === today.getDate() && d.getMonth() === today.getMonth() && d.getFullYear() === today.getFullYear()
                   };
                 });

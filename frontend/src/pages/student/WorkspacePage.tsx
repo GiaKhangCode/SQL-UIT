@@ -1,20 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import CodeMirror from "@uiw/react-codemirror";
-import { sql, MySQL, PLSQL, MSSQL } from "@codemirror/lang-sql";
+import { sql, MSSQL } from "@codemirror/lang-sql";
 import { EditorView } from "@codemirror/view";
 import { X, Star, RotateCcw, Maximize2, Minimize2, Braces } from "lucide-react";
 import { indentRange } from "@codemirror/language";
-import {
-  getFavorites,
-  toggleFavorite,
-} from "../../services/studentPreferences";
 import { AppHeader } from "../../components/AppHeader";
 import { DataGrid, Dialog, Empty, Loading, Status } from "../../components/ui";
 import { useLoad } from "../../components/useLoad";
 import { useTheme } from "../../context/ThemeContext";
 import { studentApi, type QueryResult } from "../../services/studentApi";
-import type { DataTable, Problem, Submission } from "../../data/mockData";
+import type { Problem, Submission } from "../../data/models";
 import { AiChatPanel } from "../../components/AiChatPanel";
 const editorTheme = EditorView.theme({
   "&": {
@@ -83,10 +79,10 @@ function Workspace({ problem }: { problem: Problem }) {
         : "Practice";
   const context = params.get("context") || source;
   const contestMode = source === "Contests" && Boolean(params.get("contest"));
-  const [favorite, setFavorite] = useState(() =>
-    getFavorites().includes(problem.id),
-  );
+  const [favorite, setFavorite] = useState(false);
+  const [favoriteBusy, setFavoriteBusy] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [problemWidth, setProblemWidth] = useState(34);
   const [cursor, setCursor] = useState({ line: 1, column: 1 });
   const editor = useRef<EditorView | null>(null);
   const expandTrigger = useRef<HTMLButtonElement>(null);
@@ -94,9 +90,6 @@ function Workspace({ problem }: { problem: Problem }) {
     () => studentApi.getDraft(problem.id) ?? (problem.draft || ""),
   );
   const [selected, setSelected] = useState("");
-  const [database, setDatabase] = useState("MySQL");
-  const [databaseMenu, setDatabaseMenu] = useState(false);
-  const [tables, setTables] = useState<DataTable[]>(problem.tables || []);
   const [problemTab, setProblemTab] = useState("Description");
   const [resultTab, setResultTab] = useState("Run result");
   const [mobileTab, setMobileTab] = useState("Problem");
@@ -106,10 +99,8 @@ function Workspace({ problem }: { problem: Problem }) {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<QueryResult | null>(null);
   const [lastSubmit, setLastSubmit] = useState<QueryResult | null>(null);
-  const [confirmReset, setConfirmReset] = useState(false);
+  const [confirmResetQuery, setConfirmResetQuery] = useState(false);
   const [notice, setNotice] = useState("");
-  const databaseTrigger = useRef<HTMLButtonElement>(null);
-  const dbContainer = useRef<HTMLDivElement>(null);
   const helpTrigger = useRef<HTMLButtonElement | null>(null);
   const helpClose = useRef<HTMLButtonElement>(null);
   const alive = useRef(true);
@@ -124,11 +115,30 @@ function Workspace({ problem }: { problem: Problem }) {
   }, [code, problem.id]);
   useEffect(() => {
     let active = true;
+    studentApi.getPreferences().then((preferences) => {
+      if (active) setFavorite(preferences.favorites.includes(problem.id));
+    }).catch(() => { if (active) setNotice("Could not load saved problems."); });
+    return () => { active = false; };
+  }, [problem.id]);
+  async function toggleSaved() {
+    if (favoriteBusy) return;
+    setFavoriteBusy(true);
+    try {
+      const response = await studentApi.toggleFavorite(problem.id);
+      setFavorite(response.status === "added");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not update saved problems.");
+    } finally {
+      setFavoriteBusy(false);
+    }
+  }
+  useEffect(() => {
+    let active = true;
     if (help) {
       setHelpText("Loading guidance…");
-      studentApi.getHint(problem.id, help).then((t) => {
+      studentApi.getHint(problem.id).then((t) => {
         if (active) setHelpText(t);
-      });
+      }).catch(() => { if (active) setHelpText("Guidance is unavailable right now."); });
       helpClose.current?.focus();
     }
     return () => {
@@ -147,26 +157,17 @@ function Workspace({ problem }: { problem: Problem }) {
           expandTrigger.current?.focus();
           return;
         }
-        if (databaseMenu) {
-          setDatabaseMenu(false);
-          databaseTrigger.current?.focus();
-        } else if (help) {
+        if (help) {
           setHelp(null);
           helpTrigger.current?.focus();
         }
       }
     }
-    function outside(e: PointerEvent) {
-      if (!dbContainer.current?.contains(e.target as Node))
-        setDatabaseMenu(false);
-    }
     document.addEventListener("keydown", escape);
-    document.addEventListener("pointerdown", outside);
     return () => {
       document.removeEventListener("keydown", escape);
-      document.removeEventListener("pointerdown", outside);
     };
-  }, [help, databaseMenu, expanded]);
+  }, [help, expanded]);
   async function run(kind: "selected" | "all" | "submit") {
     if (busy) return;
     setBusy(true);
@@ -180,42 +181,27 @@ function Workspace({ problem }: { problem: Problem }) {
           ? await studentApi.submitSolution(
               problem.id,
               code,
-              database,
+              "SQL Server",
               source,
               context,
             )
           : await studentApi.runQuery(
               problem.id,
               kind === "selected" ? selected : code,
-              database,
+              "SQL Server",
+              source,
+              context,
             );
       if (alive.current) {
         if (kind === "submit") setLastSubmit(value);
         else setResult(value);
         setMobileTab("Result");
       }
-    } catch {
+    } catch (error) {
       if (alive.current)
-        setNotice("The mock runner is unavailable. Try again.");
+        setNotice(error instanceof Error ? error.message : "The SQL runner is unavailable. Try again.");
     } finally {
       if (alive.current) setBusy(false);
-    }
-  }
-  async function reset() {
-    setConfirmReset(false);
-    setBusy(true);
-    try {
-      const restored = await studentApi.resetDatabase(problem.id, database);
-      if (alive.current) {
-        setTables(restored);
-        setNotice("Mock schema and sample rows restored. SQL draft preserved.");
-        setDatabaseMenu(false);
-      }
-    } finally {
-      if (alive.current) {
-        setBusy(false);
-        databaseTrigger.current?.focus();
-      }
     }
   }
   const display = resultTab === "Submissions" ? lastSubmit : result;
@@ -226,6 +212,9 @@ function Workspace({ problem }: { problem: Problem }) {
           title: problem.title,
           number: problem.number,
           topic: problem.topic || "Uncategorized",
+          source,
+          context: source === "Practice" ? problem.topic || "Uncategorized" : context,
+          backTo: source === "Assignments" ? "/assignments" : source === "Contests" ? "/contests" : "/practice",
         }}
       />
       <main id="main-content" className="workspace-main">
@@ -246,7 +235,7 @@ function Workspace({ problem }: { problem: Problem }) {
             </button>
           ))}
         </div>
-        <div className={`workspace-layout ${isAiPanelOpen ? "with-ai" : ""}`}>
+        <div className={`workspace-layout ${isAiPanelOpen ? "with-ai" : ""}`} style={{ "--problem-pane-width": `${problemWidth}%` } as CSSProperties}>
           <section
             className={
               "problem-pane mobile-pane" +
@@ -270,6 +259,7 @@ function Workspace({ problem }: { problem: Problem }) {
                   {t}
                 </button>
               ))}
+              {!isAiPanelOpen && <label className="workspace-pane-size" title="Resize problem panel"><span>Panel width</span><input type="range" min="25" max="55" value={problemWidth} onChange={(event) => setProblemWidth(Number(event.target.value))} aria-label="Problem panel width" /></label>}
             </div>
             <div className="problem-scroll">
               {problemTab === "Description" ? (
@@ -290,39 +280,15 @@ function Workspace({ problem }: { problem: Problem }) {
                   <p className="muted">{problem.description}</p>
                   <h3>Requirements</h3>
                   <p>{problem.requirements}</p>
-                  <h3>Expected output</h3>
-                  {problem.expected && <DataGrid table={problem.expected} />}
-                  <p className="tiny">
-                    {problem.id === "p1"
-                      ? "Bao Tran and Ngoc Linh have no matching rows in Orders."
-                      : "Output shown for the sample dataset."}
-                  </p>
+                  {problem.expected && <><h3>Expected output</h3><DataGrid table={problem.expected} /><p className="tiny muted">Output shown for the sample dataset.</p></>}
                   <hr />
                 </>
               ) : (
                 <>
-                  <h2>Mock database</h2>
-                  <p className="muted">
-                    {database} · read-only sample schema and data
-                  </p>
-                  {tables.map((t) => (
-                    <section className="schema-section" key={t.name}>
-                      <h3>{t.name}</h3>
-                      <p className="schema-metadata">
-                        {t.columns
-                          .map(
-                            (c) =>
-                              c +
-                              " " +
-                              (c.includes("name") || c === "month"
-                                ? "VARCHAR"
-                                : "NUMBER"),
-                          )
-                          .join(" · ")}
-                      </p>
-                      <DataGrid table={t} />
-                    </section>
-                  ))}
+                  <h2>Database setup</h2>
+                  <p className="muted">SQL Server · read-only schema and seed data used for evaluation</p>
+                  <section className="schema-section"><h3>Schema</h3><pre className="workspace-schema-code"><code>{(problem as Problem & { schema?: string }).schema || "No schema provided."}</code></pre></section>
+                  <section className="schema-section"><h3>Seed data</h3><pre className="workspace-schema-code"><code>{(problem as Problem & { seedData?: string }).seedData || "No seed data provided."}</code></pre></section>
                 </>
               )}
             </div>
@@ -351,7 +317,7 @@ function Workspace({ problem }: { problem: Problem }) {
                 </div>
                 <p aria-live="polite">{helpText}</p>
                 <small className="muted">
-                  Guidance only · mock response, no complete solution.
+                  Guidance only · no complete solution.
                 </small>
               </section>
             )}
@@ -385,7 +351,8 @@ function Workspace({ problem }: { problem: Problem }) {
               <button
                 className="save-problem"
                 aria-pressed={favorite}
-                onClick={() => setFavorite(toggleFavorite(problem.id))}
+                disabled={favoriteBusy}
+                onClick={() => void toggleSaved()}
               >
                 <Star size={15} fill={favorite ? "currentColor" : "none"} />
                 {favorite ? "Saved" : "Save"}
@@ -401,44 +368,8 @@ function Workspace({ problem }: { problem: Problem }) {
               aria-label="SQL editor"
             >
               <div className="editor-toolbar">
-                <div className="database-container" ref={dbContainer}>
-                  <button
-                    className="button"
-                    ref={databaseTrigger}
-                    aria-expanded={databaseMenu}
-                    aria-controls="database-options"
-                    disabled={busy}
-                    onClick={() => setDatabaseMenu((o) => !o)}
-                  >
-                    {database} ⌄
-                  </button>
-                  {databaseMenu && (
-                    <div className="database-menu" id="database-options">
-                      {["MySQL", "Oracle", "SQL Server"].map((db) => (
-                        <button
-                          key={db}
-                          aria-pressed={database === db}
-                          onClick={() => {
-                            setDatabase(db);
-                            setDatabaseMenu(false);
-                            databaseTrigger.current?.focus();
-                          }}
-                        >
-                          {db}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <button
-                  className="icon-button reset-database"
-                  disabled={busy}
-                  aria-label="Reset database"
-                  title="Reset database"
-                  onClick={() => setConfirmReset(true)}
-                >
-                  <RotateCcw size={16} />
-                </button>
+                <span className="editor-dialect">SQL Server</span>
+                <button className="icon-button" type="button" aria-label="Reset SQL query" title="Reset SQL query" onClick={() => setConfirmResetQuery(true)}><RotateCcw size={16} /></button>
                 <b>query.sql</b>
                 <button
                   className="icon-button format-query"
@@ -483,14 +414,7 @@ function Workspace({ problem }: { problem: Problem }) {
                   height="100%"
                   theme={dark ? "dark" : "light"}
                   extensions={[
-                    sql({
-                      dialect:
-                        database === "Oracle"
-                          ? PLSQL
-                          : database === "SQL Server"
-                            ? MSSQL
-                            : MySQL,
-                    }),
+                    sql({ dialect: MSSQL }),
                     editorTheme,
                   ]}
                   onChange={setCode}
@@ -585,14 +509,7 @@ function Workspace({ problem }: { problem: Problem }) {
                     <Status value={display.status} />
                     <p>{display.message}</p>
                     {display.table && <DataGrid table={display.table} />}
-                    <p className="tiny muted">
-                      {resultTab === "Submissions"
-                        ? "Score: " +
-                          (display.status === "Accepted" ? "100" : "0") +
-                          "/100 · "
-                        : ""}
-                      Frontend simulation · SQL has not been executed.
-                    </p>
+                    <p className="tiny muted">{resultTab === "Submissions" ? "Submission saved to your history." : "Executed against the problem dataset."}</p>
                     {resultTab === "Submissions" && (
                       <Link className="text-button" to="/submissions">
                         View submission history →
@@ -608,12 +525,9 @@ function Workspace({ problem }: { problem: Problem }) {
                     </h2>
                     <p className="muted">
                       Run the query to preview returned data. Submit when ready
-                      to simulate grading.
+                      for evaluation.
                     </p>
-                    <small>
-                      Sample data ·{" "}
-                      {(problem.tables || []).map((t) => t.name).join(" and ")}
-                    </small>
+                    <small>SQL Server evaluation</small>
                   </>
                 )}
                 {notice && (
@@ -633,25 +547,7 @@ function Workspace({ problem }: { problem: Problem }) {
           )}
         </div>
       </main>
-      {confirmReset && (
-        <Dialog
-          title="Reset mock database?"
-          onClose={() => setConfirmReset(false)}
-        >
-          <p>
-            Restore the original schema and sample rows for {database}. Your SQL
-            draft will be preserved.
-          </p>
-          <div className="dialog-actions">
-            <button className="button" onClick={() => setConfirmReset(false)}>
-              Cancel
-            </button>
-            <button className="button primary" onClick={() => void reset()}>
-              Reset database
-            </button>
-          </div>
-        </Dialog>
-      )}
+      {confirmResetQuery && <Dialog title="Reset SQL query?" onClose={() => setConfirmResetQuery(false)}><p>Your current SQL draft will be cleared from this browser.</p><div className="dialog-actions"><button className="button" type="button" onClick={() => setConfirmResetQuery(false)}>Cancel</button><button className="button primary" type="button" onClick={() => { setCode(""); setResult(null); setLastSubmit(null); setConfirmResetQuery(false); }}>Clear query</button></div></Dialog>}
     </div>
   );
 }

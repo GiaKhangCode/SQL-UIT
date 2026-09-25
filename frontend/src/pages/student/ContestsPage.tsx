@@ -1,17 +1,17 @@
 import { useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { studentApi } from "../../services/studentApi";
-import { type Contest } from "../../data/mockData";
+import { type Contest } from "../../data/models";
 import { useLoad } from "../../components/useLoad";
-import { Empty, Loading, Status } from "../../components/ui";
+import { Empty, ErrorState, Loading, Status } from "../../components/ui";
 export function ContestsPage() {
   const navigate = useNavigate();
   const { data, loading, error } = useLoad(studentApi.getContests);
   const [tab, setTab] = useState("All");
   const [search, setSearch] = useState("");
   const [params] = useSearchParams();
-  if (loading) return <Loading />;
-  if (error || !data) return <p role="alert">{error}</p>;
+  if (loading) return <section className="page contests-page"><Loading label="Loading contests…" /></section>;
+  if (error || !data) return <section className="page contests-page"><ErrorState title="Contests unavailable" message={error || "Could not load contests."} onRetry={() => window.location.reload()} /></section>;
   const selected = data.find((c) => c.id === params.get("contest"));
   const filtered = data.filter(
     (c) =>
@@ -36,32 +36,7 @@ export function ContestsPage() {
   if (selected) return <Navigate replace to={"/contests/" + selected.id} />;
   return (
     <section className="page contests-page">
-      <h1 className="featured-heading">Featured contests</h1>
-      <div className="featured-contests">
-        {data.slice(0, 3).map((c, i) => (
-          <button
-            className={"featured-contest featured-" + i}
-            key={c.id}
-            onClick={() => details(c)}
-          >
-            <span>{"{ SQL }"}</span>
-            <h2>{c.title}</h2>
-            <p>
-              {
-                [
-                  "Joins under pressure",
-                  "Represent your class",
-                  "Four-person team challenge",
-                ][i]
-              }
-            </p>
-            <small>
-              {c.status.toUpperCase()} · {c.participants} participants ·{" "}
-              {c.problemIds.length} problems
-            </small>
-          </button>
-        ))}
-      </div>
+      <div className="page-heading"><h1>Contests</h1><p>Timed SQL challenges for your classes</p></div>
       <div className="contest-toolbar">
         <div
           className="underline-tabs"
@@ -109,14 +84,9 @@ export function ContestsPage() {
                 <small>{c.scope}</small>
                 <p>{c.description}</p>
                 <span className="tiny">
-                  {c.date} · {c.time}–{c.endTime} ICT · {c.problemIds.length}{" "}
-                  problems · {c.participants} participants
+                  {c.date} {c.time} → {c.endDate || c.date} {c.endTime} · {c.problemIds.length}{" "}
+                  problem{c.problemIds.length === 1 ? "" : "s"} · {c.submitters ?? "—"} student{c.submitters === 1 ? "" : "s"} submitted on included problems
                 </span>
-                {c.status === "Active" && (
-                  <p className="tiny muted">
-                    Demo countdown · 42 minutes remaining
-                  </p>
-                )}
               </div>
               <button className="text-button" onClick={() => details(c)}>
                 View details →
@@ -125,26 +95,10 @@ export function ContestsPage() {
           ))}
           {!filtered.length && <Empty title="No matching contests" />}
         </div>
-        <aside className="hall-of-fame" aria-labelledby="hall-of-fame-title">
-          <h2 id="hall-of-fame-title">Hall of Fame</h2>
-          <p className="tiny muted">Recent public achievements</p>
-          {[
-            ["Query Masters", "Team Champion", "SQL Team Challenge · Sep 2026"],
-            ["Bao Tran", "1st place", "JOIN Masters Weekly"],
-            ["Ngoc Linh", "Fastest solver", "SQL Sprint #04"],
-          ].map((r, i) => (
-            <div className="fame-row" key={r[0]}>
-              <b>0{i + 1}</b>
-              <div>
-                <strong>{r[0]}</strong>
-                <small>{r[1]}</small>
-                <small>{r[2]}</small>
-              </div>
-            </div>
-          ))}
-          <a className="fame-results-link" href="#contest-feed" onClick={() => setTab("Past")}>
-            View published results →
-          </a>
+        <aside className="hall-of-fame" aria-label="Contest guidance">
+          <h2>Ready to compete?</h2>
+          <p className="tiny muted">Open a contest to see its schedule and problems. Your submissions are saved to your account.</p>
+          <Link className="fame-results-link" to="/submissions">View your submissions →</Link>
         </aside>
       </div>
     </section>

@@ -51,17 +51,6 @@ export function toggleFavorite(id: string) {
   storage.set("sql-practice:favorites", JSON.stringify(next));
   return next.includes(id);
 }
-// Demonstration accepted-day history; date arithmetic uses calendar days in ICT.
-export const demoAcceptedDays = [
-  ...Array.from(
-    { length: 12 },
-    (_, i) => "2026-08-" + String(i + 1).padStart(2, "0"),
-  ),
-  ...Array.from(
-    { length: 7 },
-    (_, i) => "2026-09-" + String(i + 12).padStart(2, "0"),
-  ),
-];
 export function calculateStreak(days: string[], today: string) {
   const ordered = [...new Set(days)].filter((day) => day <= today).sort();
   const dayNumber = (day: string) => Date.parse(day + "T00:00:00Z") / 86400000;

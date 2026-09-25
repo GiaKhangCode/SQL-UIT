@@ -21,7 +21,7 @@ export async function apiFetch<T = any>(endpoint: string, options: RequestInit =
   const data = isJson ? await response.json() : await response.text();
 
   if (!response.ok) {
-    const errorMsg = data?.detail || typeof data === 'string' ? data : "Có lỗi xảy ra từ máy chủ";
+    const errorMsg = typeof data === "string" ? data : data?.detail || "The server could not complete the request.";
     throw new Error(errorMsg);
   }
 

@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import { studentApi } from "../services/studentApi";
 import { X, Send, History, Plus, MessageSquare } from "lucide-react";
-import { Problem } from "../data/mockData";
+import { Problem } from "../data/models";
+import { parseServerDateTime } from "../utils/serverDateTime";
 
 export interface AiChatPanelProps {
   problem: Problem;
@@ -18,7 +19,7 @@ interface ChatMessage {
 export function AiChatPanel({ problem, code, onClose }: AiChatPanelProps) {
   const defaultMessage = {
     role: "ai" as const,
-    content: `Xin chào! Mình là trợ lý AI. Mình có thể giúp gì cho bạn với bài tập "${problem.title}"?`,
+    content: `Hi! I can help you work through "${problem.title}". What would you like to ask?`,
   };
 
   const [messages, setMessages] = useState<ChatMessage[]>([defaultMessage]);
@@ -27,14 +28,21 @@ export function AiChatPanel({ problem, code, onClose }: AiChatPanelProps) {
   const [showHistory, setShowHistory] = useState(false);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState("");
+  const [chatError, setChatError] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const fetchSessions = async () => {
+    setHistoryLoading(true);
+    setHistoryError("");
     try {
       const data = await studentApi.getAiChatSessions(problem.id);
       setSessions(data);
     } catch (e) {
-      console.error(e);
+      setHistoryError(e instanceof Error ? e.message : "Could not load chat history.");
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
@@ -44,6 +52,7 @@ export function AiChatPanel({ problem, code, onClose }: AiChatPanelProps) {
 
   const loadSession = async (sessionId: string) => {
     setIsLoading(true);
+    setHistoryError("");
     try {
       const msgs = await studentApi.getAiChatMessages(sessionId);
       if (msgs && msgs.length > 0) {
@@ -52,7 +61,7 @@ export function AiChatPanel({ problem, code, onClose }: AiChatPanelProps) {
         setShowHistory(false);
       }
     } catch (e) {
-      console.error(e);
+      setHistoryError(e instanceof Error ? e.message : "Could not load this chat.");
     } finally {
       setIsLoading(false);
     }
@@ -62,6 +71,7 @@ export function AiChatPanel({ problem, code, onClose }: AiChatPanelProps) {
     setMessages([defaultMessage]);
     setCurrentSessionId(undefined);
     setShowHistory(false);
+    setChatError("");
   };
 
   useEffect(() => {
@@ -79,6 +89,7 @@ export function AiChatPanel({ problem, code, onClose }: AiChatPanelProps) {
     const newMessages = [...messages, { role: "user", content: userMsg } as ChatMessage];
     setMessages(newMessages);
     setIsLoading(true);
+    setChatError("");
 
     try {
       const response = await studentApi.askAi(
@@ -93,8 +104,10 @@ export function AiChatPanel({ problem, code, onClose }: AiChatPanelProps) {
         setCurrentSessionId(response.sessionId);
         fetchSessions(); // Refresh history
       }
-    } catch (error: any) {
-      setMessages([...newMessages, { role: "ai", content: `Có lỗi xảy ra: ${error.message}` }]);
+    } catch (error) {
+      setMessages(messages);
+      setInput(userMsg);
+      setChatError(error instanceof Error ? error.message : "Could not send message.");
     } finally {
       setIsLoading(false);
     }
@@ -110,7 +123,7 @@ export function AiChatPanel({ problem, code, onClose }: AiChatPanelProps) {
           <button className="icon-button" onClick={startNewChat} aria-label="New chat" title="New chat">
             <Plus size={18} />
           </button>
-          <button className={"icon-button " + (showHistory ? "active" : "")} onClick={() => setShowHistory(!showHistory)} aria-label="Chat history" title="History">
+          <button className={"icon-button " + (showHistory ? "active" : "")} onClick={() => setShowHistory(!showHistory)} aria-label="Chat history" aria-pressed={showHistory} title="History">
             <History size={18} />
           </button>
           <button className="icon-button" onClick={onClose} aria-label="Close AI panel" title="Close">
@@ -122,8 +135,8 @@ export function AiChatPanel({ problem, code, onClose }: AiChatPanelProps) {
       <div className="ai-chat-body">
         {showHistory ? (
           <div className="ai-chat-history-list">
-            {sessions.length === 0 ? (
-              <div className="empty-history">Chưa có lịch sử đoạn chat nào.</div>
+            {historyLoading ? <div className="empty-history" role="status">Loading chat history…</div> : historyError ? <div className="empty-history" role="alert">{historyError}</div> : sessions.length === 0 ? (
+              <div className="empty-history">No chat history yet.</div>
             ) : (
               sessions.map(s => (
                 <button 
@@ -132,7 +145,7 @@ export function AiChatPanel({ problem, code, onClose }: AiChatPanelProps) {
                   onClick={() => loadSession(s.id)}
                 >
                   <MessageSquare size={16} />
-                  <span>{new Date(s.createdAt || s.created_at).toLocaleString()}</span>
+                  <span>{s.createdAt || s.created_at ? parseServerDateTime(s.createdAt || s.created_at).toLocaleString() : "Chat session"}</span>
                 </button>
               ))
             )}
@@ -149,7 +162,7 @@ export function AiChatPanel({ problem, code, onClose }: AiChatPanelProps) {
             {isLoading && (
               <div className="ai-message ai">
                 <div className="message-bubble loading">
-                  Đang suy nghĩ...
+                  Thinking...
                 </div>
               </div>
             )}
@@ -158,6 +171,7 @@ export function AiChatPanel({ problem, code, onClose }: AiChatPanelProps) {
       </div>
 
       <div className="ai-chat-input">
+        {chatError && <p role="alert" className="field-error">{chatError}</p>}
         <input
           type="text"
           value={input}
@@ -167,11 +181,12 @@ export function AiChatPanel({ problem, code, onClose }: AiChatPanelProps) {
               handleSend();
             }
           }}
-          placeholder="Nhập câu hỏi của bạn..."
+          placeholder="Ask a question about this problem..."
           disabled={isLoading || showHistory}
         />
         <button 
           className="send-button" 
+          aria-label="Send AI message"
           onClick={handleSend}
           disabled={isLoading || showHistory || !input.trim()}
         >

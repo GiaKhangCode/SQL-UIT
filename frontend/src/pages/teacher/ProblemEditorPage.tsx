@@ -1,16 +1,16 @@
 import { useState, useEffect } from "react";
-import { useLocation, useParams, useNavigate } from "react-router-dom";
-import { Dialog } from "../../components/ui";
+import { useParams, useNavigate } from "react-router-dom";
+import { Dialog, ErrorState, Loading } from "../../components/ui";
 import { teacherService } from "../../services/teacherService";
-import { teacherProblems, type TeacherProblem } from "../../data/teacherDemoData";
+import { type TeacherProblem } from "../../data/teacherTypes";
 import { TeacherField, TeacherPageIntro, TeacherSectionTitle } from "./TeacherPageParts";
 
 export function ProblemEditorPage() {
   const { problemId } = useParams();
-  const location = useLocation();
   const navigate = useNavigate();
-  const selectedId = problemId || (location.pathname.endsWith("/new") ? "new" : "p1");
+  const selectedId = problemId || "new";
   const [problem, setProblem] = useState<TeacherProblem | null>(null);
+  const [loadError, setLoadError] = useState("");
   
   useEffect(() => {
     async function fetchProblem() {
@@ -24,16 +24,24 @@ export function ProblemEditorPage() {
           });
           const nextNumber = String(maxNum + 1).padStart(3, '0');
           
-          const base = teacherProblems[0];
           setProblem({ 
-            ...base, 
             id: "new", 
             number: nextNumber, 
-            title: "New SQL problem", 
+            title: "",
+            difficulty: "Easy",
             visibility: "Private", 
             topics: "", 
             database: "SQL Server",
-            testCases: [{ seedData: base.seedData, isHidden: false }]
+            statement: "",
+            requirements: "",
+            hints: [],
+            schema: "",
+            seedData: "",
+            seedSummary: "",
+            referenceSolution: "",
+            expectedColumns: [],
+            expectedRows: [],
+            testCases: [{ seedData: "", isHidden: false }]
           });
           return;
         }
@@ -52,26 +60,27 @@ export function ProblemEditorPage() {
           hints: data.hint ? data.hint.split('\n') : [],
           schema: data.schema || "",
           seedData: data.seedData || "",
-          seedSummary: "1 table · 5 rows",
+          seedSummary: "",
           referenceSolution: data.referenceSolution || "",
           testCases: data.testCases && data.testCases.length > 0 ? data.testCases : [{ seedData: data.seedData || "", isHidden: false }],
           expectedColumns: [],
           expectedRows: []
         });
       } catch(e) {
-        console.error("Failed to load problem:", e);
+        setLoadError(e instanceof Error ? e.message : "Could not load this problem.");
       }
     }
     fetchProblem();
   }, [selectedId]);
 
-  const [saveState, setSaveState] = useState("All changes saved");
-  const [validationState, setValidationState] = useState("Validation passed");
-  const [ready, setReady] = useState(false);
+  const [saveState, setSaveState] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [validating, setValidating] = useState(false);
+  const [validationState, setValidationState] = useState("Not validated");
   const [dialog, setDialog] = useState<"preview" | null>(null);
 
   if (!problem) {
-    return <div style={{ padding: '24px' }}>Loading...</div>;
+    return <div className="teacher-page">{loadError ? <ErrorState title="Problem editor unavailable" message={loadError} onRetry={() => window.location.reload()} /> : <Loading label="Loading problem editor…" />}</div>;
   }
 
   function update<K extends keyof TeacherProblem>(
@@ -80,15 +89,12 @@ export function ProblemEditorPage() {
   ) {
     setProblem((current) => current ? ({ ...current, [field]: value }) : null);
     setSaveState("Unsaved changes");
-    setReady(false);
-  }
-
-  function saveDraft() {
-    setSaveState("Draft saved");
+    setValidationState("Not validated");
   }
 
   async function validate() {
-    if (!problem) return;
+    if (!problem || validating) return;
+    setValidating(true);
     setValidationState("Validating...");
     try {
       const tc = (problem.testCases || [{seedData: problem.seedData}])[0];
@@ -98,20 +104,26 @@ export function ProblemEditorPage() {
         seedData: tc.seedData,
         referenceSolution: problem.referenceSolution
       });
-      if (result.status === "Success" || result.status === "Tabular result") {
-        setValidationState("Validation passed · Output updated");
+      if ((result.status === "Success" || result.status === "Tabular result") && result.table) {
         update("expectedColumns", result.table.columns);
         update("expectedRows", result.table.rows);
+        setValidationState("Validation passed · Output updated");
+      } else if (result.status === "Success") {
+        setValidationState("Validation passed · no tabular output");
       } else {
         setValidationState(`Validation error: ${result.message}`);
       }
     } catch (e: any) {
       setValidationState(`Validation error: ${e.message}`);
+    } finally {
+      setValidating(false);
     }
   }
 
-  async function markReady() {
-    if (!problem) return;
+  async function saveProblem() {
+    if (!problem || saving) return;
+    if (!problem.title.trim()) { setSaveState("Enter a title before saving."); return; }
+    setSaving(true);
     setSaveState("Saving to server...");
     try {
         const payload = {
@@ -136,12 +148,13 @@ export function ProblemEditorPage() {
         }
         
         setSaveState("All changes saved");
-        setReady(true);
         if (selectedId === "new") {
             navigate("/teacher/problems");
         }
     } catch (e) {
-        setSaveState("Failed to save to server");
+        setSaveState(e instanceof Error ? e.message : "Failed to save to server.");
+    } finally {
+        setSaving(false);
     }
   }
 
@@ -149,11 +162,8 @@ export function ProblemEditorPage() {
     <section className="teacher-page teacher-problem-page">
       <TeacherPageIntro
         title="Problem editor"
-        context={`Problem ${problem.number} / ${problem.title}`}
+        context={problem.title ? `Problem ${problem.number} / ${problem.title}` : "New SQL problem"}
       >
-        <button className="button" type="button" onClick={saveDraft}>
-          Save draft
-        </button>
         <button
           className="button"
           type="button"
@@ -161,13 +171,13 @@ export function ProblemEditorPage() {
         >
           Preview
         </button>
-        <button className="button primary" type="button" onClick={markReady}>
-          Mark as ready
+        <button className="button primary" type="button" disabled={saving} onClick={saveProblem}>
+          {saving ? "Saving…" : "Save problem"}
         </button>
       </TeacherPageIntro>
       <div className="teacher-divider" />
-      <p className={`teacher-editor-state${ready ? " is-published" : ""}`}>
-        {ready ? "Ready" : "Draft"} · {problem.visibility} · {saveState} · {validationState}
+      <p className="teacher-editor-state" role="status">
+        {problem.visibility} · {saveState || "Unsaved form"} · {validationState}
       </p>
 
       <div className="teacher-editor-layout">
@@ -236,7 +246,7 @@ export function ProblemEditorPage() {
             </select>
             <small className="teacher-visibility-help">
               {problem.visibility === "Private"
-                ? "Private: only you can use it. Public: listed in Practice for all students."
+                ? "Private problems are available to students through assigned work. Public problems appear in Practice."
                 : "Public problems are listed in Practice for all students."}
             </small>
           </TeacherField>
@@ -280,17 +290,15 @@ export function ProblemEditorPage() {
 
         <section className="teacher-editor-validation">
           <TeacherSectionTitle title="Database & validation" />
-          <TeacherField label="DATABASE">
+          <TeacherField label="SQL DIALECT">
             <select
               value={problem.database}
               onChange={(event) => update("database", event.target.value)}
             >
               <option>SQL Server</option>
-              <option>MySQL 8.0</option>
-              <option>PostgreSQL 16</option>
-              <option>SQLite 3</option>
             </select>
           </TeacherField>
+          <p className="tiny muted">Validation and student execution currently use SQL Server.</p>
           <div className="teacher-code-section">
             <div className="teacher-code-title">
               <span>Schema</span>
@@ -357,9 +365,7 @@ export function ProblemEditorPage() {
           }}>
             Add test case
           </button>
-          <p className="teacher-seed-summary">
-            {problem.seedSummary} · loaded before every run
-          </p>
+          <p className="teacher-seed-summary">Test case seed SQL is loaded before evaluation.</p>
           <div className="teacher-code-section">
             <div className="teacher-code-title">
               <span>Reference solution</span>
@@ -374,8 +380,8 @@ export function ProblemEditorPage() {
               onChange={(event) => update("referenceSolution", event.target.value)}
             />
           </div>
-          <button className="button" type="button" onClick={validate} style={{ marginTop: '16px', marginBottom: '24px' }}>
-            Validate solution
+          <button className="button" type="button" disabled={validating} onClick={validate} style={{ marginTop: '16px', marginBottom: '24px' }}>
+            {validating ? "Validating…" : "Validate solution"}
           </button>
           <div className="teacher-expected-output">
             <TeacherSectionTitle title="Expected output" />

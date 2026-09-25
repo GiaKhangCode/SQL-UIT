@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import type { Deadline } from "../data/mockData";
+import type { Deadline } from "../data/models";
 export function DeadlineList({ items }: { items: Deadline[] }) {
   return (
     <div className="deadline-list">
@@ -12,7 +12,7 @@ export function DeadlineList({ items }: { items: Deadline[] }) {
             {item.kind} · {item.context}
           </small>
           <small>
-            Due {item.date.slice(5)} · {item.time} ICT
+            Due {item.date.slice(5)} · {item.time}
           </small>
         </Link>
       ))}
@@ -22,14 +22,14 @@ export function DeadlineList({ items }: { items: Deadline[] }) {
 export function Calendar({
   items,
   compact = false,
-  referenceDate = "2026-09-18",
+  referenceDate = new Date().toLocaleDateString("en-CA"),
 }: {
   items: Deadline[];
   compact?: boolean;
   referenceDate?: string;
 }) {
-  const [month, setMonth] = useState(8);
-  const [year, setYear] = useState(2026);
+  const [month, setMonth] = useState(() => new Date().getMonth());
+  const [year, setYear] = useState(() => new Date().getFullYear());
   const [selected, setSelected] = useState("");
   const first = (new Date(year, month, 1).getDay() + 6) % 7;
   const days = new Date(year, month + 1, 0).getDate();
@@ -104,10 +104,7 @@ export function Calendar({
         })}
       </div>
       <p className="calendar-legend">
-        ● {referenceDate === "2026-09-17" ? "Assignment due" : "Due date"}{" "}
-        <span>
-          {referenceDate === "2026-09-17" ? "" : "Demo today: Sep 18"}
-        </span>
+        ● Due date <span>Today is outlined</span>
       </p>
       {selected && (
         <div className="calendar-selection" aria-live="polite">

@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Dialog } from "../../components/ui";
+import { Dialog, ErrorState, Loading } from "../../components/ui";
 import {
-  teacherClassProgress,
   type TeacherClass,
   type TeacherClassMember,
-} from "../../data/teacherDemoData";
+} from "../../data/teacherTypes";
 import { TeacherField, TeacherPageIntro } from "./TeacherPageParts";
 import { teacherService } from "../../services/teacherService";
+import { academicTerms } from "../../utils/academicTerms";
 
 export function ClassesGroupsPage() {
   const [classes, setClasses] = useState<TeacherClass[]>([]);
+  const [classesLoading, setClassesLoading] = useState(true);
+  const [classesError, setClassesError] = useState("");
   const [term, setTerm] = useState("All terms");
   const [search, setSearch] = useState("");
   const [selectedClassId, setSelectedClassId] = useState("");
@@ -22,7 +24,11 @@ export function ClassesGroupsPage() {
   const [availableStudents, setAvailableStudents] = useState<TeacherClassMember[]>([]);
   const [newMemberId, setNewMemberId] = useState("");
   const [saved, setSaved] = useState(false);
-  const [emptyStateNotice, setEmptyStateNotice] = useState("");
+  const [dialogError, setDialogError] = useState("");
+  const [dialogBusy, setDialogBusy] = useState(false);
+  const [classActivities, setClassActivities] = useState<any[]>([]);
+  const [detailMembers, setDetailMembers] = useState<TeacherClassMember[]>([]);
+  const [detailError, setDetailError] = useState("");
   
   const [newClassForm, setNewClassForm] = useState({
     id: "",
@@ -34,18 +40,30 @@ export function ClassesGroupsPage() {
   });
 
   useEffect(() => {
-    teacherService.getClasses().then(setClasses).catch(console.error);
+    teacherService.getClasses().then(setClasses).catch((error) => setClassesError(error instanceof Error ? error.message : "Could not load classes.")).finally(() => setClassesLoading(false));
   }, []);
 
   useEffect(() => {
     if (dialog === "members" && selectedClassId) {
+      setDialogError("");
       teacherService.getClassMembers(selectedClassId).then(data => {
         setMembers(data);
         setDraftMembers(data);
-      }).catch(console.error);
-      teacherService.getAllStudents().then(setAvailableStudents).catch(console.error);
+      }).catch((error) => setDialogError(error instanceof Error ? error.message : "Could not load class members."));
+      teacherService.getAllStudents().then(setAvailableStudents).catch((error) => setDialogError(error instanceof Error ? error.message : "Could not load students."));
     }
   }, [dialog, selectedClassId]);
+
+  useEffect(() => {
+    if (!classDetailsOpen || !selectedClassId) return;
+    setDetailError("");
+    Promise.all([teacherService.getAssignments(), teacherService.getClassMembers(selectedClassId)])
+      .then(([activities, classMembers]) => {
+        setClassActivities(activities.filter((item: any) => item.classIds?.includes(selectedClassId)));
+        setDetailMembers(classMembers);
+      })
+      .catch(() => setDetailError("Could not load class activity or members."));
+  }, [classDetailsOpen, selectedClassId]);
 
   const termOptions = useMemo(
     () => Array.from(new Set(classes.map((classInfo) => classInfo.term))).sort((a, b) => {
@@ -65,15 +83,10 @@ export function ClassesGroupsPage() {
   }), [classes, search, term]);
   const selectedClass = visibleClasses.find((classInfo) => classInfo.id === selectedClassId) || null;
   const totalVisibleStudents = visibleClasses.reduce((total, classInfo) => total + classInfo.students, 0);
-  const selectedProgress = selectedClass ? teacherClassProgress[selectedClass.id] : undefined;
-  const assignments = selectedProgress?.assignments || [];
-  const students = selectedProgress?.students || [];
-  const filteredStudents = useMemo(() => students.filter((student) =>
+  const assignments = classActivities.filter(item => !item.isContest);
+  const filteredStudents = useMemo(() => detailMembers.filter((student) =>
     `${student.name} ${student.id}`.toLowerCase().includes(studentSearch.toLowerCase()),
-  ), [students, studentSearch]);
-  const totalSubmissions = assignments.reduce((total, assignment) => total + assignment.submitted, 0);
-  const expectedSubmissions = assignments.reduce((total, assignment) => total + assignment.expected, 0);
-  const submissionRate = expectedSubmissions ? Math.round((totalSubmissions / expectedSubmissions) * 100) : 0;
+  ), [detailMembers, studentSearch]);
 
   function selectClass(classInfo: TeacherClass) {
     setSelectedClassId(classInfo.id);
@@ -92,7 +105,9 @@ export function ClassesGroupsPage() {
   }
 
   async function saveMembers() {
-    if (!selectedClassId) return;
+    if (!selectedClassId || dialogBusy) return;
+    setDialogBusy(true);
+    setDialogError("");
     try {
       const originalIds = new Set(members.map(m => m.id));
       const draftIds = new Set(draftMembers.map(m => m.id));
@@ -106,25 +121,32 @@ export function ClassesGroupsPage() {
       ]);
       
       setMembers(draftMembers);
+      setClasses((current) => current.map((item) => item.id === selectedClassId ? { ...item, students: draftMembers.length } : item));
       setSaved(true);
     } catch (err) {
-      console.error("Failed to save members", err);
+      setDialogError(err instanceof Error ? err.message : "Could not save members.");
+    } finally {
+      setDialogBusy(false);
     }
   }
 
   async function createClassSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!newClassForm.id || !newClassForm.course || !newClassForm.term) return;
+    if (newClassForm.endDate < newClassForm.startDate) { setDialogError("End date must be after the start date."); return; }
     
+    setDialogBusy(true);
+    setDialogError("");
     teacherService.createClass(newClassForm).then((created) => {
       setClasses((curr) => [...curr, created]);
       setSelectedClassId(created.id);
       setDialog(null);
       setNewClassForm({ id: "", course: "", term: "", mode: "Individual", startDate: "", endDate: "" });
-    }).catch(console.error);
+    }).catch((error) => setDialogError(error instanceof Error ? error.message : "Could not create class.")).finally(() => setDialogBusy(false));
   }
 
   function openCreateClass() {
+    setDialogError("");
     setNewClassForm({
       id: "",
       course: "",
@@ -140,9 +162,9 @@ export function ClassesGroupsPage() {
     <section className="teacher-page teacher-classes-page">
       <TeacherPageIntro
         title="Classes & groups"
-        context={`${term} · ${visibleClasses.length} ${visibleClasses.length === 1 ? "class" : "classes"}`}
+        context={classesError ? "Classes unavailable" : `${term} · ${visibleClasses.length} ${visibleClasses.length === 1 ? "class" : "classes"}`}
       >
-        <button className="button primary" type="button" onClick={openCreateClass}>New class</button>
+        <button className="button primary" type="button" disabled={classesLoading || !!classesError} onClick={openCreateClass}>New class</button>
         {classes.length > 0 && (
           <button className="button" type="button" disabled={!selectedClass} onClick={() => setDialog("members")}>
             Manage members
@@ -151,8 +173,8 @@ export function ClassesGroupsPage() {
       </TeacherPageIntro>
       <div className="teacher-divider" />
 
-      {classes.length === 0 ? <div className="teacher-empty-state">
-        <div><h2>No classes yet</h2><p>Create a class to invite students and organize groups.</p><div className="teacher-empty-actions"><button className="button primary" type="button" onClick={openCreateClass}>New class</button><button className="button" type="button" onClick={() => setEmptyStateNotice("Class list import is ready for the demo.")}>Import class list</button></div>{emptyStateNotice && <p className="teacher-form-message" role="status">{emptyStateNotice}</p>}</div>
+      {classesLoading ? <Loading label="Loading classes…" /> : classesError ? <ErrorState title="Could not load classes" message={classesError} onRetry={() => window.location.reload()} /> : classes.length === 0 ? <div className="teacher-empty-state">
+        <div><h2>No classes yet</h2><p>Create a class to invite students and organize groups.</p><div className="teacher-empty-actions"><button className="button primary" type="button" onClick={openCreateClass}>New class</button></div></div>
       </div> : <>
       <div className="teacher-class-filters">
         <TeacherField label="ACADEMIC TERM">
@@ -172,7 +194,7 @@ export function ClassesGroupsPage() {
 
       <div className="teacher-class-list-summary" aria-live="polite">
         <strong>{visibleClasses.length} {visibleClasses.length === 1 ? "class" : "classes"}</strong>
-        <span>{term === "All terms" ? "Across all teaching terms" : term} · {totalVisibleStudents} students</span>
+        <span>{term === "All terms" ? "Across all teaching terms" : term} · {totalVisibleStudents} student{totalVisibleStudents === 1 ? "" : "s"}</span>
       </div>
 
       <div className="teacher-classes-layout">
@@ -235,12 +257,11 @@ export function ClassesGroupsPage() {
               </div>
               <span className={selectedClass.status === "Active" ? "teacher-state-success" : "muted"}>{selectedClass.status}</span>
             </div>
-            <p className="teacher-class-detail-meta">{selectedClass.mode} · Teacher Huy Lai</p>
+            <p className="teacher-class-detail-meta">{selectedClass.mode}</p>
 
             <div className="teacher-class-metrics teacher-class-summary-metrics">
               <div><span>STUDENTS</span><strong>{selectedClass.students}</strong></div>
-              <div><span>ASSIGNMENTS</span><strong>{assignments.length}</strong></div>
-              <div><span>SUBMISSIONS</span><strong>{totalSubmissions}</strong></div>
+              <div><span>TERM</span><strong>{selectedClass.term}</strong></div>
             </div>
             <button className="button primary teacher-class-detail-button" type="button" onClick={() => setClassDetailsOpen(true)}>
               View class details
@@ -253,10 +274,10 @@ export function ClassesGroupsPage() {
       {dialog === "members" && selectedClass && (
         <Dialog title="Manage members" onClose={() => setDialog(null)}>
           <div className="teacher-manage-dialog">
-            <p className="tiny muted">{selectedClass.id} · {selectedClass.students} enrolled students</p>
+            <p className="tiny muted">{selectedClass.id} · {selectedClass.students} enrolled student{selectedClass.students === 1 ? "" : "s"}</p>
             <div className="teacher-member-list">
               {draftMembers.map((member) => (
-                <div key={member.name}>
+                <div key={member.id}>
                   <span>{member.name}<small>{member.role}</small></span>
                   <button
                     className="teacher-remove-row"
@@ -318,7 +339,8 @@ export function ClassesGroupsPage() {
             )}
             <div style={{ marginTop: "1rem" }}>
               {saved && <p className="teacher-form-message" role="status">Changes saved.</p>}
-              <button className="button primary" type="button" onClick={saveMembers}>Save members</button>
+              {dialogError && <p className="teacher-state-failed" role="alert">{dialogError}</p>}
+              <button className="button primary" type="button" disabled={dialogBusy} onClick={saveMembers}>{dialogBusy ? "Saving…" : "Save members"}</button>
             </div>
           </div>
         </Dialog>
@@ -339,9 +361,9 @@ export function ClassesGroupsPage() {
             <div className="teacher-class-metrics">
               <div><span>STUDENTS</span><strong>{selectedClass.students}</strong></div>
               <div><span>ASSIGNMENTS</span><strong>{assignments.length}</strong></div>
-              <div><span>SUBMISSIONS</span><strong>{totalSubmissions}</strong></div>
-              <div><span>SUBMITTED</span><strong>{submissionRate}%</strong></div>
+              <div><span>CONTESTS</span><strong>{classActivities.filter(item => item.isContest).length}</strong></div>
             </div>
+            {detailError && <p role="alert" className="teacher-state-failed">{detailError}</p>}
 
             <section className="teacher-class-detail-section">
               <div className="teacher-class-section-heading">
@@ -349,19 +371,13 @@ export function ClassesGroupsPage() {
                 <Link to="/teacher/assignments">View all</Link>
               </div>
               {assignments.length ? assignments.map((assignment) => {
-                const progress = assignment.expected
-                  ? Math.round((assignment.submitted / assignment.expected) * 100)
-                  : 0;
                 return <article className="teacher-class-assignment" key={assignment.id}>
                   <div className="teacher-class-assignment-topline">
                     <div>
                       <strong>{assignment.title}</strong>
-                      <small>Due {assignment.dueDate} · {assignment.status}</small>
+                      <small>Due {assignment.due || "—"} · {assignment.status}</small>
                     </div>
-                    <b>{assignment.submitted}/{assignment.expected}</b>
-                  </div>
-                  <div className="teacher-class-progress-track" aria-label={`${progress}% submitted`}>
-                    <span style={{ width: `${progress}%` }} />
+                    <b>{assignment.submitted}</b>
                   </div>
                 </article>;
               }) : <p className="muted">No assignment progress is available for this class yet.</p>}
@@ -369,8 +385,8 @@ export function ClassesGroupsPage() {
 
             <section className="teacher-class-detail-section">
               <div className="teacher-class-section-heading">
-                <h3>Student progress</h3>
-                <span>{students.length} sample records</span>
+                <h3>Class members</h3>
+                <span>{detailMembers.length} enrolled</span>
               </div>
               <label className="teacher-student-search">
                 <span className="sr-only">Search students</span>
@@ -387,14 +403,7 @@ export function ClassesGroupsPage() {
                       <strong>{student.name}</strong>
                       <small>{student.id}</small>
                     </div>
-                    <div className="teacher-class-student-stat">
-                      <strong>{student.submissions}</strong>
-                      <small>submissions</small>
-                    </div>
-                    <div className="teacher-class-student-stat">
-                      <strong>{student.completedAssignments}/{assignments.length}</strong>
-                      <small>assignments</small>
-                    </div>
+                    <div className="teacher-class-student-stat"><small>{student.role}</small></div>
                   </div>
                 ))}
                 {!filteredStudents.length && <p className="muted">No students match this search.</p>}
@@ -423,7 +432,7 @@ export function ClassesGroupsPage() {
               <span>TERM</span>
               <select required value={newClassForm.term} onChange={e => setNewClassForm({...newClassForm, term: e.target.value})}>
                 <option value="" disabled>Select a term...</option>
-                {Array.from({ length: 11 }, (_, i) => 2025 + i).flatMap(year => [1, 2, 3].map(sem => `Semester ${sem}, ${year}`)).map(t => (
+                {academicTerms().map(t => (
                   <option key={t} value={t}>{t}</option>
                 ))}
               </select>
@@ -440,7 +449,8 @@ export function ClassesGroupsPage() {
               </label>
             </div>
             
-            <button className="button primary" style={{ marginTop: "1rem" }} type="submit">Create class</button>
+            {dialogError && <p className="teacher-state-failed" role="alert">{dialogError}</p>}
+            <button className="button primary" disabled={dialogBusy} style={{ marginTop: "1rem" }} type="submit">{dialogBusy ? "Creating…" : "Create class"}</button>
           </form>
         </Dialog>
       )}

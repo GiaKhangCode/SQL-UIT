@@ -1,5 +1,5 @@
 import { apiFetch } from "./apiClient";
-import type { TeacherClass, TeacherClassMember } from "../data/teacherDemoData";
+import type { TeacherClass, TeacherClassMember } from "../data/teacherTypes";
 
 export interface ClassCreate {
   id: string;

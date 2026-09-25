@@ -17,7 +17,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Background session verify
   useEffect(() => {
     authService.restoreSessionAsync().then(user => {
-      if (!user && session) setSession(null);
+      if (!user && session && !authService.restoreSession()) setSession(null);
       if (user && !session) setSession(user);
     });
   }, []);

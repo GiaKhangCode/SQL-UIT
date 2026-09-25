@@ -1,12 +1,16 @@
 import { apiFetch } from "./apiClient";
 import { storage } from "./storage";
-import {
-  assignments,
-  classes,
-  contests,
-  deadlines,
-  groups,
-} from "../data/mockData";
+import type { Assignment, Deadline } from "../data/models";
+import type { Contest } from "../data/models";
+import { localDate, localTime, parseServerDateTime } from "../utils/serverDateTime";
+
+export interface StudentAssignments {
+  classes: { id: string; code: string; name: string; lecturer: string; mode: string }[];
+  groups: { id: string; name: string; code: string; classId: string; members: number }[];
+  assignments: Assignment[];
+  deadlines: Deadline[];
+  problems: { id: string; title: string; topic: string; difficulty: string; progress: string }[];
+}
 
 export type ProblemFilters = {
   includeTrending?: boolean;
@@ -36,28 +40,47 @@ export interface DashboardStats {
   deadlines: any[];
   currentStreak: number;
   submissionsPerDay: DailySubmission[];
+  deadlinesError?: string;
+}
+
+function localizeSchedule<T extends { date: string; time: string }>(item: T): T {
+  if (!item.date || !item.time) return item;
+  const timestamp = `${item.date}T${item.time}:00`;
+  return { ...item, date: localDate(timestamp), time: localTime(timestamp) };
 }
 
 export const studentApi = {
-  getLearningStreak: () => {
-    // For now, returning a static or simple streak
-    return 0;
-  },
-
   getDashboard: async (): Promise<DashboardStats> => {
-    return await apiFetch("/api/student/dashboard");
+    const [dashboardResult, enrolledResult] = await Promise.allSettled([
+      apiFetch("/api/student/dashboard") as Promise<DashboardStats>,
+      apiFetch("/api/student/assignments") as Promise<StudentAssignments>,
+    ]);
+    if (dashboardResult.status === "rejected") throw dashboardResult.reason;
+    const dashboard = dashboardResult.value;
+    if (enrolledResult.status === "rejected") return { ...dashboard, deadlines: [], deadlinesError: "Could not load upcoming deadlines." };
+    const enrolled = enrolledResult.value;
+    const now = Date.now();
+    const deadlines = (enrolled.deadlines || [])
+      .filter((item) => item.date && item.time && parseServerDateTime(`${item.date}T${item.time}:00`).getTime() >= now)
+      .map(localizeSchedule)
+      .sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`));
+    return { ...dashboard, deadlines };
   },
 
   getProblems: async (f: ProblemFilters = {}) => {
-    let url = "/api/problems";
+    const url = "/api/problems";
     // We can add query params if the backend supports it, for now fetch all and filter in frontend or backend
     // Since our backend doesn't take query params yet for get_problems, we filter them here
-    const problems: any[] = await apiFetch(url);
+    const problems: any[] = (await apiFetch(url)).map((problem: any) => ({
+      ...problem,
+      progress: problem.progress || "Not started",
+    }));
     
     return problems.filter(
       (p) =>
+        p.practiceListed === true &&
         (!f.search || `${p.title} ${p.number}`.toLowerCase().includes(f.search.toLowerCase())) &&
-        (!f.topic || p.topic === f.topic) &&
+        (!f.topic || (Array.isArray(p.topics) ? p.topics : String(p.topic || "").split(",")).some((topic: string) => topic.trim() === f.topic)) &&
         (!f.difficulty || p.difficulty === f.difficulty) &&
         (!f.progress || p.progress === f.progress)
     );
@@ -67,19 +90,46 @@ export const studentApi = {
     return await apiFetch(`/api/problems/${id}`);
   },
 
-  getAssignments: async () => {
-    return await apiFetch("/api/student/assignments");
+  getAssignments: async (): Promise<StudentAssignments> => {
+    const [enrolled, catalog] = await Promise.all([
+      apiFetch("/api/student/assignments") as Promise<StudentAssignments>,
+      apiFetch("/api/assignments") as Promise<any[]>,
+    ]);
+    const contestIds = new Set(catalog.filter(item => item.isContest).map(item => item.id));
+    return {
+      ...enrolled,
+      assignments: enrolled.assignments.filter(item => !contestIds.has(item.id)).map(localizeSchedule),
+      deadlines: (enrolled.deadlines || []).map(localizeSchedule),
+    };
   },
 
-  getContests: async () => {
-    return contests;
+  getContests: async (): Promise<Contest[]> => {
+    const [assignments, enrolled] = await Promise.all([
+      apiFetch("/api/assignments") as Promise<any[]>,
+      apiFetch("/api/student/assignments") as Promise<StudentAssignments>,
+    ]);
+    const enrolledIds = new Set(enrolled.assignments.map(item => item.id));
+    return assignments.filter(item => item.isContest && item.published && enrolledIds.has(item.id)).map(item => {
+      return {
+        id: item.id, title: item.title,
+        status: item.status === "Scheduled" ? "Upcoming" : item.status === "Closed" ? "Closed" : "Active",
+        date: item.opens ? localDate(item.opens) : "",
+        time: item.opens ? localTime(item.opens) : "",
+        endDate: item.closes ? localDate(item.closes) : "",
+        endTime: item.closes ? localTime(item.closes) : "",
+        scope: item.classes || "Assigned classes",
+        description: item.instructions || "Timed SQL challenge",
+        submitters: Number.parseInt(item.submitted || "", 10) || 0,
+        problemIds: (item.problemList || []).map((problem: { id: string }) => problem.id),
+      } as Contest;
+    });
   },
 
 
-  runQuery: async (id: string, query: string, database: string): Promise<QueryResult> => {
+  runQuery: async (id: string, query: string, database: string, source = "Practice", context = "Practice"): Promise<QueryResult> => {
     return await apiFetch(`/api/problems/${id}/run`, {
       method: "POST",
-      body: JSON.stringify({ query, database, source: "Practice", context: "Practice" }),
+      body: JSON.stringify({ query, database, source, context }),
     });
   },
 
@@ -96,17 +146,8 @@ export const studentApi = {
     });
   },
 
-  resetDatabase: async (id: string, database: string) => {
-    // For Sandbox, nothing needs to be reset permanently for the user, just fetching the problem again
+  getHint: async (id: string) => {
     const problem = await apiFetch(`/api/problems/${id}`);
-    return problem.tables;
-  },
-
-  getHint: async (id: string, mode: "Hint" | "AI") => {
-    const problem = await apiFetch(`/api/problems/${id}`);
-    if (mode === "AI") {
-        return "AI guidance: " + (problem.hint || "Phân tích kỹ đề bài và các bảng dữ liệu.");
-    }
     return problem.hint || "Không có gợi ý cho bài tập này.";
   },
 

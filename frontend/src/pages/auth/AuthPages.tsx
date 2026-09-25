@@ -1,7 +1,7 @@
 import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { validEmail } from "../../services/authService";
+import { authService, validEmail } from "../../services/authService";
 type Errors = Record<string, string>;
 function PasswordField({
   id,
@@ -525,7 +525,6 @@ export function RegisterLecturerPage() {
     if (Object.keys(next).length) return;
     setBusy(true);
     try {
-      const { authService } = await import("../../services/authService");
       await authService.registerLecturer(name, email, password, department);
       setSuccess(true);
     } catch (e) {

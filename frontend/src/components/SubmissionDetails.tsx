@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { type Submission } from "../data/mockData";
+import { type Submission } from "../data/models";
 import { Dialog, Status } from "./ui";
+import { submissionTimeLabel } from "../utils/serverDateTime";
 export function SubmissionDetails({
   submission,
   problem,
@@ -29,10 +30,7 @@ export function SubmissionDetails({
           {p.number}. {p.title}
         </h1>
         <p className="tiny muted">
-          {new Date(submission.submittedAt).toLocaleString("en-GB", {
-            timeZone: "Asia/Ho_Chi_Minh",
-          })}{" "}
-          ICT
+          {submissionTimeLabel(submission.submittedAt)}
         </p>
         <p className="tiny">
           {submission.source} · {submission.context}
@@ -57,7 +55,7 @@ export function SubmissionDetails({
             <div>
               <small>Final score</small>
               <strong>
-                {submission.evaluatedScore === undefined
+                {submission.evaluatedScore == null
                   ? "Pending"
                   : `${submission.evaluatedScore}/100`}
               </strong>
@@ -91,12 +89,11 @@ export function SubmissionDetails({
             </pre>
           ) : (
             <p className="tiny muted">
-              SQL snapshot is unavailable for this seeded demo record. New
-              submissions preserve their SQL.
+              SQL snapshot is unavailable for this submission.
             </p>
           )}
           <small className="muted">
-            Submission snapshot · {submission.database || "Demo database"} ·
+            Submission snapshot · {submission.database || "Database unavailable"} ·
             Read-only
           </small>
           <p role="status" className="tiny">

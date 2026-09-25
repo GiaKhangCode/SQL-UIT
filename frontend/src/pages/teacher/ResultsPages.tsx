@@ -1,20 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { Dialog } from "../../components/ui";
-import {
-  readTeacherDraft,
-  saveTeacherDraft,
-  teacherProblems,
-  teacherSubmissions,
-  teacherTestResults,
-  type TeacherSubmission,
-} from "../../data/teacherDemoData";
+import { Dialog, ErrorState, Loading } from "../../components/ui";
 import { TeacherField, TeacherPageIntro, TeacherSectionTitle } from "./TeacherPageParts";
 import { teacherService } from "../../services/teacherService";
 import { useLoad } from "../../components/useLoad";
-
-const reviewKey = "querylab:teacher:reviews:v1";
-type Review = { finalScore: string; feedback: string; reason: string; savedAt: string };
 
 type ActivityResult = {
   id: string;
@@ -52,18 +41,24 @@ export function ResultsDashboardPage() {
     });
   }, [search, classFilter, typeFilter, statusFilter, assignments]);
 
-  const selectedResult = filtered.find((item: any) => item.id === selectedResultId) || null;
+  const selectedResult = filtered.find((item: any) => item.id === selectedResultId) || filtered[0] || null;
+  const scored = (assignments || []).map((item: any) => ({
+    count: Number.parseInt(String(item.submitted || "0/0").split("/")[0], 10) || 0,
+    average: Number.parseFloat(String(item.average || "")),
+  })).filter((item) => item.count > 0 && Number.isFinite(item.average));
+  const scoredCount = scored.reduce((sum, item) => sum + item.count, 0);
+  const averageScore = scoredCount ? `${Math.round(scored.reduce((sum, item) => sum + item.average * item.count, 0) / scoredCount)}%` : "—";
 
   function openResultDetails(activity: any) {
     setSelectedActivity(activity);
   }
 
-  if (loading) return <div className="teacher-page"><p>Loading results...</p></div>;
-  if (error) return <div className="teacher-page"><p className="teacher-state-error">Failed to load results: {error}</p></div>;
+  if (loading) return <div className="teacher-page"><Loading label="Loading results…" /></div>;
+  if (error) return <div className="teacher-page"><TeacherPageIntro title="Results" context="Results unavailable" /><ErrorState title="Could not load results" message={error} onRetry={() => window.location.reload()} /></div>;
 
   return (
     <section className="teacher-page teacher-results-page">
-      <TeacherPageIntro title="Results" context={`Semester 2, 2026 · ${assignments?.length || 0} assignments and contests · ${assignments?.filter((a: any) => a.awaiting > 0).length || 0} awaiting review`} />
+      <TeacherPageIntro title="Results" context={`${assignments?.length || 0} assignments and contests · ${assignments?.filter((a: any) => a.awaiting > 0).length || 0} awaiting review`} />
       <div className="teacher-divider" />
 
       <div className="teacher-list-filters teacher-results-filters">
@@ -72,7 +67,7 @@ export function ResultsDashboardPage() {
         </TeacherField>
         <TeacherField label="CLASS">
           <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)}>
-            <option>All classes</option><option>R11</option><option>R12</option><option>R13</option>
+            <option>All classes</option>{Array.from(new Set((assignments || []).flatMap((item: any) => String(item.classes).split(", ")))).filter(name => name && name !== "No classes").map(name => <option key={name}>{name}</option>)}
           </select>
         </TeacherField>
         <TeacherField label="TYPE">
@@ -90,9 +85,7 @@ export function ResultsDashboardPage() {
       <div className="teacher-result-metrics">
         <div><strong>{assignments?.reduce((sum: number, a: any) => sum + (a.awaiting || 0), 0) || 0}</strong><small>Awaiting review</small></div>
         <div>
-          <strong>
-            {assignments?.length ? Math.round(assignments.reduce((sum: number, a: any) => sum + parseInt(a.average || "0"), 0) / assignments.length) : 0}%
-          </strong>
+          <strong>{averageScore}</strong>
           <small>Average score</small>
         </div>
         <div>
@@ -148,7 +141,7 @@ export function ResultsDashboardPage() {
               <div><dt>Average score</dt><dd>{selectedResult.average}</dd></div>
               <div><dt>Awaiting review</dt><dd>{selectedResult.awaiting}</dd></div>
             </dl>
-            <button className="button primary teacher-list-detail-edit" type="button" onClick={() => openResultDetails(selectedResult)}>Edit</button>
+            <button className="button primary teacher-list-detail-edit" type="button" onClick={() => openResultDetails(selectedResult)}>View submissions</button>
           </> : <p className="muted">Select a result to view its details.</p>}
         </aside>
       </div>
@@ -170,8 +163,8 @@ function AssignmentSubmissionsDialog({ activity, onClose }: { activity: any, onC
         <p>{activity.isContest ? "Contest" : "Assignment"} · {activity.classes}</p>
         <p>{activity.submitted} submitted · {activity.average} average · {activity.awaiting} awaiting review</p>
         
-        {loading && <p>Loading submissions...</p>}
-        {error && <p className="teacher-state-error">Failed to load submissions</p>}
+        {loading && <Loading label="Loading submissions…" />}
+        {error && <p className="teacher-state-error">Could not load submissions: {error}</p>}
         {submissions && (
           <div className="teacher-table-scroll" style={{ maxHeight: 300, margin: "1rem 0" }}>
             <table className="teacher-table">
@@ -222,44 +215,46 @@ export function ManualReviewPage() {
     () => teacherService.getSubmission(submissionId!)
   );
 
-  const [selectedAttemptNumber, setSelectedAttemptNumber] = useState(1);
   const [finalScore, setFinalScore] = useState("");
   const [feedback, setFeedback] = useState("");
-  const [reason, setReason] = useState("No score adjustment");
+  const [saveError, setSaveError] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (submission) {
-      setFinalScore(submission.finalScore === null ? "" : `${submission.finalScore} / ${submission.maxScore}`);
-      setFeedback("");
+      setFinalScore(submission.finalScore == null ? "" : `${submission.finalScore}`);
+      setFeedback(submission.feedback || "");
     }
   }, [submission]);
 
   async function saveReview() {
     if (!finalScore.trim() || !submission) return;
+    const numericScore = Number(finalScore.split("/")[0].trim());
+    if (!Number.isFinite(numericScore) || numericScore < 0 || numericScore > 100) {
+      setSaveError("Enter a score from 0 to 100.");
+      return;
+    }
+    setSaveError("");
     setIsSaving(true);
     try {
-      const numericScore = parseInt(finalScore.split("/")[0].trim()) || 0;
       const updated = await teacherService.updateSubmissionReview(submission.id, numericScore, feedback);
       setSubmission(updated);
       setDialogOpen(true);
     } catch (err) {
-      console.error("Failed to save review:", err);
+      setSaveError(err instanceof Error ? err.message : "Failed to save review.");
     } finally {
       setIsSaving(false);
     }
   }
 
-  if (loading) return <div className="teacher-page"><p>Loading submission...</p></div>;
+  if (loading) return <div className="teacher-page"><Loading label="Loading submission…" /></div>;
   if (error || !submission) return <div className="teacher-page"><p className="teacher-state-error">Error loading submission.</p></div>;
 
   const attemptHistory = [
     { number: 1, score: submission.autoScore, submittedAt: submission.submittedAt, query: submission.query }
   ];
   const activeAttempt = attemptHistory[0];
-  const attemptPassCount = activeAttempt.score >= 8 ? 4 : 3;
-  const currentSubmissionIndex = 0; // Pagination can be added later
 
 
   return (
@@ -285,9 +280,8 @@ export function ManualReviewPage() {
                 key={attempt.number}
                 className={`teacher-attempt-pill${activeAttempt.number === attempt.number ? " active" : ""}`}
                 aria-pressed={activeAttempt.number === attempt.number}
-                onClick={() => setSelectedAttemptNumber(attempt.number)}
               >
-                Attempt {attempt.number} · {attempt.score} / {submission.maxScore}
+                Attempt {attempt.number} · {attempt.score} / 100
               </button>
             ))}
           </div>
@@ -299,40 +293,30 @@ export function ManualReviewPage() {
             <h2>Reference SQL</h2>
             <pre className="teacher-readonly-code"><code>{submission.referenceSolution || "No reference solution provided"}</code></pre>
           </section>
-          <div className="teacher-table-scroll teacher-test-results-wrap">
-            <table className="teacher-table teacher-test-results">
-              <thead><tr><th>Test</th><th>Result</th><th>Detail</th></tr></thead>
-              <tbody>
-                {/* We would fetch test cases here, mock for now */}
-                <tr>
-                  <td data-label="Test">01 · Execution</td>
-                  <td data-label="Result" className="teacher-state-success">Passed</td>
-                  <td data-label="Detail">Query executed successfully</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <p className="tiny muted">Individual test case results are unavailable for this submission.</p>
         </div>
         <aside className="teacher-grading-panel">
           <TeacherSectionTitle title="Grading" />
           <strong className="teacher-test-summary">Evaluated by platform</strong>
-          <p className="teacher-auto-score">Automatic score · {activeAttempt.score} / {submission.maxScore}</p>
+          <p className="teacher-auto-score">Automatic score · {activeAttempt.score} / 100</p>
           <TeacherField label="FINAL SCORE">
             <input
+              type="number"
+              min="0"
+              max="100"
               value={finalScore}
               onChange={(event) => setFinalScore(event.target.value)}
               aria-label="Final score"
-              placeholder={`— / ${submission.maxScore}`}
+              placeholder="0–100"
+              inputMode="numeric"
             />
           </TeacherField>
           <TeacherField label="FEEDBACK">
             <textarea rows={3} value={feedback} onChange={(event) => setFeedback(event.target.value)} />
           </TeacherField>
-          <TeacherField label="REASON FOR CHANGE">
-            <input value={reason} onChange={(event) => setReason(event.target.value)} />
-          </TeacherField>
+          {saveError && <p className="teacher-state-failed" role="alert">{saveError}</p>}
           <div className="teacher-review-history">
-            <TeacherSectionTitle title="Review history" />
+            <TeacherSectionTitle title="Saved review" />
             {submission.finalScore !== null ? (
               <p className="tiny muted">Saved in database<br />Final Score: {submission.finalScore}</p>
             ) : (

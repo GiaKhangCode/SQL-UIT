@@ -1,6 +1,6 @@
 import { AssignmentWorkPage } from "../pages/student/AssignmentWorkPage";
 import { lazy, Suspense, useEffect } from "react";
-import { APP_NAME } from "../data/mockData";
+import { APP_NAME } from "../data/models";
 import { Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { AppHeader } from "../components/AppHeader";
@@ -35,7 +35,8 @@ import { ContestsPage } from "../pages/student/ContestsPage";
 import { SubmissionsPage } from "../pages/student/SubmissionsPage";
 import { ProblemEditorPage } from "../pages/teacher/ProblemEditorPage";
 import { AssignmentBuilderPage, ContestBuilderPage } from "../pages/teacher/BuilderPages";
-import { AssignmentsListPage, ContestsListPage, ProblemLibraryPage } from "../pages/teacher/TeacherLandingPages";
+import { AssignmentsListPage, ProblemLibraryPage } from "../pages/teacher/TeacherLandingPages";
+import { ContestsListPage } from "../pages/teacher/ContestListPage";
 import { ClassesGroupsPage } from "../pages/teacher/ClassesGroupsPage";
 import { ManualReviewPage, ResultsDashboardPage } from "../pages/teacher/ResultsPages";
 import {

@@ -11,10 +11,12 @@ export type StudentSession = {
 
 export const SESSION_KEY = "sql-practice:session:v1";
 export const TOKEN_KEY = "sql-practice:access-token";
+let sessionVersion = 0;
 
 export const validEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
 function persist(user: StudentSession, token: string) {
+  sessionVersion += 1;
   storage.set(SESSION_KEY, JSON.stringify(user));
   storage.set(TOKEN_KEY, token);
   return user;
@@ -23,28 +25,12 @@ function persist(user: StudentSession, token: string) {
 export const authService = {
   async login(email: string, password: string) {
     const account = email.trim().toLowerCase();
-    if (account === "teacher" || account === "admin") {
-      if (password !== "123") {
-        throw new Error(`The demo ${account} password is incorrect.`);
-      }
-      const isAdmin = account === "admin";
-      return persist(
-        {
-          id: isAdmin ? "demo-admin" : "demo-teacher",
-          name: "Huy Lai",
-          initials: "H",
-          email: account,
-          role: isAdmin ? "admin" : "instructor",
-        },
-        isAdmin ? "demo:admin" : "demo:teacher",
-      );
-    }
-    if (!validEmail(email) || !password.trim()) {
+    const demoAlias = account === "teacher" ? "instructor@demo.local" : account === "admin" ? "admin@demo.local" : null;
+    if ((!demoAlias && !validEmail(email)) || !password.trim())
       throw new Error("Enter a valid email and a password.");
-    }
     const data = await apiFetch("/api/auth/login", {
       method: "POST",
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email: demoAlias || email, password: demoAlias === "instructor@demo.local" && password === "123" ? "password123" : password }),
     });
     return persist(data.user, data.access_token);
   },
@@ -77,21 +63,25 @@ export const authService = {
   },
   
   logout() {
+    sessionVersion += 1;
     storage.remove(SESSION_KEY);
     storage.remove(TOKEN_KEY);
   },
   
   async restoreSessionAsync(): Promise<StudentSession | null> {
-    const saved = authService.restoreSession();
-    if (saved?.id === "demo-teacher" || saved?.id === "demo-admin") return saved;
     const token = storage.get(TOKEN_KEY);
-    if (!token) return null;
+    if (!token) {
+      storage.remove(SESSION_KEY);
+      return null;
+    }
+    const version = sessionVersion;
     try {
       const user = await apiFetch("/api/auth/me");
+      if (sessionVersion !== version || storage.get(TOKEN_KEY) !== token) return null;
       storage.set(SESSION_KEY, JSON.stringify(user));
       return user;
     } catch {
-      authService.logout();
+      if (sessionVersion === version && storage.get(TOKEN_KEY) === token) authService.logout();
       return null;
     }
   },

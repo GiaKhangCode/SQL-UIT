@@ -193,7 +193,7 @@
   .admin-practice-split { grid-template-columns: minmax(0,1.6fr) minmax(240px,1fr); gap: 14px; }
   .admin-side { padding-left: 14px; }
 }
-@media (max-width: 700px) {
+@media (max-width: 800px) {
   .admin-header { height: 44px; gap: 10px; padding: 0 10px; }
   .admin-main,.admin-page { min-height: calc(100dvh - 44px); }
   .admin-brand { width: 26px; height: 26px; border-radius: 4px; }

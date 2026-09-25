@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { studentApi } from "../../services/studentApi";
-import { problems, type Deadline } from "../../data/mockData";
+import { type Deadline } from "../../data/models";
 import { useLoad } from "../../components/useLoad";
-import { Dialog, Empty, Loading, Status } from "../../components/ui";
+import { Dialog, Empty, ErrorState, Loading, Status } from "../../components/ui";
 import { Calendar } from "../../components/Calendar";
 function dateLabel(date: string) {
   return new Date(date + "T00:00:00Z").toLocaleDateString("en-US", {
@@ -21,7 +21,7 @@ function AssignmentCalendar({
 }) {
   return (
     <div className="assignment-calendar-content">
-      <Calendar items={items} referenceDate="2026-09-17" />
+      <Calendar items={items} />
       <h3>Upcoming deadlines · {items.length}</h3>
       <div
         className="assignment-deadline-scroll"
@@ -46,8 +46,8 @@ export function AssignmentsPage() {
   const [search, setSearch] = useState("");
   const [params, setParams] = useSearchParams();
   const [calendarOpen, setCalendarOpen] = useState(false);
-  if (loading) return <Loading />;
-  if (error || !data) return <p role="alert">{error}</p>;
+  if (loading) return <section className="page assignments-page"><Loading label="Loading assignments…" /></section>;
+  if (error || !data) return <section className="page assignments-page"><ErrorState title="Assignments unavailable" message={error || "Could not load assignments."} onRetry={() => window.location.reload()} /></section>;
   const assignmentDeadlines = data.deadlines.filter(
     (item) => item.kind === "Assignment",
   );
@@ -178,7 +178,7 @@ export function AssignmentsPage() {
               ? " · " +
                 data.groups.find((g) => g.id === selectedWork.groupId)!.name
               : " · Individual"}{" "}
-            · Due {dateLabel(selectedWork.date)} {selectedWork.time} ICT
+            · Due {dateLabel(selectedWork.date)} {selectedWork.time}
           </p>
           {selectedWork.problemIds.map((id) => (
             <Link
@@ -191,7 +191,7 @@ export function AssignmentsPage() {
                 encodeURIComponent(selectedWork.title)
               }
             >
-              {problems.find((p) => p.id === id)!.title}
+              {data.problems?.find((p) => p.id === id)?.title || "SQL problem"}
               <span>Open problem →</span>
             </Link>
           ))}

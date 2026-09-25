@@ -1,0 +1,137 @@
+/* Shared product language across learning, teaching, and administration. */
+.role-header { height:var(--header-height); gap:20px; border-bottom:1px solid var(--border); }
+.role-header nav { align-self:stretch; }
+.role-header nav a { height:100%; display:inline-flex; align-items:center; border-bottom:2px solid transparent; font-size:12px; }
+.role-header nav a.active { border-bottom-color:var(--accent); color:var(--accent); }
+.role-account { position:relative; margin-left:auto; min-width:0; }
+.role-account .avatar { width:32px; height:32px; }
+.role-account-menu { position:absolute; top:calc(100% + 16px); right:0; z-index:50; width:230px; padding:12px; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface); box-shadow:0 12px 28px #0f111521; display:grid; gap:4px; }
+.role-account-menu > b,.role-account-menu > small { padding:2px 8px; }
+.role-account-menu button { display:flex; align-items:center; gap:9px; min-height:38px; width:100%; border:0; border-radius:var(--radius-sm); padding:8px; text-align:left; }
+.role-account-menu button:hover,.role-account-menu button[aria-pressed="true"] { background:var(--accent-subtle); color:var(--accent); }
+.teacher-main,.admin-main { background:var(--canvas); }
+.teacher-page,.admin-page { max-width:var(--content-width); min-height:calc(100dvh - var(--header-height)); padding:30px 24px 56px; background:transparent; }
+.teacher-page-intro,.admin-page-intro { min-height:unset; margin-bottom:20px; padding:0 0 18px; border-bottom:1px solid var(--border); }
+.teacher-page-intro h1,.admin-page-intro h1 { font-size:22px; line-height:30px; }
+.teacher-page-intro p,.admin-page-intro p { font-size:12px; line-height:18px; }
+.teacher-divider { display:none; }
+.teacher-field,.admin-field { gap:6px; font-size:11px; line-height:16px; }
+.teacher-field input,.teacher-field select,.teacher-field textarea,.admin-field input,.admin-field select,.admin-field textarea { min-height:40px; padding:9px 11px; font-size:12px; line-height:20px; border-radius:var(--radius-md); }
+.teacher-page-actions .button,.admin-button { min-height:38px; padding:8px 12px; font-size:12px; }
+.teacher-list-detail-layout,.admin-split { border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface); gap:0; overflow:hidden; }
+.teacher-list-detail-main,.admin-primary { min-width:0; padding:0; }
+.teacher-list-detail-panel,.admin-side { min-width:0; padding:20px; border-left:1px solid var(--border); background:var(--surface); }
+.teacher-table,.admin-table { width:100%; font-size:12px; }
+.teacher-table th,.admin-table th { height:38px; padding:10px 12px; background:var(--subtle); color:var(--muted); font-size:10px; letter-spacing:.03em; }
+.teacher-table td,.admin-table td { padding:12px; border-bottom:1px solid var(--border-subtle); line-height:18px; }
+.teacher-library-table { min-width:0; }
+.teacher-library-table th:nth-child(1) { width:42%; }
+.teacher-library-table th:nth-child(2) { width:16%; }
+.teacher-library-table th:nth-child(3) { width:26%; }
+.teacher-library-table th:nth-child(4) { width:16%; }
+.admin-table td small,.admin-row-link { font-size:11px; line-height:17px; }
+.teacher-selectable-list-row.is-selected td,.admin-table tr.is-selected td { background:var(--accent-subtle); }
+.teacher-list-filters,.admin-user-filters,.admin-course-filters { margin-bottom:18px; }
+.teacher-list-summary,.teacher-result-metrics { border:1px solid var(--border); border-radius:var(--radius-md); background:var(--surface); margin-bottom:18px; }
+.teacher-list-summary,.teacher-result-metrics,.admin-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:0; padding:0; }
+.teacher-list-summary > div,.teacher-result-metrics > div { padding:14px 18px; border-right:1px solid var(--border-subtle); }
+.teacher-list-summary > div:last-child,.teacher-result-metrics > div:last-child { border-right:0; }
+.teacher-list-summary strong,.teacher-result-metrics strong { font-size:20px; line-height:28px; }
+.admin-metrics { grid-template-columns:repeat(4,minmax(0,1fr)); border:1px solid var(--border); border-radius:var(--radius-md); background:var(--surface); margin:0 0 18px; }
+.admin-metrics > div { padding:14px 18px; border-right:1px solid var(--border-subtle); }
+.admin-metrics > div:last-child { border-right:0; }
+.admin-metrics small { font-size:11px; }
+.teacher-editor-layout,.teacher-builder-layout,.teacher-review-layout,.teacher-classes-layout { gap:0; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface); overflow:hidden; }
+.teacher-editor-details,.teacher-builder-main,.teacher-review-main,.teacher-classes-main { padding:22px; }
+.teacher-editor-validation,.teacher-builder-sidebar,.teacher-grading-panel,.teacher-class-details { padding:22px; border-left:1px solid var(--border); }
+.teacher-editor-layout { grid-template-columns:minmax(0,1fr) minmax(0,1.25fr); }
+.teacher-builder-layout,.teacher-review-layout { grid-template-columns:minmax(0,1.8fr) minmax(280px,1fr); }
+.teacher-builder-sidebar,.teacher-grading-panel { position:sticky; top:16px; }
+.teacher-review-code-section { margin-bottom:22px; }
+.teacher-review-code-section h2 { margin-bottom:8px; }
+.builder-points-actions { display:flex; align-items:center; gap:4px; }
+.builder-points-actions input { width:68px; min-height:34px; padding:5px 7px; }
+.builder-points-actions button { min-width:32px; min-height:32px; border:1px solid var(--border); border-radius:var(--radius-sm); }
+.builder-points-actions button:hover { background:var(--accent-subtle); }
+.workspace-schema-code { max-width:100%; overflow:auto; margin:8px 0 20px; padding:14px; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--subtle); color:var(--text); font:12px/1.6 var(--font-mono); white-space:pre; }
+.workspace-layout:not(.with-ai) { grid-template-columns:var(--problem-pane-width,34%) minmax(0,1fr); }
+.workspace-pane-size { display:flex; align-items:center; gap:8px; margin-left:auto; padding:0 8px; color:var(--muted); font-size:11px; white-space:nowrap; }
+.workspace-pane-size input { width:78px; height:28px; accent-color:var(--accent); cursor:ew-resize; }
+.practice-mobile-list-select { min-height:40px; max-width:min(48vw,200px); padding:8px 10px; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--surface); color:var(--text); font-size:12px; }
+.ai-chat-input { flex-wrap:wrap; }
+.ai-chat-input .field-error { flex-basis:100%; margin:0; }
+.ai-chat-input input { min-width:0; }
+.editor-expanded .workspace-layout:not(.with-ai) { grid-template-columns:minmax(0,1fr); }
+.editor-dialect { display:inline-flex; align-items:center; min-height:32px; padding:0 9px; border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--muted); font-size:11px; }
+.admin-attention,.admin-recent-activity { padding:18px; }
+.admin-attention { border-bottom:1px solid var(--border); }
+.teacher-code-editor,.teacher-readonly-code { font-family:var(--font-mono); line-height:1.5; background:var(--subtle); border:1px solid var(--border); border-radius:var(--radius-md); }
+.teacher-list-detail-facts dd,.admin-side p { font-size:12px; line-height:18px; }
+.teacher-list-filters,.teacher-problem-filters,.teacher-activity-filters,.teacher-results-filters { width:100%; grid-template-columns:minmax(210px,2fr) repeat(3,minmax(130px,1fr)); gap:12px; }
+.admin-practice-filters { width:100%; grid-template-columns:minmax(210px,2fr) repeat(2,minmax(130px,1fr)); gap:12px; }
+.teacher-small-button,.teacher-editor-validation > .button,.teacher-preview-button,.teacher-empty-actions .button,.teacher-attempt-switcher .button { min-height:38px; padding:8px 11px; font-size:12px; }
+.teacher-list-summary small,.teacher-result-metrics small,.teacher-list-footer,.teacher-results-footer small,.admin-table-footer { font-size:11px; line-height:17px; }
+.teacher-list-detail-panel > p,.teacher-list-detail-facts > div,.teacher-empty-state p,.teacher-preview-dialog p,.teacher-draft-visibility,.teacher-form-message,.teacher-option-row b,.teacher-option-row small,.teacher-publish-checklist li,.teacher-timezone,.teacher-visibility-help,.teacher-editor-state,.teacher-seed-summary,.teacher-code-title { font-size:12px; line-height:18px; }
+.teacher-code-editor,.teacher-readonly-code { font-size:12px; }
+.teacher-class-chip,.teacher-class-options label,.teacher-readonly-field,.teacher-add-class,.teacher-add-problem-list small,.teacher-class-list-summary,.teacher-class-detail-heading p,.teacher-class-details > p,.teacher-class-assignment-topline strong,.teacher-class-assignment-topline b,.teacher-class-student-name strong,.teacher-class-student-stat strong,.teacher-table-link,.teacher-class-identity small,.teacher-member-list small,.teacher-review-code-section h2,.teacher-auto-score,.teacher-attempt-label,.teacher-attempt-pill,.teacher-status-review { font-size:11px; line-height:17px; }
+.teacher-class-assignment-topline small,.teacher-class-student-name small,.teacher-class-student-stat small,.teacher-detail-eyebrow,.teacher-class-section-heading > span,.teacher-class-section-heading a { font-size:10px; line-height:16px; }
+.teacher-student-search input { min-height:40px; padding:9px 11px; font-size:12px; }
+.teacher-list-actions a,.teacher-list-actions button,.teacher-selectable-row-title,.admin-row-link,.admin-cell-button,.admin-cell-selected,.admin-danger-link,.admin-warning-link { font-size:12px; line-height:18px; }
+.teacher-list-actions a,.teacher-list-actions button,.admin-danger-link,.admin-warning-link { min-height:34px; display:inline-flex; align-items:center; }
+.teacher-attempt-pill { min-height:36px; padding:7px 10px; }
+.teacher-remove-row { min-width:36px; min-height:36px; }
+.admin-pending-banner,.admin-notice,.admin-edit-form > p,.admin-edit-access > p,.admin-class-form .admin-field small,.admin-validation-list,.admin-practice-toggle,.admin-preview-heading p,.admin-preview-section h4,.admin-preview-section p,.admin-preview-insight,.admin-preview-insight small { font-size:12px; line-height:18px; }
+.admin-section-tabs > a,.admin-section-tabs > button,.admin-role-tabs button { min-height:40px; padding:9px 10px; font-size:12px; }
+.admin-section-heading,.admin-side h2 { font-size:15px; line-height:22px; }
+.admin-preview-section pre { font-size:12px; line-height:18px; }
+@media (max-width:900px) {
+  .teacher-page,.admin-page { padding:22px 20px 44px; }
+  .teacher-list-detail-layout,.admin-split { display:block; }
+  .teacher-list-detail-panel,.admin-side { min-height:0; border-left:0; border-top:1px solid var(--border); }
+  .teacher-editor-layout,.teacher-builder-layout,.teacher-review-layout,.teacher-classes-layout { display:block; }
+  .teacher-editor-validation,.teacher-builder-sidebar,.teacher-grading-panel,.teacher-class-details { position:static; border-left:0; border-top:1px solid var(--border); }
+  .admin-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .admin-metrics > div:nth-child(2) { border-right:0; }
+  .admin-metrics > div:nth-child(-n+2) { border-bottom:1px solid var(--border-subtle); }
+  .teacher-list-filters,.teacher-problem-filters,.teacher-activity-filters,.teacher-results-filters,.admin-practice-filters { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:800px) {
+  .teacher-page table td,.admin-page table td { font-size:12px; line-height:18px; }
+  .teacher-page table td:first-child,.admin-page table td:first-child { font-size:13px; line-height:20px; }
+  .teacher-page table td::before,.admin-page table td::before { font-size:10px; }
+  .teacher-page table tr,.admin-page table tr { padding:12px; }
+  .teacher-readonly-code { font-size:12px; }
+  .teacher-list-table-scroll,.admin-table-wrap { overflow:visible; }
+}
+@media (max-width:760px) {
+  .workspace-pane-size { display:none; }
+  .role-header { padding:0 16px; }
+  .role-header .mobile-menu { display:inline-flex; align-items:center; min-height:40px; padding:8px 10px; border:1px solid var(--border); border-radius:var(--radius-md); }
+  .role-header nav { display:none; }
+  .role-header nav.open { display:flex; position:absolute; z-index:30; top:var(--header-height); left:0; right:0; height:auto; flex-direction:column; align-items:stretch; gap:0; padding:8px 16px; background:var(--surface); border-bottom:1px solid var(--border); }
+  .role-header nav.open a { min-height:44px; height:auto; border:0; border-radius:var(--radius-sm); }
+  .role-header nav.open a.active { background:var(--accent-subtle); }
+  .role-header .account-identity { display:none; }
+  .teacher-page,.admin-page { padding:20px 16px 40px; }
+  .teacher-page-intro,.admin-page-intro { flex-wrap:wrap; }
+  .teacher-page-actions,.admin-page-actions { width:100%; justify-content:flex-start; }
+  .teacher-list-filters,.admin-user-filters,.admin-course-filters { grid-template-columns:repeat(2,minmax(0,1fr)); width:100%; gap:10px; }
+  .teacher-list-filters,.teacher-problem-filters,.teacher-activity-filters,.teacher-results-filters,.admin-practice-filters { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .teacher-library-table td,.teacher-assignment-list-table td,.teacher-contest-list-table td,.teacher-activity-results-table td,.teacher-classes-table td,.teacher-results-table td,.teacher-test-results td,.admin-table td { font-size:12px; line-height:18px; }
+  .teacher-library-table td:first-child,.teacher-assignment-list-table td:first-child,.teacher-contest-list-table td:first-child,.teacher-activity-results-table td:first-child,.teacher-classes-table td:first-child,.teacher-results-table td:first-child,.teacher-test-results td:first-child,.admin-table td:first-child { font-size:13px; line-height:20px; }
+  .teacher-library-table td:not(:first-child)::before,.teacher-assignment-list-table td:not(:first-child)::before,.teacher-contest-list-table td:not(:first-child)::before,.teacher-activity-results-table td:not(:first-child)::before,.teacher-classes-table td:not(:first-child)::before,.teacher-results-table td:not(:first-child)::before,.teacher-test-results td:not(:first-child)::before,.admin-table td:not(:first-child)::before { font-size:10px; }
+  .teacher-library-table tr,.teacher-assignment-list-table tr,.teacher-contest-list-table tr,.teacher-activity-results-table tr,.teacher-classes-table tr,.teacher-results-table tr,.teacher-test-results tr,.admin-table tr { padding:12px; }
+  .teacher-list-table-scroll,.admin-table-wrap { overflow:visible; }
+  .admin-table { display:block; width:100%; }
+  .admin-table thead { display:none; }
+  .admin-table tbody,.admin-table tr { display:block; width:100%; }
+  .admin-table td { display:block; min-height:0; padding:3px 0; border:0; }
+}
+@media (max-width:480px) {
+  .teacher-list-filters,.teacher-problem-filters,.teacher-activity-filters,.teacher-results-filters,.admin-user-filters,.admin-course-filters,.admin-practice-filters { grid-template-columns:1fr; }
+  .teacher-list-summary,.teacher-result-metrics { flex-wrap:wrap; }
+  .teacher-list-summary,.teacher-result-metrics { grid-template-columns:1fr; }
+  .teacher-list-summary > div,.teacher-result-metrics > div { border-right:0; border-bottom:1px solid var(--border-subtle); }
+  .teacher-list-summary > div:last-child,.teacher-result-metrics > div:last-child { border-bottom:0; }
+  .teacher-editor-details,.teacher-builder-main,.teacher-review-main,.teacher-classes-main,.teacher-editor-validation,.teacher-builder-sidebar,.teacher-grading-panel,.teacher-class-details { padding:16px; }
+}

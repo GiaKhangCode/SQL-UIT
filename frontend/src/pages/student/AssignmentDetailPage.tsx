@@ -1,65 +1,17 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { studentApi } from "../../services/studentApi";
-import { problems, type Assignment } from "../../data/mockData";
+import { type Assignment } from "../../data/models";
 import { useLoad } from "../../components/useLoad";
-import { Empty, Loading, Status } from "../../components/ui";
-import { useAuth } from "../../context/AuthContext";
-const roster = [
-  { name: "Huy Lai", role: "Member" },
-  { name: "Le An", role: "Leader" },
-  { name: "Pham Ngoc", role: "Member" },
-  { name: "Tran Minh", role: "Member" },
-];
-function Members({ count = 4 }: { count?: number }) {
-  const { session } = useAuth();
-  return (
-    <div className="member-list">
-      {roster.slice(0, count).map((m, i) => {
-        const name = i === 0 ? session?.name || m.name : m.name;
-        return (
-          <div className="member-row" key={m.name}>
-            <span className="avatar">
-              {name
-                .split(" ")
-                .map((part) => part[0])
-                .slice(0, 2)
-                .join("")}
-            </span>
-            <div>
-              <b>{name}</b>
-              <small>
-                {m.role}
-                {i === 0 ? " · You" : ""}
-              </small>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-function MemberAvatars({ count }: { count: number }) {
-  const { session } = useAuth();
-  return (
-    <div className="group-card-members">
-      {[session?.initials || "HL", "LA", "PN", "TM"]
-        .slice(0, count)
-        .map((initial, i) => (
-          <span className="avatar" key={i}>
-            {initial}
-          </span>
-        ))}
-      <small>{count} members</small>
-    </div>
-  );
-}
+import { Empty, ErrorState, Loading, Status } from "../../components/ui";
 function AssignedWork({
   items,
   group,
+  problemProgress,
 }: {
   items: Assignment[];
   group: boolean;
+  problemProgress: { id: string; progress: string }[];
 }) {
   return (
     <section className="detail-work-panel">
@@ -70,7 +22,7 @@ function AssignedWork({
       {items.map((a, i) => {
         const completed = a.status === "Solved";
         const solved = a.problemIds.filter(
-          (id) => problems.find((p) => p.id === id)?.progress === "Solved",
+          (id) => problemProgress.find((p) => p.id === id)?.progress === "Solved",
         ).length;
         return (
           <article className="detail-work-row" key={a.id}>
@@ -84,7 +36,7 @@ function AssignedWork({
               </h3>
               <p className="tiny muted">
                 {a.groupId ? "Group submission" : "Individual"} ·{" "}
-                {a.problemIds.length} SQL problems
+                {a.problemIds.length} SQL problem{a.problemIds.length === 1 ? "" : "s"}
               </p>
             </div>
             <div className="assignment-work-due">
@@ -122,8 +74,8 @@ export function AssignmentDetailPage({ group = false }: { group?: boolean }) {
   const { scopeId = "" } = useParams();
   const { data, loading, error } = useLoad(studentApi.getAssignments);
   const [tab, setTab] = useState("Work");
-  if (loading) return <Loading />;
-  if (!data || error) return <p role="alert">{error}</p>;
+  if (loading) return <section className="page scope-detail-page"><Loading label="Loading class work…" /></section>;
+  if (!data || error) return <section className="page scope-detail-page"><ErrorState title="Class work unavailable" message={error || "Could not load class work."} onRetry={() => window.location.reload()} /></section>;
   const currentGroup = group
     ? data.groups.find((g) => g.id === scopeId)
     : data.groups.find((g) => g.classId === scopeId);
@@ -196,18 +148,17 @@ export function AssignmentDetailPage({ group = false }: { group?: boolean }) {
           aria-pressed={tab === "Members"}
           onClick={() => setTab("Members")}
         >
-          Members {currentGroup?.members || roster.length}
+          Members
         </button>
       </div>
       <div className="scope-detail-layout">
         <div>
           {tab === "Work" ? (
-            <AssignedWork items={work} group={group} />
+            <AssignedWork items={work} group={group} problemProgress={data.problems || []} />
           ) : (
             <section className="detail-work-panel">
               <h2>{group ? "Group members" : "Your class group"}</h2>
-              <Members count={currentGroup?.members || 4} />
-              <p className="tiny muted">Sample Student roster · Mock data</p>
+              <p className="tiny muted">The member roster is not available from the student API yet.</p>
             </section>
           )}
         </div>
@@ -215,7 +166,7 @@ export function AssignmentDetailPage({ group = false }: { group?: boolean }) {
           {group ? (
             <>
               <h2>Members</h2>
-              <Members count={currentGroup?.members || 4} />
+              <p className="tiny muted">Member details are not available.</p>
             </>
           ) : currentGroup ? (
             <>
@@ -224,7 +175,6 @@ export function AssignmentDetailPage({ group = false }: { group?: boolean }) {
               <p className="tiny muted">
                 {currentClass.code} · {currentGroup.members} members
               </p>
-              <MemberAvatars count={currentGroup.members} />
               <p className="tiny muted">
                 One shared submission for group assignments
               </p>

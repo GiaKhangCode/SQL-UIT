@@ -2,21 +2,11 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
 import { studentApi } from "../../services/studentApi";
-import { type Submission } from "../../data/mockData";
+import { type Submission } from "../../data/models";
 import { SubmissionDetails } from "../../components/SubmissionDetails";
 import { useLoad } from "../../components/useLoad";
-import { Empty, Loading, PageHeading, Status } from "../../components/ui";
-
-function submittedAtLabel(value: string, mobile = false) {
-  return new Date(value).toLocaleString("en-GB", {
-    timeZone: "Asia/Ho_Chi_Minh",
-    day: "2-digit",
-    month: "short",
-    ...(mobile ? { year: "numeric" as const } : {}),
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+import { Empty, ErrorState, Loading, PageHeading, Status } from "../../components/ui";
+import { submissionTimeLabel } from "../../utils/serverDateTime";
 
 export function SubmissionsPage() {
   const [selected, setSelected] = useState<Submission | null>(null);
@@ -71,7 +61,7 @@ export function SubmissionsPage() {
       {loading && !data ? (
         <Loading />
       ) : error ? (
-        <p role="alert">{error}</p>
+        <ErrorState title="Could not load submissions" message={error} onRetry={() => window.location.reload()} />
       ) : !data?.length ? (
         <Empty title="No submissions found">
           Your attempts will appear here. Try changing the filters or{" "}
@@ -79,7 +69,7 @@ export function SubmissionsPage() {
         </Empty>
       ) : (
         <>
-          <p className="tiny muted">{data.length} submissions</p>
+          <p className="tiny muted">{data.length} submission{data.length === 1 ? "" : "s"}</p>
           <div
             className="table-scroll submissions-desktop"
             aria-busy={loading}
@@ -120,7 +110,7 @@ export function SubmissionsPage() {
                         <Status value={s.result} />
                       </td>
                       <td className="muted">
-                        {submittedAtLabel(s.submittedAt)}
+                        {submissionTimeLabel(s.submittedAt)}
                       </td>
                       <td className="submission-open-cell">
                         <button
@@ -164,7 +154,7 @@ export function SubmissionsPage() {
                     <Status value={s.result} />
                   </span>
                   <span className="submission-mobile-meta">
-                    <small>{submittedAtLabel(s.submittedAt, true)}</small>
+                    <small>{submissionTimeLabel(s.submittedAt)}</small>
                     <ChevronRight size={18} aria-hidden="true" />
                   </span>
                 </button>
