@@ -59,7 +59,7 @@ export function ResultsDashboardPage() {
   }
 
   if (loading) return <div className="teacher-page"><p>Loading results...</p></div>;
-  if (error) return <div className="teacher-page"><p className="teacher-state-error">Failed to load results: {error.message}</p></div>;
+  if (error) return <div className="teacher-page"><p className="teacher-state-error">Failed to load results: {error}</p></div>;
 
   return (
     <section className="teacher-page teacher-results-page">
@@ -218,7 +218,7 @@ export function ManualReviewPage() {
   const navigate = useNavigate();
   const { submissionId } = useParams();
   
-  const { data: submission, loading, error, setData: setSubmission } = useLoad(
+  const { data: submission, loading, error, mutate: setSubmission } = useLoad(
     () => teacherService.getSubmission(submissionId!)
   );
 
