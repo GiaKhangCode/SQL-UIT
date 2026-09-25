@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from "react";
-import { teacherClasses } from "../../data/teacherDemoData";
+import { useState, useEffect, type ReactNode } from "react";
+import { teacherService } from "../../services/teacherService";
 
 export function TeacherPageIntro({
   title,
@@ -61,6 +61,20 @@ export function ClassPicker({
   onChange: (next: string[]) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [classes, setClasses] = useState<any[]>([]);
+
+  useEffect(() => {
+    async function loadClasses() {
+      try {
+        const data = await teacherService.getClasses();
+        setClasses(data);
+      } catch (e) {
+        console.error("Failed to load classes", e);
+      }
+    }
+    loadClasses();
+  }, []);
+
   return (
     <div className="teacher-class-picker">
       <div className="teacher-class-chips">
@@ -87,7 +101,7 @@ export function ClassPicker({
       </div>
       {open && (
         <div className="teacher-class-options">
-          {teacherClasses.map((classInfo) => {
+          {classes.map((classInfo) => {
             const checked = selected.includes(classInfo.id);
             return (
               <label key={classInfo.id}>
@@ -106,6 +120,7 @@ export function ClassPicker({
               </label>
             );
           })}
+          {classes.length === 0 && <span className="muted" style={{ display: 'block', padding: '8px' }}>No classes available.</span>}
           <button
             type="button"
             className="text-button"

@@ -56,9 +56,7 @@ async def chat_with_ai(
         # Build context
         problem = request.problem_context
         context_str = f"Problem: {problem.title}\nDescription: {problem.description}\nRequirements: {problem.requirements}\n"
-        context_str += "Tables:\n"
-        for t in problem.tables:
-            context_str += f"- {t.name} (Columns: {', '.join(t.columns)})\n"
+        context_str += f"Schema SQL:\n```sql\n{problem.schema_sql}\n```\n"
         
         context_str += f"\nStudent's current SQL draft:\n```sql\n{request.code_draft}\n```"
 
@@ -118,6 +116,8 @@ async def chat_with_ai(
         raise
     
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/sessions/{problem_id}", response_model=List[AiChatSessionSchema])

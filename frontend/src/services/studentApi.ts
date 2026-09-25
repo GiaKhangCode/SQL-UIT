@@ -68,7 +68,7 @@ export const studentApi = {
   },
 
   getAssignments: async () => {
-    return { classes, groups, assignments, deadlines };
+    return await apiFetch("/api/student/assignments");
   },
 
   getContests: async () => {

@@ -146,8 +146,10 @@ export function App() {
             <Route path="problems/:problemId/edit" element={<ProblemEditorPage />} />
             <Route path="assignments" element={<AssignmentsListPage />} />
             <Route path="assignments/new" element={<AssignmentBuilderPage />} />
+            <Route path="assignments/:id/edit" element={<AssignmentBuilderPage />} />
             <Route path="contests" element={<ContestsListPage />} />
             <Route path="contests/new" element={<ContestBuilderPage />} />
+            <Route path="contests/:id/edit" element={<ContestBuilderPage />} />
             <Route path="classes" element={<ClassesGroupsPage />} />
             <Route path="results" element={<ResultsDashboardPage />} />
             <Route path="results/review/:submissionId" element={<ManualReviewPage />} />

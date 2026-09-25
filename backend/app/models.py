@@ -35,6 +35,7 @@ class Problem(Base):
     hint = Column(Text, nullable=True)
     practice_listed = Column(Boolean, default=True)
     database_type = Column(String(50), default="SQL Server")
+    creator_id = Column(String(50), ForeignKey("users.id"), nullable=True)
     
     # Store JSON strings for schema definitions and expected results (Legacy)
     tables = Column(JSON, nullable=True)   # Array of DataTable definitions
@@ -155,3 +156,41 @@ class ClassEnrollment(Base):
     student_id = Column(String(50), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     role = Column(String(50), default="Member")
     joined_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class Assignment(Base):
+    __tablename__ = "assignments"
+    
+    id = Column(String(50), primary_key=True, default=generate_uuid)
+    title = Column(String(255), nullable=False)
+    is_contest = Column(Boolean, default=False)
+    format = Column(String(50), default="Individual")
+    instructions = Column(Text, nullable=True)
+    opens = Column(DateTime, nullable=True)
+    closes = Column(DateTime, nullable=True)
+    published = Column(Boolean, default=False)
+    instructor_id = Column(String(50), ForeignKey("users.id"), nullable=True)
+    
+    # Student Options
+    hints_enabled = Column(Boolean, default=True)
+    comments_enabled = Column(Boolean, default=True)
+    leaderboard_enabled = Column(Boolean, default=False)
+    ai_allowed = Column(Boolean, default=True)
+    
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+class AssignmentClass(Base):
+    __tablename__ = "assignment_classes"
+    
+    id = Column(String(50), primary_key=True, default=generate_uuid)
+    assignment_id = Column(String(50), ForeignKey("assignments.id", ondelete="CASCADE"), nullable=False)
+    class_id = Column(String(50), ForeignKey("classes.id", ondelete="CASCADE"), nullable=False)
+
+class AssignmentProblem(Base):
+    __tablename__ = "assignment_problems"
+    
+    id = Column(String(50), primary_key=True, default=generate_uuid)
+    assignment_id = Column(String(50), ForeignKey("assignments.id", ondelete="CASCADE"), nullable=False)
+    problem_id = Column(String(50), ForeignKey("problems.id", ondelete="CASCADE"), nullable=False)
+    points = Column(Integer, default=10)
+    order_index = Column(Integer, default=0)

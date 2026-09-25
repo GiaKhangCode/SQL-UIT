@@ -183,16 +183,27 @@ def run_sandbox(db: Session, problem: Problem, query: str, is_submit: bool) -> D
     try:
         rewritten_query = rewrite_query(query)
         
+        from app.models import TestCase, TestCaseScript
+        db_tcs = db.query(TestCase).filter(TestCase.problem_id == problem.id).order_by(TestCase.order_index).all()
+        
         test_cases = []
-        if problem.test_cases and len(problem.test_cases) > 0:
-            test_cases = problem.test_cases
-        elif problem.tables and problem.expected:
-            test_cases = [{"tables": problem.tables, "expected": problem.expected, "is_hidden": False}]
-        else:
-            raise SandboxError("Bài tập chưa có dữ liệu test case.")
+        if db_tcs:
+            for tc in db_tcs:
+                script = db.query(TestCaseScript).filter(TestCaseScript.test_case_id == tc.id).first()
+                if script:
+                    tc.scripts = [script]
+                    test_cases.append(tc)
+                    
+        if not test_cases:
+            if problem.test_cases and len(problem.test_cases) > 0:
+                test_cases = problem.test_cases
+            elif problem.tables and problem.expected:
+                test_cases = [{"tables": problem.tables, "expected": problem.expected, "is_hidden": False}]
+            else:
+                raise SandboxError("Bài tập chưa có dữ liệu test case.")
 
         if not is_submit:
-            visible_cases = [tc for tc in test_cases if getattr(tc, 'is_hidden', tc.get('is_hidden', False)) == False]
+            visible_cases = [tc for tc in test_cases if (tc.get('is_hidden', False) if isinstance(tc, dict) else getattr(tc, 'is_hidden', False)) == False]
             if not visible_cases:
                 visible_cases = [test_cases[0]]
             test_cases_to_run = visible_cases[:1]
@@ -206,7 +217,7 @@ def run_sandbox(db: Session, problem: Problem, query: str, is_submit: bool) -> D
                 seed_sandbox_data(db, tc.get("tables", []))
                 expected = tc.get("expected", {})
             else:
-                script_obj = tc.scripts[0] if tc.scripts else None
+                script_obj = getattr(tc, 'scripts', None)[0] if getattr(tc, 'scripts', None) else None
                 if not script_obj:
                     raise SandboxError(f"Test case {tc.id} thiếu script.")
                 seed_sandbox_data_scripts(db, script_obj.create_script, script_obj.insert_script)

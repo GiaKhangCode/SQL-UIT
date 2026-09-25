@@ -2,20 +2,20 @@ import { Link, useParams } from "react-router-dom";
 import { studentApi } from "../../services/studentApi";
 import { useLoad } from "../../components/useLoad";
 import { Empty, Loading, Status } from "../../components/ui";
-import { problems } from "../../data/mockData";
+
 
 export function AssignmentWorkPage() {
   const { assignmentId } = useParams();
   const { data, loading, error } = useLoad(studentApi.getAssignments);
   if (loading) return <Loading />;
   if (error || !data) return <p role="alert">{error}</p>;
-  const work = data.assignments.find((a) => a.id === assignmentId);
+  const work = data.assignments.find((a: any) => a.id === assignmentId);
   if (!work) return <Empty title="Assignment unavailable"><Link to="/assignments">Back to classes</Link></Empty>;
-  const classInfo = data.classes.find((c) => c.id === work.classId)!;
-  const group = data.groups.find((g) => g.id === work.groupId);
-  const number = data.assignments.filter((a) => a.classId === work.classId).findIndex((a) => a.id === work.id) + 1;
-  const items = work.problemIds.map((id) => problems.find((p) => p.id === id)!).filter(Boolean);
-  const solved = items.filter((p) => work.status === "Solved" || p.progress === "Solved").length;
+  const classInfo = data.classes.find((c: any) => c.id === work.classId)!;
+  const group = data.groups.find((g: any) => g.id === work.groupId);
+  const number = data.assignments.filter((a: any) => a.classId === work.classId).findIndex((a: any) => a.id === work.id) + 1;
+  const items = work.problemIds.map((id: string) => data.problems?.find((p: any) => p.id === id)).filter(Boolean);
+  const solved = items.filter((p: any) => work.status === "Solved" || p.progress === "Solved").length;
   const due = new Date(work.date + "T00:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
   return <section className="page assignment-work-page">
     <Link className="detail-back" to={"/assignments/classes/" + work.classId}>← {classInfo.name} / Assignments</Link>
@@ -31,7 +31,7 @@ export function AssignmentWorkPage() {
     </dl>
     <section className="assignment-problems-card">
       <div className="section-heading"><h2>Problems</h2><small className="muted">{items.length} problems · {solved} solved</small></div>
-      {items.map((p, i) => {
+      {items.map((p: any, i: number) => {
         const progress = work.status === "Solved" ? "Solved" : p.progress;
         const to = "/workspace/" + p.id + "?source=Assignments&context=" + encodeURIComponent(work.title);
         return <article className="assignment-problem-row" key={p.id}>

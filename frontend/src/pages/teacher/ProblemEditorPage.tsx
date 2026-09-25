@@ -88,6 +88,7 @@ export function ProblemEditorPage() {
   }
 
   async function validate() {
+    if (!problem) return;
     setValidationState("Validating...");
     try {
       const tc = (problem.testCases || [{seedData: problem.seedData}])[0];
@@ -110,6 +111,7 @@ export function ProblemEditorPage() {
   }
 
   async function markReady() {
+    if (!problem) return;
     setSaveState("Saving to server...");
     try {
         const payload = {

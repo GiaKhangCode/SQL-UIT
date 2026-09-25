@@ -122,8 +122,6 @@ export function PracticeTrending() {
         {loading ? (
           <div style={{ padding: "16px", color: "var(--muted)", fontSize: 13 }}>Loading...</div>
         ) : trendingProblems?.map((row: any) => {
-          const p = problems.find((p) => p.id === row.id);
-          if (!p) return null;
           return (
             <Link
               className="trending-problem"
@@ -131,7 +129,7 @@ export function PracticeTrending() {
               to={"/workspace/" + row.id}
             >
               <span>
-                <b>{p.number}</b> {p.title}
+                <b>{row.number}</b> {row.title}
               </span>
               <small>
                 {formatLearners(row.learners)}

@@ -1,11 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { Dialog } from "../../components/ui";
-import {
-  readTeacherDraft,
-  saveTeacherDraft,
-  teacherClasses,
-  teacherProblems,
-} from "../../data/teacherDemoData";
+import { teacherService } from "../../services/teacherService";
 import { ClassPicker, TeacherField, TeacherPageIntro, TeacherSectionTitle } from "./TeacherPageParts";
 
 type BuilderProblem = { id: string; points: number };
@@ -18,40 +14,30 @@ type BuilderDraft = {
   closes: string;
   problems: BuilderProblem[];
   studentOptions: { hints: boolean; comments: boolean; leaderboard: boolean; aiAllowed: boolean };
-  published?: boolean;
+  published: boolean;
 };
 
-const assignmentKey = "querylab:teacher:assignment-draft:v1";
-const contestKey = "querylab:teacher:contest-draft:v1";
 const assignmentSeed: BuilderDraft = {
-  title: "Week 3 — JOIN practice",
-  classIds: ["IS207.R11", "IS207.R12"],
-  format: "Group work",
-  instructions:
-    "Work together on JOIN queries. Submit one solution per group for each problem.",
-  opens: "2026-09-23T08:00",
-  closes: "2026-09-30T23:59",
-  problems: [
-    { id: "p1", points: 10 },
-    { id: "p11", points: 15 },
-    { id: "p12", points: 15 },
-  ],
+  title: "New Assignment",
+  classIds: [],
+  format: "Individual",
+  instructions: "",
+  opens: "",
+  closes: "",
+  problems: [],
   studentOptions: { hints: true, comments: true, leaderboard: false, aiAllowed: true },
+  published: false,
 };
 const contestSeed: BuilderDraft = {
-  title: "SQL Sprint #06",
-  classIds: ["IS207.R11", "IS207.R12"],
+  title: "New Contest",
+  classIds: [],
   format: "Individual",
-  instructions:
-    "Ranked by solved problems, then completion time. Hints and AI assistance are disabled during the contest.",
-  opens: "2026-09-26T19:00",
-  closes: "2026-09-26T20:30",
-  problems: [
-    { id: "p1", points: 10 },
-    { id: "p11", points: 15 },
-    { id: "p12", points: 15 },
-  ],
+  instructions: "Hints and AI assistance are disabled during the contest.",
+  opens: "",
+  closes: "",
+  problems: [],
   studentOptions: { hints: false, comments: false, leaderboard: true, aiAllowed: false },
+  published: false,
 };
 
 export function AssignmentBuilderPage() {
@@ -63,27 +49,80 @@ export function ContestBuilderPage() {
 }
 
 function BuilderPage({ contest }: { contest: boolean }) {
-  const key = contest ? contestKey : assignmentKey;
-  const [draft, setDraft] = useState(() => {
-    const defaults = contest
-      ? contestSeed.studentOptions
-      : assignmentSeed.studentOptions;
-    const saved = readTeacherDraft<BuilderDraft>(key, contest ? contestSeed : assignmentSeed);
-    return { ...saved, studentOptions: { ...defaults, ...saved.studentOptions } };
-  });
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const isNew = !id || id === "new";
+  
+  const [draft, setDraft] = useState<BuilderDraft | null>(null);
+  const [availableClasses, setAvailableClasses] = useState<any[]>([]);
+  const [allProblems, setAllProblems] = useState<any[]>([]);
   const [saveState, setSaveState] = useState("All changes saved");
   const [alertText, setAlertText] = useState("");
   const [addProblemOpen, setAddProblemOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
 
+  useEffect(() => {
+    async function fetchClasses() {
+      try {
+        const data = await teacherService.getClasses();
+        setAvailableClasses(data);
+      } catch (e) {
+        console.error("Failed to load classes", e);
+      }
+    }
+    fetchClasses();
+
+    async function fetchProblems() {
+      try {
+        const data = await teacherService.getAllProblems();
+        setAllProblems(data);
+      } catch (e) {
+        console.error("Failed to load problems", e);
+      }
+    }
+    fetchProblems();
+
+    if (isNew) {
+      setDraft(contest ? contestSeed : assignmentSeed);
+      return;
+    }
+    
+    async function fetchAssignment() {
+      try {
+        const data = await teacherService.getAssignment(id!);
+        // format opens/closes to local datetime string format for input type="datetime-local"
+        const formatDatetime = (dt: string) => dt ? new Date(dt).toISOString().slice(0, 16) : "";
+        setDraft({
+          title: data.title,
+          classIds: data.classIds || [],
+          format: data.format as "Group work" | "Individual",
+          instructions: data.instructions || "",
+          opens: formatDatetime(data.opens),
+          closes: formatDatetime(data.closes),
+          problems: data.problemList || [],
+          studentOptions: data.studentOptions || (contest ? contestSeed.studentOptions : assignmentSeed.studentOptions),
+          published: data.published
+        });
+      } catch (e) {
+        console.error("Failed to load assignment", e);
+      }
+    }
+    fetchAssignment();
+  }, [id, isNew, contest]);
+
+  if (!draft) {
+    return <div style={{ padding: "24px" }}>Loading...</div>;
+  }
+
   function update<K extends keyof BuilderDraft>(field: K, value: BuilderDraft[K]) {
-    setDraft((current) => ({ ...current, [field]: value, published: false }));
+    setDraft((current) => current ? ({ ...current, [field]: value }) : null);
     setSaveState("Unsaved changes");
     setAlertText("");
   }
 
   function setAiAllowed(allowed: boolean) {
     setDraft((current) => {
+      if (!current) return current;
       const disabledSentence = "Hints and AI assistance are disabled during the contest.";
       const allowedSentence = "Hints are disabled during the contest. AI assistance is allowed.";
       const instructions = contest
@@ -94,7 +133,6 @@ function BuilderPage({ contest }: { contest: boolean }) {
       return {
         ...current,
         instructions,
-        published: false,
         studentOptions: { ...current.studentOptions, aiAllowed: allowed },
       };
     });
@@ -110,35 +148,67 @@ function BuilderPage({ contest }: { contest: boolean }) {
     draft.problems.length > 0 &&
     draft.problems.every((item) => item.points > 0) &&
     scheduleValid;
-  const studentCount = contest ? 84 : 42;
 
-  function saveDraft() {
-    saveTeacherDraft(key, draft);
-    setSaveState("All changes saved");
-    setAlertText("Saved in this browser for the teacher demo.");
-  }
+  const selectedClassesData = availableClasses.filter(c => draft.classIds.includes(c.id));
+  const studentCount = selectedClassesData.reduce((sum, c) => sum + (c.students || 0), 0);
+  const groupCount = selectedClassesData.reduce((sum, c) => sum + (c.groups?.length || 0), 0);
 
-  function publishDraft() {
-    if (!readyToPublish) {
+  async function saveToServer(isPublished: boolean) {
+    if (isPublished && !readyToPublish) {
       setAlertText("Select a class, add scored problems, and check the schedule before publishing.");
       return;
     }
-    const publishedDraft = { ...draft, published: true };
-    setDraft(publishedDraft);
-    saveTeacherDraft(key, publishedDraft);
-    setSaveState("All changes saved");
-    setAlertText("Published in the demo preview. No students or backend are connected.");
+    
+    setSaveState("Saving to server...");
+    try {
+      const payload = {
+        title: draft!.title,
+        isContest: contest,
+        classIds: draft!.classIds,
+        format: draft!.format,
+        instructions: draft!.instructions,
+        opens: draft!.opens ? new Date(draft!.opens).toISOString() : null,
+        closes: draft!.closes ? new Date(draft!.closes).toISOString() : null,
+        problems: draft!.problems,
+        studentOptions: draft!.studentOptions,
+        published: isPublished
+      };
+      
+      if (isNew) {
+        await teacherService.createAssignment(payload);
+      } else {
+        await teacherService.updateAssignment(id!, payload);
+      }
+      
+      setDraft({ ...draft!, published: isPublished });
+      setSaveState("All changes saved");
+      setAlertText(isPublished ? "Successfully published." : "Draft saved successfully.");
+      
+      if (isNew) {
+        navigate(contest ? "/teacher/contests" : "/teacher/assignments");
+      }
+    } catch (e) {
+      setSaveState("Failed to save to server");
+    }
   }
 
-  function addProblem(id: string) {
-    if (!draft.problems.some((item) => item.id === id)) {
-      update("problems", [...draft.problems, { id, points: 10 }]);
+  function saveDraft() {
+    saveToServer(false);
+  }
+
+  function publishDraft() {
+    saveToServer(true);
+  }
+
+  function addProblem(problemId: string) {
+    if (!draft!.problems.some((item) => item.id === problemId)) {
+      update("problems", [...draft!.problems, { id: problemId, points: 10 }]);
     }
     setAddProblemOpen(false);
   }
 
-  const availableProblems = teacherProblems.filter(
-    (problem) => !draft.problems.some((item) => item.id === problem.id),
+  const availableProblems = allProblems.filter(
+    (problem) => !draft!.problems.some((item) => item.id === problem.id),
   );
 
   return (
@@ -191,7 +261,7 @@ function BuilderPage({ contest }: { contest: boolean }) {
                 {draft.classIds.length} {draft.classIds.length === 1 ? "class" : "classes"}
                 {contest
                   ? ` · ${studentCount} students`
-                  : ` · 9 groups / ${studentCount} students`}
+                  : ` · ${groupCount} groups / ${studentCount} students`}
               </div>
             </TeacherField>
             <TeacherField label={contest ? "RULES" : "INSTRUCTIONS"}>
@@ -216,7 +286,8 @@ function BuilderPage({ contest }: { contest: boolean }) {
                 </thead>
                 <tbody>
                   {draft.problems.map((item, index) => {
-                    const problem = teacherProblems.find((row) => row.id === item.id)!;
+                    const problem = allProblems.find((row) => row.id === item.id);
+                    if (!problem) return null;
                     return (
                       <tr key={item.id}>
                         <td data-label="Order / problem">
@@ -352,7 +423,8 @@ function BuilderPage({ contest }: { contest: boolean }) {
             <p>{draft.instructions}</p>
             <ul>
               {draft.problems.map((item) => {
-                const problem = teacherProblems.find((row) => row.id === item.id)!;
+                const problem = allProblems.find((row) => row.id === item.id);
+                if (!problem) return null;
                 return <li key={item.id}>{problem.title} · {item.points} points</li>;
               })}
             </ul>

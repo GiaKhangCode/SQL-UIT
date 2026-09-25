@@ -10,6 +10,8 @@ import {
   type TeacherSubmission,
 } from "../../data/teacherDemoData";
 import { TeacherField, TeacherPageIntro, TeacherSectionTitle } from "./TeacherPageParts";
+import { teacherService } from "../../services/teacherService";
+import { useLoad } from "../../components/useLoad";
 
 const reviewKey = "querylab:teacher:reviews:v1";
 type Review = { finalScore: string; feedback: string; reason: string; savedAt: string };
@@ -25,14 +27,7 @@ type ActivityResult = {
   reviewId?: string;
 };
 
-const activityResults: ActivityResult[] = [
-  { id: "week-3", title: "Week 3 — JOIN practice", type: "Assignment", classes: "R11 · R12", submitted: "38 / 42", average: "82%", awaiting: 6, reviewId: "1042" },
-  { id: "sprint-05", title: "SQL Sprint #05", type: "Contest", classes: "R11 · R12", submitted: "57 / 84", average: "64%", awaiting: 0 },
-  { id: "week-2", title: "Week 2 — SELECT basics", type: "Assignment", classes: "R11", submitted: "42 / 42", average: "88%", awaiting: 0 },
-  { id: "sprint-04", title: "SQL Sprint #04", type: "Contest", classes: "R11 · R12", submitted: "79 / 84", average: "71%", awaiting: 3, reviewId: "1043" },
-  { id: "week-1", title: "Week 1 — Warm-up", type: "Assignment", classes: "R12", submitted: "39 / 39", average: "91%", awaiting: 0 },
-  { id: "sprint-03", title: "SQL Sprint #03", type: "Contest", classes: "R11", submitted: "40 / 42", average: "69%", awaiting: 0 },
-];
+
 
 export function ResultsDashboardPage() {
   const navigate = useNavigate();
@@ -44,24 +39,31 @@ export function ResultsDashboardPage() {
   const [selectedResultId, setSelectedResultId] = useState("");
   const [selectedActivity, setSelectedActivity] = useState<ActivityResult | null>(null);
 
-  const filtered = useMemo(
-    () => activityResults.filter((item) =>
-      `${item.title} ${item.classes}`.toLowerCase().includes(search.toLowerCase()) &&
-      (classFilter === "All classes" || item.classes.includes(classFilter)) &&
-      (typeFilter === "All types" || item.type === typeFilter) &&
-      (statusFilter === "All" || (statusFilter === "Awaiting review" ? item.awaiting > 0 : item.awaiting === 0)),
-    ),
-    [search, classFilter, typeFilter, statusFilter],
-  );
-  const selectedResult = filtered.find((item) => item.id === selectedResultId) || null;
+  const { data: assignments, loading, error } = useLoad(teacherService.getAssignments);
 
-  function openResultDetails(activity: ActivityResult) {
+  const filtered = useMemo(() => {
+    if (!assignments) return [];
+    return assignments.filter((item: any) => {
+      const typeStr = item.isContest ? "Contest" : "Assignment";
+      return `${item.title} ${item.classes}`.toLowerCase().includes(search.toLowerCase()) &&
+      (classFilter === "All classes" || item.classes.includes(classFilter)) &&
+      (typeFilter === "All types" || typeStr === typeFilter) &&
+      (statusFilter === "All" || (statusFilter === "Awaiting review" ? item.awaiting > 0 : item.awaiting === 0));
+    });
+  }, [search, classFilter, typeFilter, statusFilter, assignments]);
+
+  const selectedResult = filtered.find((item: any) => item.id === selectedResultId) || null;
+
+  function openResultDetails(activity: any) {
     setSelectedActivity(activity);
   }
 
+  if (loading) return <div className="teacher-page"><p>Loading results...</p></div>;
+  if (error) return <div className="teacher-page"><p className="teacher-state-error">Failed to load results: {error.message}</p></div>;
+
   return (
     <section className="teacher-page teacher-results-page">
-      <TeacherPageIntro title="Results" context="Semester 2, 2026 · 9 assignments and contests · 6 awaiting review" />
+      <TeacherPageIntro title="Results" context={`Semester 2, 2026 · ${assignments?.length || 0} assignments and contests · ${assignments?.filter((a: any) => a.awaiting > 0).length || 0} awaiting review`} />
       <div className="teacher-divider" />
 
       <div className="teacher-list-filters teacher-results-filters">
@@ -86,9 +88,22 @@ export function ResultsDashboardPage() {
       </div>
 
       <div className="teacher-result-metrics">
-        <div><strong>6</strong><small>Awaiting review</small></div>
-        <div><strong>82%</strong><small>Average score</small></div>
-        <div><strong>164</strong><small>Submissions received</small></div>
+        <div><strong>{assignments?.reduce((sum: number, a: any) => sum + (a.awaiting || 0), 0) || 0}</strong><small>Awaiting review</small></div>
+        <div>
+          <strong>
+            {assignments?.length ? Math.round(assignments.reduce((sum: number, a: any) => sum + parseInt(a.average || "0"), 0) / assignments.length) : 0}%
+          </strong>
+          <small>Average score</small>
+        </div>
+        <div>
+          <strong>
+            {assignments?.reduce((sum: number, a: any) => {
+              const parts = (a.submitted || "0/0").split("/");
+              return sum + parseInt(parts[0] || "0");
+            }, 0) || 0}
+          </strong>
+          <small>Submissions received</small>
+        </div>
       </div>
 
       <div className="teacher-list-detail-layout teacher-results-detail-layout">
@@ -108,7 +123,7 @@ export function ResultsDashboardPage() {
                     onClick={() => setSelectedResultId(item.id)}
                   >
                     <td data-label="ASSIGNMENT / CONTEST"><button className="teacher-selectable-row-title teacher-list-row-title" type="button" aria-label={`Show details for ${item.title}`} onClick={(event) => { event.stopPropagation(); setSelectedResultId(item.id); }}>{item.title}</button></td>
-                    <td data-label="TYPE">{item.type}</td>
+                    <td data-label="TYPE">{item.isContest ? "Contest" : "Assignment"}</td>
                     <td data-label="CLASSES">{item.classes}</td>
                     <td data-label="SUBMITTED">{item.submitted}</td>
                     <td data-label="AVG SCORE">{item.average}</td>
@@ -127,7 +142,7 @@ export function ResultsDashboardPage() {
           {selectedResult ? <>
             <span className="teacher-detail-eyebrow">RESULT DETAILS</span>
             <h2>{selectedResult.title}</h2>
-            <p className="muted">{selectedResult.type} · {selectedResult.classes}</p>
+            <p className="muted">{selectedResult.isContest ? "Contest" : "Assignment"} · {selectedResult.classes}</p>
             <dl className="teacher-list-detail-facts">
               <div><dt>Submitted</dt><dd>{selectedResult.submitted}</dd></div>
               <div><dt>Average score</dt><dd>{selectedResult.average}</dd></div>
@@ -138,82 +153,125 @@ export function ResultsDashboardPage() {
         </aside>
       </div>
       <div className="teacher-results-footer">
-        <small className="muted">Showing {filtered.length} of 9 items</small>
+        <small className="muted">Showing {filtered.length} of {assignments?.length || 0} items</small>
       </div>
-      {selectedActivity && <Dialog title={selectedActivity.title} onClose={() => setSelectedActivity(null)}>
-        <div className="teacher-preview-dialog"><p>{selectedActivity.type} · {selectedActivity.classes}</p><p>{selectedActivity.submitted} submitted · {selectedActivity.average} average · {selectedActivity.awaiting} awaiting review</p><div className="teacher-dialog-actions"><button className="button" type="button" onClick={() => setSelectedActivity(null)}>Close</button>{selectedActivity.reviewId && <button className="button primary" type="button" onClick={() => navigate(`/teacher/results/review/${selectedActivity.reviewId}`)}>Review a submission</button>}</div></div>
-      </Dialog>}
+      {selectedActivity && <AssignmentSubmissionsDialog activity={selectedActivity} onClose={() => setSelectedActivity(null)} />}
     </section>
+  );
+}
+
+function AssignmentSubmissionsDialog({ activity, onClose }: { activity: any, onClose: () => void }) {
+  const navigate = useNavigate();
+  const { data: submissions, loading, error } = useLoad(() => teacherService.getAssignmentSubmissions(activity.id));
+
+  return (
+    <Dialog title={activity.title} onClose={onClose}>
+      <div className="teacher-preview-dialog" style={{ width: 600, maxWidth: "100%" }}>
+        <p>{activity.isContest ? "Contest" : "Assignment"} · {activity.classes}</p>
+        <p>{activity.submitted} submitted · {activity.average} average · {activity.awaiting} awaiting review</p>
+        
+        {loading && <p>Loading submissions...</p>}
+        {error && <p className="teacher-state-error">Failed to load submissions</p>}
+        {submissions && (
+          <div className="teacher-table-scroll" style={{ maxHeight: 300, margin: "1rem 0" }}>
+            <table className="teacher-table">
+              <thead>
+                <tr>
+                  <th>STUDENT</th>
+                  <th>PROBLEM</th>
+                  <th>SCORE</th>
+                  <th>STATUS</th>
+                  <th>ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {submissions.map((sub: any) => (
+                  <tr key={sub.id}>
+                    <td>{sub.student}</td>
+                    <td>{sub.problem}</td>
+                    <td>{sub.score}</td>
+                    <td className={sub.status === "Needs review" ? "teacher-state-warning" : "teacher-state-success"}>{sub.status}</td>
+                    <td>
+                      <button className="button teacher-small-button" type="button" onClick={() => navigate(`/teacher/results/review/${sub.id}`)}>Review</button>
+                    </td>
+                  </tr>
+                ))}
+                {submissions.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="teacher-empty-row">No submissions yet.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+        
+        <div className="teacher-dialog-actions">
+          <button className="button" type="button" onClick={onClose}>Close</button>
+        </div>
+      </div>
+    </Dialog>
   );
 }
 
 export function ManualReviewPage() {
   const navigate = useNavigate();
   const { submissionId } = useParams();
-  const submission =
-    teacherSubmissions.find((item) => item.id === submissionId) || teacherSubmissions[0];
-  const [selectedAttemptNumber, setSelectedAttemptNumber] = useState(submission.id === "1042" ? 2 : 1);
-  const attemptHistory = submission.id === "1042"
-    ? [
-        {
-          number: 1,
-          score: 6,
-          submittedAt: "Sep 18, 14:10",
-          query: `SELECT c.customer_id, c.customer_name\nFROM Customers AS c\nLEFT JOIN Orders AS o\n  ON c.customer_id = o.customer_id\nWHERE o.order_id IS NULL;`,
-        },
-        { number: 2, score: 8, submittedAt: submission.submittedAt, query: submission.query },
-      ]
-    : [{ number: 1, score: submission.autoScore, submittedAt: submission.submittedAt, query: submission.query }];
-  const activeAttempt = attemptHistory.find((attempt) => attempt.number === selectedAttemptNumber) || attemptHistory[attemptHistory.length - 1];
-  const attemptPassCount = activeAttempt.score >= 8 ? 4 : 3;
-  const currentSubmissionIndex = teacherSubmissions.findIndex((item) => item.id === submission.id);
-  const savedReviews = readTeacherDraft<Record<string, Review>>(reviewKey, {});
-  const existing = savedReviews[submission.id];
-  const [finalScore, setFinalScore] = useState(existing?.finalScore || (submission.finalScore === null ? "" : `${submission.finalScore} / ${submission.maxScore}`));
-  const [feedback, setFeedback] = useState(existing?.feedback || (submission.id === "1042" ? "Correct JOIN and NULL handling. Add ORDER BY customer_id to meet the required output order." : "Review the aggregation and sorting against the problem requirements."));
-  const [reason, setReason] = useState(existing?.reason || "No score adjustment");
-  const [savedReview, setSavedReview] = useState(existing);
+  
+  const { data: submission, loading, error, setData: setSubmission } = useLoad(
+    () => teacherService.getSubmission(submissionId!)
+  );
+
+  const [selectedAttemptNumber, setSelectedAttemptNumber] = useState(1);
+  const [finalScore, setFinalScore] = useState("");
+  const [feedback, setFeedback] = useState("");
+  const [reason, setReason] = useState("No score adjustment");
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    const saved = readTeacherDraft<Record<string, Review>>(reviewKey, {})[submission.id];
-    setSelectedAttemptNumber(submission.id === "1042" ? 2 : 1);
-    setFinalScore(saved?.finalScore || (submission.finalScore === null ? "" : `${submission.finalScore} / ${submission.maxScore}`));
-    setFeedback(saved?.feedback || (submission.id === "1042" ? "Correct JOIN and NULL handling. Add ORDER BY customer_id to meet the required output order." : "Review the aggregation and sorting against the problem requirements."));
-    setReason(saved?.reason || "No score adjustment");
-    setSavedReview(saved);
-  }, [submission.id]);
+    if (submission) {
+      setFinalScore(submission.finalScore === null ? "" : `${submission.finalScore} / ${submission.maxScore}`);
+      setFeedback("");
+    }
+  }, [submission]);
 
-  const problem = teacherProblems.find((item) => item.title === submission.problem) || teacherProblems[0];
-
-  function saveReview() {
-    if (!finalScore.trim()) return;
-    const nextReview = {
-      finalScore: finalScore.trim(),
-      feedback: feedback.trim(),
-      reason: reason.trim(),
-      savedAt: new Date().toLocaleString("en-GB", {
-        timeZone: "Asia/Ho_Chi_Minh",
-        day: "2-digit",
-        month: "short",
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-    };
-    const next = { ...savedReviews, [submission.id]: nextReview };
-    saveTeacherDraft(reviewKey, next);
-    setSavedReview(nextReview);
-    setDialogOpen(true);
+  async function saveReview() {
+    if (!finalScore.trim() || !submission) return;
+    setIsSaving(true);
+    try {
+      const numericScore = parseInt(finalScore.split("/")[0].trim()) || 0;
+      const updated = await teacherService.updateSubmissionReview(submission.id, numericScore, feedback);
+      setSubmission(updated);
+      setDialogOpen(true);
+    } catch (err) {
+      console.error("Failed to save review:", err);
+    } finally {
+      setIsSaving(false);
+    }
   }
+
+  if (loading) return <div className="teacher-page"><p>Loading submission...</p></div>;
+  if (error || !submission) return <div className="teacher-page"><p className="teacher-state-error">Error loading submission.</p></div>;
+
+  const attemptHistory = [
+    { number: 1, score: submission.autoScore, submittedAt: submission.submittedAt, query: submission.query }
+  ];
+  const activeAttempt = attemptHistory[0];
+  const attemptPassCount = activeAttempt.score >= 8 ? 4 : 3;
+  const currentSubmissionIndex = 0; // Pagination can be added later
+
 
   return (
     <section className="teacher-page teacher-review-page">
       <TeacherPageIntro
         title="Manual review"
-        context={`${submission.student} / ${submission.problem} / Attempt ${activeAttempt.number} of 3 / Submission #${submission.id}`}
+        context={`${submission.student} / ${submission.problem} / ${submission.attempts} / Submission #${submission.id.substring(0, 8)}`}
       >
         <Link className="button" to="/teacher/results">Back to results</Link>
-        <button className="button primary" type="button" onClick={saveReview}>Save review</button>
+        <button className="button primary" type="button" onClick={saveReview} disabled={isSaving}>
+          {isSaving ? "Saving..." : "Save review"}
+        </button>
       </TeacherPageIntro>
       <div className="teacher-divider" />
 
@@ -221,7 +279,7 @@ export function ManualReviewPage() {
         <div className="teacher-review-main">
           <div className="teacher-attempt-switcher">
             <span className="teacher-attempt-label">ATTEMPT</span>
-            {attemptHistory.slice().reverse().map((attempt) => (
+            {attemptHistory.map((attempt) => (
               <button
                 type="button"
                 key={attempt.number}
@@ -232,8 +290,6 @@ export function ManualReviewPage() {
                 Attempt {attempt.number} · {attempt.score} / {submission.maxScore}
               </button>
             ))}
-            <button className="button teacher-small-button" type="button" onClick={() => navigate(`/teacher/results/review/${teacherSubmissions[(currentSubmissionIndex - 1 + teacherSubmissions.length) % teacherSubmissions.length].id}`)}>‹ Previous</button>
-            <button className="button teacher-small-button" type="button" onClick={() => navigate(`/teacher/results/review/${teacherSubmissions[(currentSubmissionIndex + 1) % teacherSubmissions.length].id}`)}>Next ›</button>
           </div>
           <section className="teacher-review-code-section">
             <h2>Student SQL · submitted {activeAttempt.submittedAt}</h2>
@@ -241,26 +297,25 @@ export function ManualReviewPage() {
           </section>
           <section className="teacher-review-code-section">
             <h2>Reference SQL</h2>
-            <pre className="teacher-readonly-code"><code>{problem.referenceSolution}</code></pre>
+            <pre className="teacher-readonly-code"><code>{submission.referenceSolution || "No reference solution provided"}</code></pre>
           </section>
           <div className="teacher-table-scroll teacher-test-results-wrap">
             <table className="teacher-table teacher-test-results">
               <thead><tr><th>Test</th><th>Result</th><th>Detail</th></tr></thead>
               <tbody>
-                {teacherTestResults.map((test, testIndex) => (
-                  <tr key={test.test}>
-                    <td data-label="Test">{test.test}</td>
-                    <td data-label="Result" className={testIndex < attemptPassCount ? "teacher-state-success" : "teacher-state-failed"}>{testIndex < attemptPassCount ? "Passed" : "Failed"}</td>
-                    <td data-label="Detail">{test.detail}</td>
-                  </tr>
-                ))}
+                {/* We would fetch test cases here, mock for now */}
+                <tr>
+                  <td data-label="Test">01 · Execution</td>
+                  <td data-label="Result" className="teacher-state-success">Passed</td>
+                  <td data-label="Detail">Query executed successfully</td>
+                </tr>
               </tbody>
             </table>
           </div>
         </div>
         <aside className="teacher-grading-panel">
           <TeacherSectionTitle title="Grading" />
-          <strong className="teacher-test-summary">{attemptPassCount} / 5 tests passed</strong>
+          <strong className="teacher-test-summary">Evaluated by platform</strong>
           <p className="teacher-auto-score">Automatic score · {activeAttempt.score} / {submission.maxScore}</p>
           <TeacherField label="FINAL SCORE">
             <input
@@ -278,19 +333,20 @@ export function ManualReviewPage() {
           </TeacherField>
           <div className="teacher-review-history">
             <TeacherSectionTitle title="Review history" />
-            {savedReview ? (
-              <p className="tiny muted">Saved by Huy Lai · {savedReview.savedAt}<br />{savedReview.reason}</p>
+            {submission.finalScore !== null ? (
+              <p className="tiny muted">Saved in database<br />Final Score: {submission.finalScore}</p>
             ) : (
-              <p className="tiny muted">No manual changes yet.<br />Your saved review will include your name and time.</p>
+              <p className="tiny muted">No manual changes yet.<br />Your saved review will update the student's score.</p>
             )}
           </div>
         </aside>
       </div>
       {dialogOpen && (
         <Dialog title="Review saved" onClose={() => setDialogOpen(false)}>
-          <p className="tiny">This review is stored in the local teacher demo.</p>
-          <p className="tiny muted">No grading API is connected.</p>
-          <button className="button primary" type="button" onClick={() => setDialogOpen(false)}>Continue</button>
+          <p className="tiny">The score has been updated in the database.</p>
+          <div className="teacher-dialog-actions">
+            <button className="button primary" type="button" onClick={() => setDialogOpen(false)}>Continue</button>
+          </div>
         </Dialog>
       )}
     </section>

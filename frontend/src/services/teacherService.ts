@@ -81,4 +81,47 @@ export const teacherService = {
       method: "DELETE",
     });
   },
+
+  async getAssignments(): Promise<any[]> {
+    return apiFetch("/api/assignments");
+  },
+
+  async getAssignment(id: string): Promise<any> {
+    return apiFetch(`/api/assignments/${encodeURIComponent(id)}`);
+  },
+
+  async createAssignment(data: any): Promise<any> {
+    return apiFetch("/api/assignments", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateAssignment(id: string, data: any): Promise<any> {
+    return apiFetch(`/api/assignments/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteAssignment(id: string): Promise<any> {
+    return apiFetch(`/api/assignments/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+  },
+
+  async getSubmission(id: string): Promise<any> {
+    return apiFetch(`/api/submissions/${encodeURIComponent(id)}`);
+  },
+
+  async updateSubmissionReview(id: string, finalScore: number, feedback: string): Promise<any> {
+    return apiFetch(`/api/submissions/${encodeURIComponent(id)}/review`, {
+      method: "PUT",
+      body: JSON.stringify({ finalScore, feedback }),
+    });
+  },
+
+  async getAssignmentSubmissions(assignmentId: string): Promise<any[]> {
+    return apiFetch(`/api/assignments/${encodeURIComponent(assignmentId)}/submissions`);
+  },
 };

@@ -14,22 +14,50 @@ router = APIRouter()
 
 @router.get("/trending", response_model=List[TrendingProblem])
 def get_trending(range: str = "Week", db: Session = Depends(get_db)):
-    query = db.query(Submission.problem_id, func.count(func.distinct(Submission.user_id)).label("learners"))
+    query = db.query(
+        Submission.problem_id, 
+        Problem.number,
+        Problem.title,
+        func.count(func.distinct(Submission.user_id)).label("learners")
+    ).join(Problem, Problem.id == Submission.problem_id)
     
     if range == "Week":
         start_date = datetime.datetime.utcnow() - datetime.timedelta(days=7)
         query = query.filter(Submission.submitted_at >= start_date)
-    elif range == "Month" or range == "Sep 2026": # support mock value from UI temporarily if needed
+    elif range == "Month" or range == "Sep 2026": 
         start_date = datetime.datetime.utcnow() - datetime.timedelta(days=30)
         query = query.filter(Submission.submitted_at >= start_date)
         
-    results = query.group_by(Submission.problem_id).order_by(func.count(func.distinct(Submission.user_id)).desc()).limit(5).all()
+    results = query.group_by(
+        Submission.problem_id, 
+        Problem.number, 
+        Problem.title
+    ).order_by(func.count(func.distinct(Submission.user_id)).desc()).limit(5).all()
     
-    return [TrendingProblem(id=r[0], learners=r[1]) for r in results]
+    return [TrendingProblem(id=r[0], number=r[1], title=r[2], learners=r[3]) for r in results]
 
 @router.get("", response_model=List[ProblemListResponse])
 def get_problems(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    problems = db.query(Problem).all()
+    from app.models import ClassEnrollment, AssignmentClass, AssignmentProblem
+    
+    if current_user.role == "instructor":
+        problems = db.query(Problem).filter(
+            (Problem.practice_listed == True) | 
+            (Problem.creator_id == current_user.id)
+        ).all()
+    elif current_user.role == "admin":
+        problems = db.query(Problem).all()
+    else:
+        assigned_pids_query = db.query(AssignmentProblem.problem_id)\
+            .join(AssignmentClass, AssignmentClass.assignment_id == AssignmentProblem.assignment_id)\
+            .join(ClassEnrollment, ClassEnrollment.class_id == AssignmentClass.class_id)\
+            .filter(ClassEnrollment.student_id == current_user.id).subquery()
+            
+        problems = db.query(Problem).filter(
+            (Problem.practice_listed == True) | 
+            (Problem.id.in_(assigned_pids_query))
+        ).all()
+        
     subs = db.query(Submission.problem_id, Submission.result).filter(Submission.user_id == current_user.id).all()
     
     status_map = {}
@@ -55,6 +83,18 @@ def get_problem(problem_id: str, db: Session = Depends(get_db), current_user: Us
     if not p:
         raise HTTPException(status_code=404, detail="Problem not found")
         
+    if not p.practice_listed:
+        if current_user.role == "instructor" and p.creator_id != current_user.id:
+            raise HTTPException(status_code=403, detail="You don't have permission to view this problem.")
+        elif current_user.role == "student":
+            from app.models import ClassEnrollment, AssignmentClass, AssignmentProblem
+            assigned = db.query(AssignmentProblem.problem_id)\
+                .join(AssignmentClass, AssignmentClass.assignment_id == AssignmentProblem.assignment_id)\
+                .join(ClassEnrollment, ClassEnrollment.class_id == AssignmentClass.class_id)\
+                .filter(ClassEnrollment.student_id == current_user.id, AssignmentProblem.problem_id == p.id).first()
+            if not assigned:
+                raise HTTPException(status_code=403, detail="You don't have permission to view this problem.")
+                
     subs = db.query(Submission.result).filter(
         Submission.user_id == current_user.id,
         Submission.problem_id == p.id
@@ -98,6 +138,9 @@ def update_problem(problem_id: str, problem: ProblemCreate, db: Session = Depend
     p = db.query(Problem).filter(Problem.id == problem_id).first()
     if not p:
         raise HTTPException(status_code=404, detail="Problem not found")
+        
+    if p.creator_id and p.creator_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You don't have permission to edit this problem.")
         
     topics_list = [t.strip() for t in problem.topics.split(",")] if problem.topics else []
     
@@ -169,6 +212,9 @@ def delete_problem(problem_id: str, db: Session = Depends(get_db), current_user:
     if not p:
         raise HTTPException(status_code=404, detail="Problem not found")
         
+    if p.creator_id and p.creator_id != current_user.id:
+        raise HTTPException(status_code=403, detail="You don't have permission to delete this problem.")
+        
     from app.models import ProblemTopic, TestCase, TestCaseScript, Submission, ProblemDraft, Favorite, ProblemListItem, AiChatSession
     
     # Delete related dependencies to avoid foreign key constraints
@@ -216,7 +262,8 @@ def create_problem(problem: ProblemCreate, db: Session = Depends(get_db), curren
         description=problem.statement,
         requirements=problem.requirements,
         hint="\n".join(problem.hints) if problem.hints else None,
-        database_type=problem.database
+        database_type=problem.database,
+        creator_id=current_user.id
     )
     db.add(new_prob)
     

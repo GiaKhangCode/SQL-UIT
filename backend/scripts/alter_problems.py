@@ -11,12 +11,14 @@ if not DATABASE_URL:
 engine = create_engine(DATABASE_URL)
 with engine.connect() as conn:
     try:
-        conn.execute(text("ALTER TABLE problems ADD topics NVARCHAR(MAX) NULL, database_type VARCHAR(50) NULL, test_cases NVARCHAR(MAX) NULL"))
+        conn.execute(text("ALTER TABLE problems ADD topics NVARCHAR(MAX) NULL, database_type VARCHAR(50) NULL, test_cases NVARCHAR(MAX) NULL, creator_id VARCHAR(50) NULL"))
         
         # We also need to alter existing 'tables' and 'expected' to allow NULL
         conn.execute(text("ALTER TABLE problems ALTER COLUMN tables NVARCHAR(MAX) NULL"))
         conn.execute(text("ALTER TABLE problems ALTER COLUMN expected NVARCHAR(MAX) NULL"))
         conn.execute(text("ALTER TABLE problems ALTER COLUMN topic VARCHAR(100) NULL"))
+        
+        # Backfill creator_id if needed, we'll leave it as NULL for existing problems or set to a default admin/instructor if required
         conn.commit()
         print("Columns added and altered successfully in 'problems' table")
     except Exception as e:

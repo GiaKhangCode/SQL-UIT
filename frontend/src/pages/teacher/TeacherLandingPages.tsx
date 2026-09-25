@@ -209,7 +209,20 @@ const assignmentSeed: AssignmentRow[] = [
 
 export function AssignmentsListPage() {
   const navigate = useNavigate();
-  const [assignments, setAssignments] = useState(assignmentSeed);
+  const [assignments, setAssignments] = useState<AssignmentRow[]>([]);
+  
+  useEffect(() => {
+    async function loadAssignments() {
+      try {
+        const data = await teacherService.getAssignments();
+        // filter out contests if needed, but for now show all
+        setAssignments(data);
+      } catch(e) {
+        console.error("Failed to load assignments", e);
+      }
+    }
+    loadAssignments();
+  }, []);
   const [search, setSearch] = useState("");
   const [classFilter, setClassFilter] = useState("All classes");
   const [statusFilter, setStatusFilter] = useState("All statuses");
@@ -223,9 +236,20 @@ export function AssignmentsListPage() {
   ), [assignments, search, classFilter, statusFilter, semester]);
   const selectedAssignment = filtered.find((item) => item.id === selectedAssignmentId) || filtered[0] || null;
 
+  async function removeAssignment(id: string) {
+    if (!window.confirm("Are you sure you want to delete this assignment?")) return;
+    try {
+      await teacherService.deleteAssignment(id);
+      setAssignments(assignments.filter(a => a.id !== id));
+      if (selectedAssignmentId === id) setSelectedAssignmentId("");
+    } catch (e) {
+      console.error("Failed to delete assignment", e);
+    }
+  }
+
   return (
     <section className="teacher-page teacher-list-page">
-      <TeacherPageIntro title="Assignments" context={assignments.length ? `${semester} · 9 assignments · 2 open` : `${semester} · 0 assignments`}>
+      <TeacherPageIntro title="Assignments" context={assignments.length ? `${semester} · ${assignments.length} assignments` : `${semester} · 0 assignments`}>
         <button className="button primary" type="button" onClick={() => navigate("/teacher/assignments/new")}>New assignment</button>
       </TeacherPageIntro>
       <div className="teacher-divider" />
@@ -237,9 +261,9 @@ export function AssignmentsListPage() {
           <TeacherField label="SEMESTER"><select value={semester} onChange={(event) => setSemester(event.target.value)}><option>Semester 1, 2025</option><option>Semester 2, 2026</option></select></TeacherField>
         </div>
         <div className="teacher-list-summary">
-          <div><strong>2</strong><small>Open now</small></div>
-          <div><strong>3</strong><small>Due this week</small></div>
-          <div><strong>6</strong><small>Awaiting review</small></div>
+          <div><strong>{assignments.filter(a => a.status === 'Open').length}</strong><small>Open now</small></div>
+          <div><strong>{assignments.filter(a => a.status === 'Scheduled').length}</strong><small>Scheduled</small></div>
+          <div><strong>{assignments.filter(a => a.status === 'Draft').length}</strong><small>Drafts</small></div>
         </div>
         <div className="teacher-divider teacher-list-divider" />
         <div className="teacher-list-detail-layout">
@@ -258,7 +282,7 @@ export function AssignmentsListPage() {
                 {!filtered.length && <tr><td className="teacher-empty-row" colSpan={6}>No assignments match these filters.</td></tr>}</tbody>
               </table>
             </div>
-            <p className="teacher-list-footer">Showing {filtered.length} of 9 assignments</p>
+            <p className="teacher-list-footer">Showing {filtered.length} of {assignments.length} assignments</p>
           </div>
           <aside className="teacher-list-detail-panel">
             {selectedAssignment ? <>
@@ -272,8 +296,9 @@ export function AssignmentsListPage() {
                 <div><dt>Status</dt><dd>{selectedAssignment.status}</dd></div>
               </dl>
               <div className="teacher-list-detail-actions">
-                <Link className="button primary" to="/teacher/assignments/new">Edit</Link>
+                <Link className="button primary" to={`/teacher/assignments/${selectedAssignment.id}/edit`}>Edit</Link>
                 <Link className="button" to={`/teacher/results?search=${encodeURIComponent(selectedAssignment.title)}`}>Results</Link>
+                <button className="button teacher-danger-button" onClick={() => removeAssignment(selectedAssignment.id)}>Delete</button>
               </div>
             </> : <p className="muted">Select an assignment to view its details.</p>}
           </aside>

@@ -91,12 +91,12 @@ function Workspace({ problem }: { problem: Problem }) {
   const editor = useRef<EditorView | null>(null);
   const expandTrigger = useRef<HTMLButtonElement>(null);
   const [code, setCode] = useState(
-    () => studentApi.getDraft(problem.id) ?? problem.draft,
+    () => studentApi.getDraft(problem.id) ?? (problem.draft || ""),
   );
   const [selected, setSelected] = useState("");
   const [database, setDatabase] = useState("MySQL");
   const [databaseMenu, setDatabaseMenu] = useState(false);
-  const [tables, setTables] = useState<DataTable[]>(problem.tables);
+  const [tables, setTables] = useState<DataTable[]>(problem.tables || []);
   const [problemTab, setProblemTab] = useState("Description");
   const [resultTab, setResultTab] = useState("Run result");
   const [mobileTab, setMobileTab] = useState("Problem");
@@ -225,7 +225,7 @@ function Workspace({ problem }: { problem: Problem }) {
         workspace={{
           title: problem.title,
           number: problem.number,
-          topic: problem.topic,
+          topic: problem.topic || "Uncategorized",
         }}
       />
       <main id="main-content" className="workspace-main">
@@ -277,13 +277,13 @@ function Workspace({ problem }: { problem: Problem }) {
                   <p className="tiny">PROBLEM {problem.number}</p>
                   <h1>{problem.title}</h1>
                   <div className="problem-meta">
-                    <Status value={problem.difficulty} />
-                    <Status value={problem.topic} />
+                    <Status value={problem.difficulty || "Unknown"} />
+                    <Status value={problem.topic || "Uncategorized"} />
                     <Status
                       value={
                         lastSubmit?.status === "Accepted"
                           ? "Solved"
-                          : problem.progress
+                          : (problem.progress || "Not started")
                       }
                     />
                   </div>
@@ -291,7 +291,7 @@ function Workspace({ problem }: { problem: Problem }) {
                   <h3>Requirements</h3>
                   <p>{problem.requirements}</p>
                   <h3>Expected output</h3>
-                  <DataGrid table={problem.expected} />
+                  {problem.expected && <DataGrid table={problem.expected} />}
                   <p className="tiny">
                     {problem.id === "p1"
                       ? "Bao Tran and Ngoc Linh have no matching rows in Orders."
@@ -612,7 +612,7 @@ function Workspace({ problem }: { problem: Problem }) {
                     </p>
                     <small>
                       Sample data ·{" "}
-                      {problem.tables.map((t) => t.name).join(" and ")}
+                      {(problem.tables || []).map((t) => t.name).join(" and ")}
                     </small>
                   </>
                 )}

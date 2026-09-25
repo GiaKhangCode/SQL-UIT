@@ -126,6 +126,27 @@ class SubmissionResponse(CamelModel):
     evaluated_score: Optional[int] = None
     feedback: Optional[str] = None
 
+class TeacherSubmissionResponse(CamelModel):
+    id: str
+    student: str
+    problem: str
+    auto_score: int = Field(alias="autoScore")
+    max_score: int = Field(alias="maxScore")
+    final_score: Optional[int] = Field(alias="finalScore")
+    status: str
+    attempts: str
+    query: str
+    reference_solution: Optional[str] = Field(alias="referenceSolution", default=None)
+    submitted_at: str = Field(alias="submittedAt")
+
+class TeacherSubmissionSummary(CamelModel):
+    id: str
+    student: str
+    problem: str
+    score: int
+    status: str
+    submitted_at: str = Field(alias="submittedAt")
+
 class DailySubmission(CamelModel):
     date: str
     count: int
@@ -155,6 +176,8 @@ class ListCreateRequest(CamelModel):
 
 class TrendingProblem(CamelModel):
     id: str
+    number: str
+    title: str
     learners: int
 
 class ChatMessage(CamelModel):
@@ -275,4 +298,50 @@ class ClassMemberResponse(CamelModel):
 
 class ClassMemberAdd(CamelModel):
     student_id: str
+
+# ========================
+# Pydantic models cho Assignments / Contests
+# ========================
+class BuilderProblem(CamelModel):
+    id: str
+    points: int
+
+class StudentOptions(CamelModel):
+    hints: bool
+    comments: bool
+    leaderboard: bool
+    ai_allowed: bool = Field(..., alias="aiAllowed")
+
+class AssignmentCreate(CamelModel):
+    title: str
+    is_contest: bool = Field(default=False, alias="isContest")
+    class_ids: List[str] = Field(..., alias="classIds")
+    format: str
+    instructions: str
+    opens: datetime
+    closes: datetime
+    problems: List[BuilderProblem]
+    student_options: StudentOptions = Field(..., alias="studentOptions")
+    published: bool
+
+class AssignmentResponse(CamelModel):
+    id: str
+    title: str
+    is_contest: bool = Field(..., alias="isContest")
+    classes: str # For list view
+    problems: int # For list view
+    due: str # For list view
+    submitted: str # For list view
+    average: str = "0%" # For list view
+    awaiting: int = 0 # For list view
+    review_id: Optional[str] = Field(default=None, alias="reviewId")
+    status: str # For list view
+    format: str
+    instructions: str
+    opens: datetime
+    closes: datetime
+    published: bool
+    student_options: StudentOptions = Field(..., alias="studentOptions")
+    problem_list: List[BuilderProblem] = Field(..., alias="problemList")
+    class_ids: List[str] = Field(..., alias="classIds")
 
