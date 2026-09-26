@@ -19,6 +19,17 @@ def create_assignment(assignment: AssignmentCreate, db: Session = Depends(get_db
     if current_user.role not in ["instructor", "admin"]:
         raise HTTPException(status_code=403, detail="Chỉ Giảng viên và Admin mới có quyền tạo assignment/contest.")
         
+    if assignment.class_ids:
+        active_classes = db.query(Class.id).filter(
+            Class.id.in_(assignment.class_ids),
+            Class.status == "Active"
+        ).all()
+        if len(active_classes) != len(assignment.class_ids):
+            raise HTTPException(
+                status_code=400, 
+                detail="Một hoặc nhiều lớp học đã chọn không hợp lệ hoặc đã bị lưu trữ (Archived)."
+            )
+            
     assignment_id = str(uuid.uuid4())
     new_assignment = Assignment(
         id=assignment_id,

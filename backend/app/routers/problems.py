@@ -445,8 +445,17 @@ def submit_query(problem_id: str, request: QueryRequest, db: Session = Depends(g
     result = run_sandbox(db, p, request.query, is_submit=True)
     
     # Save submission
-    status = result["status"]
-    score = max_score if status == "Accepted" else 0
+    status = result.get("status", "Runtime Error")
+    
+    passed = result.get("passed", 0)
+    total = result.get("total", 1)
+    
+    if status == "Accepted":
+        score = max_score
+    elif status == "Partial":
+        score = int((passed / total) * max_score)
+    else:
+        score = 0
     
     sub = Submission(
         id=str(uuid.uuid4()),

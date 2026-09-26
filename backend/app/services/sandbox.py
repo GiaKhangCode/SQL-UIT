@@ -226,6 +226,9 @@ def run_sandbox(db: Session, problem: Problem, query: str, is_submit: bool) -> D
             test_cases_to_run = test_cases
             
         last_table = None
+        passed_count = 0
+        total_cases = len(test_cases_to_run)
+        first_error_msg = None
         
         for idx, tc in enumerate(test_cases_to_run):
             if isinstance(tc, dict):
@@ -245,21 +248,38 @@ def run_sandbox(db: Session, problem: Problem, query: str, is_submit: bool) -> D
             last_table = actual_result
             
             is_correct, msg = compare_results(actual_result, expected)
-            if not is_correct:
-                status = "Wrong Answer" if is_submit else "Tabular result"
-                msg_prefix = f"Test case {idx + 1} sai: " if len(test_cases) > 1 and is_submit else ""
-                return {
-                    "status": status,
-                    "message": msg_prefix + msg if is_submit else "Chạy thử thành công nhưng kết quả khác đáp án.",
-                    "table": actual_result
-                }
+            if is_correct:
+                passed_count += 1
+            else:
+                if not first_error_msg:
+                    status_str = "Wrong Answer" if is_submit else "Tabular result"
+                    msg_prefix = f"Test case {idx + 1} sai: " if len(test_cases) > 1 and is_submit else ""
+                    first_error_msg = msg_prefix + msg if is_submit else "Chạy thử thành công nhưng kết quả khác đáp án."
+                
+                if not is_submit:
+                    return {
+                        "status": status_str,
+                        "message": first_error_msg,
+                        "table": actual_result
+                    }
 
         if is_submit:
-            return {
-                "status": "Accepted",
-                "message": "Chúc mừng! Đáp án chính xác tất cả test cases.",
-                "table": last_table
-            }
+            if passed_count == total_cases:
+                return {
+                    "status": "Accepted",
+                    "message": "Chúc mừng! Đáp án chính xác tất cả test cases.",
+                    "table": last_table,
+                    "passed": passed_count,
+                    "total": total_cases
+                }
+            else:
+                return {
+                    "status": "Partial" if passed_count > 0 else "Wrong Answer",
+                    "message": first_error_msg or "Kết quả không khớp với đáp án.",
+                    "table": last_table,
+                    "passed": passed_count,
+                    "total": total_cases
+                }
         else:
             return {
                 "status": "Tabular result",

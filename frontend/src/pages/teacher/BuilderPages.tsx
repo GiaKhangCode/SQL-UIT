@@ -72,7 +72,8 @@ function BuilderPage({ contest }: { contest: boolean }) {
     async function fetchClasses() {
       try {
         const data = await teacherService.getClasses();
-        setAvailableClasses(data);
+        const activeClasses = data.filter((c: any) => c.status === "Active");
+        setAvailableClasses(activeClasses);
       } catch (e) {
         setClassesError(e instanceof Error ? e.message : "Could not load classes.");
       } finally {

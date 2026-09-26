@@ -34,6 +34,31 @@ async def chat_with_ai(
         raise HTTPException(status_code=500, detail=f"{provider.upper()}_API_KEY is not configured on the server.")
 
     try:
+        from app.models import Assignment, AssignmentProblem, AssignmentClass, ClassEnrollment
+        import datetime
+        now = datetime.datetime.utcnow()
+        
+        active_restricted_assignments = db.query(Assignment).join(
+            AssignmentProblem, AssignmentProblem.assignment_id == Assignment.id
+        ).join(
+            AssignmentClass, AssignmentClass.assignment_id == Assignment.id
+        ).join(
+            ClassEnrollment, ClassEnrollment.class_id == AssignmentClass.class_id
+        ).filter(
+            ClassEnrollment.student_id == current_user.id,
+            AssignmentProblem.problem_id == request.problem_context.id,
+            Assignment.published == True,
+            Assignment.ai_allowed == False,
+            (Assignment.opens == None) | (Assignment.opens <= now),
+            (Assignment.closes == None) | (Assignment.closes > now)
+        ).first()
+
+        if active_restricted_assignments:
+            raise HTTPException(
+                status_code=403, 
+                detail="Hệ thống phát hiện bạn đang trong thời gian làm Kỳ thi/Bài tập không cho phép dùng AI."
+            )
+            
         # Determine session or create new one
         if request.session_id:
             session = db.query(AiChatSession).filter(

@@ -413,6 +413,7 @@ export function ResetPasswordPage() {
 export function RegisterPage() {
   const auth = useAuth();
   const navigate = useNavigate();
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -423,6 +424,7 @@ export function RegisterPage() {
     e.preventDefault();
     if (busy) return;
     const next: Errors = {};
+    if (!name.trim()) next.name = "Enter your full name.";
     if (!validEmail(email.trim())) next.email = "Enter a valid school email.";
     if (password.length < 8) next.password = "Use at least 8 characters.";
     if (!confirm || confirm !== password)
@@ -432,9 +434,7 @@ export function RegisterPage() {
     if (Object.keys(next).length) return;
     setBusy(true);
     try {
-      const name =
-        email.split("@")[0].replace(/[._-]+/g, " ").trim() || "Student";
-      await auth.register(name, email, password);
+      await auth.register(name.trim(), email, password);
       navigate("/dashboard", { replace: true, state: { welcome: true } });
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Registration failed.");
@@ -445,6 +445,21 @@ export function RegisterPage() {
   return (
     <AuthLayout register>
       <form onSubmit={(e) => void submit(e)} noValidate>
+        <label className="field" htmlFor="register-name">
+          Full name
+          <input
+            id="register-name"
+            type="text"
+            autoComplete="name"
+            placeholder="Nguyen Van A"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            aria-invalid={!!errors.name}
+          />
+          {errors.name && (
+            <small className="field-error">{errors.name}</small>
+          )}
+        </label>
         <label className="field" htmlFor="register-email">
           Email
           <input
