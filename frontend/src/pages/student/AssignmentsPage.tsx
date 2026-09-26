@@ -188,7 +188,9 @@ export function AssignmentsPage() {
                 "/workspace/" +
                 id +
                 "?source=Assignments&context=" +
-                encodeURIComponent(selectedWork.id)
+                encodeURIComponent(selectedWork.id) +
+                "&contextTitle=" +
+                encodeURIComponent(selectedWork.title)
               }
             >
               {data.problems?.find((p) => p.id === id)?.title || "SQL problem"}

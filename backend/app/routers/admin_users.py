@@ -63,6 +63,11 @@ def update_admin_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
         
+    if user_update.email != user.email:
+        existing_email = db.query(models.User).filter(models.User.email == user_update.email).first()
+        if existing_email:
+            raise HTTPException(status_code=400, detail="Email này đã được sử dụng bởi một tài khoản khác.")
+        
     user.name = user_update.name
     user.email = user_update.email
     user.status = user_update.status

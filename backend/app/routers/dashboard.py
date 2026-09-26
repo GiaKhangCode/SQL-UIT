@@ -10,7 +10,7 @@ from collections import defaultdict
 router = APIRouter()
 
 @router.get("", response_model=DashboardStats)
-def get_dashboard(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_dashboard(tz_offset: int = 0, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     # Lấy các problem đã giải quyết
     accepted_subs = db.query(Submission.problem_id).filter(
         Submission.user_id == current_user.id,
@@ -18,33 +18,31 @@ def get_dashboard(db: Session = Depends(get_db), current_user: User = Depends(ge
     ).distinct().all()
     accepted_problem_ids = {sub[0] for sub in accepted_subs}
 
-    problems = db.query(Problem).all()
+    attempted_subs = db.query(Submission.problem_id).filter(
+        Submission.user_id == current_user.id
+    ).distinct().all()
+    attempted_problem_ids = {sub[0] for sub in attempted_subs}
 
     solved = 0
     easy = 0
     medium = 0
     hard = 0
     continuing_problems = []
+    
+    if accepted_problem_ids:
+        accepted_problems = db.query(Problem.difficulty).filter(Problem.id.in_(accepted_problem_ids)).all()
+        solved = len(accepted_problems)
+        easy = sum(1 for p in accepted_problems if p.difficulty == "Easy")
+        medium = sum(1 for p in accepted_problems if p.difficulty == "Medium")
+        hard = sum(1 for p in accepted_problems if p.difficulty == "Hard")
 
-    for p in problems:
-        if p.id in accepted_problem_ids:
-            solved += 1
-            if p.difficulty == "Easy":
-                easy += 1
-            elif p.difficulty == "Medium":
-                medium += 1
-            elif p.difficulty == "Hard":
-                hard += 1
-        else:
-            # Kiểm tra xem có submission nào chưa (đang giải dang dở)
-            has_sub = db.query(Submission.id).filter(
-                Submission.user_id == current_user.id,
-                Submission.problem_id == p.id
-            ).first()
-            if has_sub:
-                p_resp = ProblemListResponse.model_validate(p)
-                p_resp.progress = "In progress"
-                continuing_problems.append(p_resp)
+    continuing_ids = attempted_problem_ids - accepted_problem_ids
+    if continuing_ids:
+        c_problems = db.query(Problem).filter(Problem.id.in_(continuing_ids)).all()
+        for p in c_problems:
+            p_resp = ProblemListResponse.model_validate(p)
+            p_resp.progress = "In progress"
+            continuing_problems.append(p_resp)
 
     # Lấy dữ liệu submission 1 năm gần nhất
     one_year_ago = datetime.datetime.utcnow() - datetime.timedelta(days=365)
@@ -58,7 +56,8 @@ def get_dashboard(db: Session = Depends(get_db), current_user: User = Depends(ge
     
     for (sub_time,) in recent_subs:
         if sub_time:
-            date_str = sub_time.strftime("%Y-%m-%d")
+            local_time = sub_time - datetime.timedelta(minutes=tz_offset)
+            date_str = local_time.strftime("%Y-%m-%d")
             daily_counts[date_str] += 1
             distinct_dates.add(date_str)
             
@@ -68,8 +67,9 @@ def get_dashboard(db: Session = Depends(get_db), current_user: User = Depends(ge
     current_streak = 0
     sorted_dates = sorted(list(distinct_dates), reverse=True)
     
-    today_str = datetime.datetime.utcnow().strftime("%Y-%m-%d")
-    yesterday_str = (datetime.datetime.utcnow() - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+    now_local = datetime.datetime.utcnow() - datetime.timedelta(minutes=tz_offset)
+    today_str = now_local.strftime("%Y-%m-%d")
+    yesterday_str = (now_local - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
     
     if sorted_dates:
         if sorted_dates[0] in (today_str, yesterday_str):

@@ -78,17 +78,28 @@ def seed_sandbox_data(db: Session, tables: list):
                 insert_sql = f"INSERT INTO #{name} VALUES ({', '.join(formatted_vals)})"
                 db.execute(text(insert_sql))
 
+import concurrent.futures
+
 def execute_query(db: Session, rewritten_query: str) -> Dict[str, Any]:
     """ Thực thi query và trả về kết quả dạng Tabular """
-    try:
+    def _run():
         result = db.execute(text(rewritten_query))
         columns = list(result.keys())
         rows = [list(row) for row in result.fetchall()]
+        return columns, rows
+
+    try:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(_run)
+            columns, rows = future.result(timeout=5.0)
+
         return {
             "name": "Result",
             "columns": columns,
             "rows": rows
         }
+    except concurrent.futures.TimeoutError:
+        raise SandboxError("TIME_LIMIT_EXCEEDED")
     except Exception as e:
         raise SandboxError(f"Lỗi thực thi SQL: {str(e)}")
 
@@ -253,6 +264,8 @@ def run_sandbox(db: Session, problem: Problem, query: str, is_submit: bool) -> D
             }
             
     except SandboxError as e:
+        if "TIME_LIMIT_EXCEEDED" in str(e):
+            return {"status": "Time Limit Exceeded", "message": "Truy vấn chạy quá thời gian cho phép (5s)."}
         return {"status": "Runtime Error", "message": str(e)}
     except Exception as e:
         return {"status": "Runtime Error", "message": f"Lỗi hệ thống không xác định: {str(e)}"}

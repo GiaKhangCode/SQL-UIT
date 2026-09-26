@@ -78,6 +78,7 @@ function Workspace({ problem }: { problem: Problem }) {
         ? "Contests"
         : "Practice";
   const context = params.get("context") || source;
+  const contextTitle = params.get("contextTitle") || context;
   const contestMode = source === "Contests" && Boolean(params.get("contest"));
   const [favorite, setFavorite] = useState(false);
   const [favoriteBusy, setFavoriteBusy] = useState(false);
@@ -213,7 +214,7 @@ function Workspace({ problem }: { problem: Problem }) {
           number: problem.number,
           topic: problem.topic || "Uncategorized",
           source,
-          context: source === "Practice" ? problem.topic || "Uncategorized" : context,
+          context: source === "Practice" ? problem.topic || "Uncategorized" : contextTitle,
           backTo: source === "Assignments" ? "/assignments" : source === "Contests" ? "/contests" : "/practice",
         }}
       />

@@ -118,7 +118,8 @@ def get_assignments(db: Session = Depends(get_db), current_user: User = Depends(
             submitted_students_query = db.query(Submission.user_id).filter(
                 Submission.user_id.in_(student_ids),
                 Submission.problem_id.in_(problem_ids),
-                Submission.context == a.id
+                Submission.context == a.id,
+                Submission.source.in_(["Assignments", "Contests"])
             ).distinct().all()
             submitted_students = len(submitted_students_query)
         else:
@@ -127,17 +128,23 @@ def get_assignments(db: Session = Depends(get_db), current_user: User = Depends(
         # Calculate average score, awaiting review, and get a review_id
         from sqlalchemy import func
         if submitted_students > 0:
-            avg_score_query = db.query(func.avg(Submission.score)).filter(
+            max_scores_subquery = db.query(
+                func.max(func.coalesce(Submission.evaluated_score, Submission.score)).label('max_score')
+            ).filter(
                 Submission.user_id.in_(student_ids),
                 Submission.problem_id.in_(problem_ids),
-                Submission.context == a.id
-            ).scalar()
+                Submission.context == a.id,
+                Submission.source.in_(["Assignments", "Contests"])
+            ).group_by(Submission.user_id, Submission.problem_id).subquery()
+            
+            avg_score_query = db.query(func.avg(max_scores_subquery.c.max_score)).scalar()
             avg_score = int(avg_score_query) if avg_score_query else 0
             
             awaiting_query = db.query(Submission).filter(
                 Submission.user_id.in_(student_ids),
                 Submission.problem_id.in_(problem_ids),
                 Submission.context == a.id,
+                Submission.source.in_(["Assignments", "Contests"]),
                 Submission.evaluated_score == None
             )
             awaiting = awaiting_query.count()
@@ -201,11 +208,17 @@ def get_assignment(assignment_id: str, db: Session = Depends(get_db), current_us
             ).first()
             if not enrollment:
                 raise HTTPException(status_code=403, detail="Bạn không thuộc lớp được giao bài tập này.")
-                
+        else:
+            raise HTTPException(status_code=403, detail="Bài tập này chưa được giao cho bất kỳ lớp nào.")
     problems = db.query(AssignmentProblem).filter(AssignmentProblem.assignment_id == a.id).order_by(AssignmentProblem.order_index).all()
     problems_list = [{"id": p.problem_id, "points": p.points} for p in problems]
     
     now = datetime.datetime.utcnow()
+    
+    if current_user.role == "student" and a.opens and now < a.opens:
+        problems_list = []
+        problems = []
+        
     if not a.published:
         status = "Draft"
     elif a.opens and a.opens > now:
@@ -233,7 +246,8 @@ def get_assignment(assignment_id: str, db: Session = Depends(get_db), current_us
         submitted_students_query = db.query(Submission.user_id).filter(
             Submission.user_id.in_(student_ids),
             Submission.problem_id.in_(problem_ids),
-            Submission.context == a.id
+            Submission.context == a.id,
+            Submission.source.in_(["Assignments", "Contests"])
         ).distinct().all()
         submitted_students = len(submitted_students_query)
     else:
@@ -241,17 +255,23 @@ def get_assignment(assignment_id: str, db: Session = Depends(get_db), current_us
         
     from sqlalchemy import func
     if submitted_students > 0:
-        avg_score_query = db.query(func.avg(Submission.score)).filter(
+        max_scores_subquery = db.query(
+            func.max(func.coalesce(Submission.evaluated_score, Submission.score)).label('max_score')
+        ).filter(
             Submission.user_id.in_(student_ids),
             Submission.problem_id.in_(problem_ids),
-            Submission.context == a.id
-        ).scalar()
+            Submission.context == a.id,
+            Submission.source.in_(["Assignments", "Contests"])
+        ).group_by(Submission.user_id, Submission.problem_id).subquery()
+        
+        avg_score_query = db.query(func.avg(max_scores_subquery.c.max_score)).scalar()
         avg_score = int(avg_score_query) if avg_score_query else 0
         
         awaiting_query = db.query(Submission).filter(
             Submission.user_id.in_(student_ids),
             Submission.problem_id.in_(problem_ids),
             Submission.context == a.id,
+            Submission.source.in_(["Assignments", "Contests"]),
             Submission.evaluated_score == None
         )
         awaiting = awaiting_query.count()
@@ -368,6 +388,10 @@ def delete_assignment(assignment_id: str, db: Session = Depends(get_db), current
     
     db.query(AssignmentClass).filter(AssignmentClass.assignment_id == assignment_id).delete()
     db.query(AssignmentProblem).filter(AssignmentProblem.assignment_id == assignment_id).delete()
+    
+    from app.models import Submission
+    db.query(Submission).filter(Submission.context == assignment_id).delete()
+    
     db.delete(a)
     
     from app.models import ActivityLog
@@ -390,28 +414,25 @@ def get_assignment_submissions(assignment_id: str, db: Session = Depends(get_db)
     if not a:
         raise HTTPException(status_code=404, detail="Assignment not found")
         
-    if current_user.role != "instructor" or a.instructor_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Bạn không có quyền xem danh sách bài nộp của Assignment này.")
+    if current_user.role != "admin":
+        if current_user.role != "instructor" or a.instructor_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Bạn không có quyền xem danh sách bài nộp của Assignment này.")
         
     classes = db.query(AssignmentClass).filter(AssignmentClass.assignment_id == a.id).all()
     class_ids = [c.class_id for c in classes]
     
     from app.models import ClassEnrollment, Submission, Problem
-    student_ids = []
-    if class_ids:
-        enrollments = db.query(ClassEnrollment.student_id).filter(ClassEnrollment.class_id.in_(class_ids)).distinct().all()
-        student_ids = [e[0] for e in enrollments]
         
     problems = db.query(AssignmentProblem).filter(AssignmentProblem.assignment_id == a.id).all()
     problem_ids = [p.problem_id for p in problems]
     
-    if not student_ids or not problem_ids:
+    if not problem_ids:
         return []
         
     subs = db.query(Submission).filter(
-        Submission.user_id.in_(student_ids),
         Submission.problem_id.in_(problem_ids),
-        Submission.context == a.id
+        Submission.context == a.id,
+        Submission.source.in_(["Assignments", "Contests"])
     ).order_by(Submission.submitted_at.desc()).all()
     
     result = []

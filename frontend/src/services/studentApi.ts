@@ -52,8 +52,9 @@ function localizeSchedule<T extends { date: string; time: string }>(item: T): T 
 
 export const studentApi = {
   getDashboard: async (): Promise<DashboardStats> => {
+    const tzOffset = new Date().getTimezoneOffset();
     const [dashboardResult, enrolledResult] = await Promise.allSettled([
-      apiFetch("/api/student/dashboard") as Promise<DashboardStats>,
+      apiFetch(`/api/student/dashboard?tz_offset=${tzOffset}`) as Promise<DashboardStats>,
       apiFetch("/api/student/assignments") as Promise<StudentAssignments>,
     ]);
     if (dashboardResult.status === "rejected") throw dashboardResult.reason;
@@ -81,7 +82,7 @@ export const studentApi = {
       (p) =>
         (f.includePrivate ? true : p.practiceListed === true) &&
         (!f.search || `${p.title} ${p.number}`.toLowerCase().includes(f.search.toLowerCase())) &&
-        (!f.topic || (Array.isArray(p.topics) ? p.topics : String(p.topic || "").split(",")).some((topic: string) => topic.trim() === f.topic)) &&
+        (!f.topic || (p.topics && (p.topics as string[]).includes(f.topic))) &&
         (!f.difficulty || p.difficulty === f.difficulty) &&
         (!f.progress || p.progress === f.progress)
     );

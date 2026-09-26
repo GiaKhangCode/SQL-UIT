@@ -60,6 +60,7 @@ export type Submission = {
   problemId: string;
   source: "Practice" | "Assignments" | "Contests";
   context: string;
+  contextTitle?: string;
   result: Verdict;
   score: number;
   submittedAt: string;

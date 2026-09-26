@@ -62,7 +62,6 @@ class ProblemBase(CamelModel):
     id: str
     number: str
     title: str
-    topic: Optional[str] = None
     topics: Optional[List[str]] = None
     difficulty: str
     practice_listed: bool
@@ -128,6 +127,7 @@ class SubmissionResponse(CamelModel):
     problem_id: str
     source: str
     context: str
+    context_title: Optional[str] = None
     result: str
     score: int
     submitted_at: datetime
@@ -254,6 +254,7 @@ class AdminClassResponse(CamelModel):
     id: str
     course: str
     lecturer: str
+    lecturer_id: Optional[str] = None
     students: int
     status: str
     semester: str
@@ -284,7 +285,7 @@ class AdminClassCreate(CamelModel):
     id: str
     course: str
     semester: str
-    lecturer_name: str
+    lecturer_id: str
     start_date: Optional[str] = None
     end_date: Optional[str] = None
 
@@ -292,7 +293,7 @@ class AdminClassUpdate(CamelModel):
     course: Optional[str] = None
     semester: Optional[str] = None
     dates: Optional[str] = None
-    lecturer_name: Optional[str] = None
+    lecturer_id: Optional[str] = None
     status: Optional[str] = None
     start_date: Optional[str] = None
     end_date: Optional[str] = None

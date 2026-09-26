@@ -19,6 +19,8 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
         raise HTTPException(status_code=400, detail="Incorrect email or password")
     if user.status == "Pending":
         raise HTTPException(status_code=403, detail="Tài khoản của bạn đang chờ phê duyệt.")
+    if user.status == "Inactive":
+        raise HTTPException(status_code=403, detail="Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ Admin.")
     token = create_access_token(data={"sub": user.email})
     return {"access_token": token, "token_type": "bearer"}
 
@@ -96,7 +98,8 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Incorrect email or password")
     if user.status == "Pending":
         raise HTTPException(status_code=403, detail="Tài khoản của bạn đang chờ phê duyệt.")
-        
+    if user.status == "Inactive":
+        raise HTTPException(status_code=403, detail="Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ Admin.")
     token = create_access_token(data={"sub": user.email})
     return {"access_token": token, "token_type": "bearer", "user": user}
 

@@ -41,6 +41,7 @@ def get_admin_classes(db: Session = Depends(get_db), current_user: models.User =
             id=c.id,
             course=c.course,
             lecturer=lecturer_name,
+            lecturer_id=c.instructor_id,
             students=students_count,
             status=c.status,
             semester=c.term,
@@ -62,8 +63,8 @@ def create_admin_class(
         
     instructor_id = None
     lecturer_name = "Unassigned"
-    if data.lecturer_name != "Unassigned":
-        instructor = db.query(models.User).filter(models.User.name == data.lecturer_name, models.User.role == "instructor").first()
+    if data.lecturer_id != "Unassigned":
+        instructor = db.query(models.User).filter(models.User.id == data.lecturer_id, models.User.role == "instructor").first()
         if instructor:
             instructor_id = instructor.id
             lecturer_name = instructor.name
@@ -93,6 +94,7 @@ def create_admin_class(
         id=new_class.id,
         course=new_class.course,
         lecturer=lecturer_name,
+        lecturer_id=instructor_id,
         students=0,
         status=new_class.status,
         semester=new_class.term,
@@ -124,18 +126,16 @@ def update_admin_class(
         c.end_date = data.end_date
         
     lecturer_name = "Unassigned"
-    if data.lecturer_name is not None:
-        if data.lecturer_name == "Unassigned":
+    if data.lecturer_id is not None:
+        if data.lecturer_id == "Unassigned":
             c.instructor_id = None
         else:
-            instructor = db.query(models.User).filter(models.User.name == data.lecturer_name, models.User.role == "instructor").first()
+            instructor = db.query(models.User).filter(models.User.id == data.lecturer_id, models.User.role == "instructor").first()
             if instructor:
                 c.instructor_id = instructor.id
                 lecturer_name = instructor.name
             else:
-                # If instructor not found by name, keep existing or handle error
-                # For simplicity, we just ignore if not found
-                pass
+                raise HTTPException(status_code=400, detail="Lecturer không tồn tại hoặc không hợp lệ.")
                 
     # Log activity
     log = models.ActivityLog(
@@ -158,6 +158,7 @@ def update_admin_class(
         id=c.id,
         course=c.course,
         lecturer=lecturer_name,
+        lecturer_id=c.instructor_id,
         students=students_count,
         status=c.status,
         semester=c.term,

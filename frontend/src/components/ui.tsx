@@ -12,7 +12,7 @@ export function Status({
     explicitTone ||
     (/Accepted|Solved|Active/.test(value)
       ? "success"
-      : /Wrong|Runtime|Hard/.test(value)
+      : /Wrong|Runtime|Hard|Rejected/.test(value)
         ? "danger"
         : /Time Limit|Medium|Upcoming/.test(value)
           ? "warning"

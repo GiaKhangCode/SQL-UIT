@@ -52,6 +52,7 @@ export function SubmissionsPage() {
               "Wrong Answer",
               "Runtime Error",
               "Time Limit Exceeded",
+              "Rejected",
             ].map((v) => (
               <option key={v}>{v}</option>
             ))}
@@ -104,7 +105,7 @@ export function SubmissionsPage() {
                       </td>
                       <td>
                         {s.source}
-                        <small>{s.context}</small>
+                        <small>{s.contextTitle || s.context}</small>
                       </td>
                       <td>
                         <Status value={s.result} />
@@ -149,7 +150,7 @@ export function SubmissionsPage() {
                       <b>
                         {p.number}. {p.title}
                       </b>
-                      <small>{s.source} · {s.context}</small>
+                      <small>{s.source} · {s.contextTitle || s.context}</small>
                     </span>
                     <Status value={s.result} />
                   </span>

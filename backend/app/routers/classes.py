@@ -103,7 +103,10 @@ def get_class_members(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(check_instructor_role)
 ):
-    c = db.query(models.Class).filter(models.Class.id == class_id, models.Class.instructor_id == current_user.id).first()
+    if current_user.role.lower() == "admin":
+        c = db.query(models.Class).filter(models.Class.id == class_id).first()
+    else:
+        c = db.query(models.Class).filter(models.Class.id == class_id, models.Class.instructor_id == current_user.id).first()
     if not c:
         raise HTTPException(status_code=404, detail="Class not found or you don't have access")
         
@@ -128,13 +131,24 @@ def add_class_member(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(check_instructor_role)
 ):
-    c = db.query(models.Class).filter(models.Class.id == class_id, models.Class.instructor_id == current_user.id).first()
+    if current_user.role.lower() == "admin":
+        c = db.query(models.Class).filter(models.Class.id == class_id).first()
+    else:
+        c = db.query(models.Class).filter(models.Class.id == class_id, models.Class.instructor_id == current_user.id).first()
     if not c:
         raise HTTPException(status_code=404, detail="Class not found or you don't have access")
         
     student = db.query(models.User).filter(models.User.id == member_data.student_id).first()
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
+        
+    existing_enrollment = db.query(models.ClassEnrollment).filter(
+        models.ClassEnrollment.class_id == class_id,
+        models.ClassEnrollment.student_id == student.id
+    ).first()
+    
+    if existing_enrollment:
+        raise HTTPException(status_code=400, detail="Sinh viên này đã được thêm vào lớp từ trước.")
     
     enrollment = models.ClassEnrollment(
         class_id=class_id,
@@ -161,7 +175,10 @@ def remove_class_member(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(check_instructor_role)
 ):
-    c = db.query(models.Class).filter(models.Class.id == class_id, models.Class.instructor_id == current_user.id).first()
+    if current_user.role.lower() == "admin":
+        c = db.query(models.Class).filter(models.Class.id == class_id).first()
+    else:
+        c = db.query(models.Class).filter(models.Class.id == class_id, models.Class.instructor_id == current_user.id).first()
     if not c:
         raise HTTPException(status_code=404, detail="Class not found or you don't have access")
         

@@ -34,6 +34,8 @@ export function ContestDetailPage() {
     (contest.status === "Active" ? "Contests" : "Practice") +
     "&context=" +
     encodeURIComponent(contest.id) +
+    "&contextTitle=" +
+    encodeURIComponent(contest.title) +
     (contest.status === "Active" ? "&contest=" + contest.id : "");
   return (
     <section className="page contest-detail-page">

@@ -9,6 +9,7 @@ export type AdminClass = {
   course: string;
   id: string;
   lecturer: string;
+  lecturerId?: string;
   students: number;
   status: "Active" | "Draft" | "Archived" | string;
   semester: string;

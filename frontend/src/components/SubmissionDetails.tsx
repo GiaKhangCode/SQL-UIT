@@ -33,7 +33,7 @@ export function SubmissionDetails({
           {submissionTimeLabel(submission.submittedAt)}
         </p>
         <p className="tiny">
-          {submission.source} · {submission.context}
+          {submission.source} · {submission.contextTitle || submission.context}
         </p>
         <section
           className="submission-evaluation"

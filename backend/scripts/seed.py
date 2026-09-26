@@ -58,47 +58,6 @@ def seed_data():
         db.add(admin_user)
         print("Đã tạo User: admin@demo.local")
 
-    # 2. Tạo Problem mẫu (p1)
-    p1 = db.query(Problem).filter(Problem.id == "p1").first()
-    if not p1:
-        customers_table = {
-            "name": "Customers",
-            "columns": ["customer_id", "customer_name"],
-            "rows": [
-                [1, "Minh Anh"], [2, "Bao Tran"], [3, "Huy Lai"], [4, "Ngoc Linh"]
-            ]
-        }
-        orders_table = {
-            "name": "Orders",
-            "columns": ["order_id", "customer_id", "amount"],
-            "rows": [
-                [101, 1, 120], [102, 3, 85], [103, 1, 60]
-            ]
-        }
-        expected_table = {
-            "name": "Expected result",
-            "columns": ["customer_id", "customer_name"],
-            "rows": [
-                [2, "Bao Tran"], [4, "Ngoc Linh"]
-            ]
-        }
-        
-        p1 = Problem(
-            id="p1",
-            number="014",
-            title="Customers without orders",
-            topic="JOIN",
-            difficulty="Medium",
-            description="Given the Customers and Orders tables, find customers who have never placed an order.",
-            requirements="Return customer_id and customer_name. Sort the result by customer_id in ascending order.",
-            hint="Which join preserves customers without a matching order? Consider checking for a missing value after joining.",
-            practice_listed=True,
-            tables=[customers_table, orders_table],
-            expected=expected_table
-        )
-        db.add(p1)
-        print("Đã tạo Problem: p1")
-
     db.commit()
     db.close()
     print("Seeding hoàn tất!")

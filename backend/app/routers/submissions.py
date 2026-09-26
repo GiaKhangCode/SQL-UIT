@@ -26,7 +26,25 @@ def get_submissions(
     if search:
         query = query.join(Problem, Problem.id == Submission.problem_id).filter(Problem.title.ilike(f"%{search}%"))
         
-    return query.order_by(Submission.submitted_at.desc()).all()
+    submissions = query.order_by(Submission.submitted_at.desc()).all()
+    
+    from app.models import Assignment
+    assignment_cache = {}
+    
+    res = []
+    for sub in submissions:
+        sub_schema = SubmissionResponse.model_validate(sub)
+        if sub.source in ["Assignments", "Contests"] and sub.context:
+            if sub.context not in assignment_cache:
+                assignment = db.query(Assignment).filter(Assignment.id == sub.context).first()
+                if assignment:
+                    assignment_cache[sub.context] = assignment.title
+                else:
+                    assignment_cache[sub.context] = sub.context
+            sub_schema.context_title = assignment_cache.get(sub.context, sub.context)
+        res.append(sub_schema)
+        
+    return res
 
 from pydantic import BaseModel
 class ReviewRequest(BaseModel):
@@ -40,8 +58,15 @@ def get_submission(submission_id: str, db: Session = Depends(get_db), current_us
     if not sub:
         raise HTTPException(status_code=404, detail="Submission not found")
         
-    if current_user.role != "instructor" and sub.user_id != current_user.id:
+    if current_user.role == "student" and sub.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Bạn không có quyền xem bài nộp này.")
+        
+    if current_user.role == "instructor":
+        if sub.source in ["Assignments", "Contests"] and sub.context:
+            from app.models import Assignment
+            assignment = db.query(Assignment).filter(Assignment.id == sub.context).first()
+            if assignment and assignment.instructor_id != current_user.id:
+                raise HTTPException(status_code=403, detail="Bạn không có quyền xem bài nộp của Assignment này.")
         
     user = db.query(User).filter(User.id == sub.user_id).first()
     problem = db.query(Problem).filter(Problem.id == sub.problem_id).first()
@@ -65,7 +90,9 @@ def get_submission(submission_id: str, db: Session = Depends(get_db), current_us
     
     from app.models import TestCase
     ref_tc = db.query(TestCase).filter(TestCase.problem_id == sub.problem_id).first()
-    ref_sol = ref_tc.expected_query if ref_tc else ""
+    ref_sol = ""
+    if current_user.role in ["instructor", "admin"] and ref_tc:
+        ref_sol = ref_tc.expected_query or ""
     
     return TeacherSubmissionResponse(
         id=sub.id,
@@ -93,11 +120,14 @@ def review_submission(submission_id: str, review: ReviewRequest, db: Session = D
     if not sub:
         raise HTTPException(status_code=404, detail="Submission not found")
         
+    if sub.source in ["Assignments", "Contests"] and sub.context:
+        from app.models import Assignment
+        assignment = db.query(Assignment).filter(Assignment.id == sub.context).first()
+        if assignment and assignment.instructor_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Bạn không có quyền chấm bài của Assignment này.")
+        
     sub.evaluated_score = review.finalScore
     sub.feedback = review.feedback
-    
-    # Giáo viên có quyền quyết định điểm số cuối cùng, có thể hạ điểm nếu phát hiện gian lận
-    sub.score = review.finalScore
     
     # Cập nhật trạng thái dựa vào điểm số (0 điểm thì đánh rớt, lớn hơn 0 điểm thì chấp nhận)
     if review.finalScore == 0:

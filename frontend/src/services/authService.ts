@@ -24,13 +24,11 @@ function persist(user: StudentSession, token: string) {
 
 export const authService = {
   async login(email: string, password: string) {
-    const account = email.trim().toLowerCase();
-    const demoAlias = account === "teacher" ? "instructor@demo.local" : account === "admin" ? "admin@demo.local" : null;
-    if ((!demoAlias && !validEmail(email)) || !password.trim())
+    if (!validEmail(email) || !password.trim())
       throw new Error("Enter a valid email and a password.");
     const data = await apiFetch("/api/auth/login", {
       method: "POST",
-      body: JSON.stringify({ email: demoAlias || email, password: demoAlias === "instructor@demo.local" && password === "123" ? "password123" : password }),
+      body: JSON.stringify({ email, password }),
     });
     return persist(data.user, data.access_token);
   },

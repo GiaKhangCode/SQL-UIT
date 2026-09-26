@@ -12,6 +12,31 @@ from sqlalchemy import func
 
 router = APIRouter()
 
+def check_problem_access(db: Session, current_user: User, p: Problem):
+    if p.practice_listed:
+        return True
+    if current_user.role == "admin":
+        return True
+    if current_user.role == "instructor" and p.creator_id == current_user.id:
+        return True
+    if current_user.role == "student":
+        from app.models import ClassEnrollment, AssignmentClass, AssignmentProblem, Assignment
+        import datetime
+        now = datetime.datetime.utcnow()
+        assigned = db.query(AssignmentProblem.problem_id)\
+            .join(AssignmentClass, AssignmentClass.assignment_id == AssignmentProblem.assignment_id)\
+            .join(ClassEnrollment, ClassEnrollment.class_id == AssignmentClass.class_id)\
+            .join(Assignment, Assignment.id == AssignmentProblem.assignment_id)\
+            .filter(
+                ClassEnrollment.student_id == current_user.id, 
+                AssignmentProblem.problem_id == p.id,
+                Assignment.published == True,
+                (Assignment.opens == None) | (Assignment.opens <= now)
+            ).first()
+        if assigned:
+            return True
+    return False
+
 @router.get("/trending", response_model=List[TrendingProblem])
 def get_trending(range: str = "Week", db: Session = Depends(get_db)):
     query = db.query(
@@ -48,10 +73,18 @@ def get_problems(db: Session = Depends(get_db), current_user: User = Depends(get
     elif current_user.role == "admin":
         problems = db.query(Problem).all()
     else:
+        from app.models import Assignment
+        import datetime
+        now = datetime.datetime.utcnow()
         assigned_pids_query = db.query(AssignmentProblem.problem_id)\
             .join(AssignmentClass, AssignmentClass.assignment_id == AssignmentProblem.assignment_id)\
             .join(ClassEnrollment, ClassEnrollment.class_id == AssignmentClass.class_id)\
-            .filter(ClassEnrollment.student_id == current_user.id).subquery()
+            .join(Assignment, Assignment.id == AssignmentProblem.assignment_id)\
+            .filter(
+                ClassEnrollment.student_id == current_user.id,
+                Assignment.published == True,
+                (Assignment.opens == None) | (Assignment.opens <= now)
+            ).subquery()
             
         submitted_pids_query = db.query(Submission.problem_id)\
             .filter(Submission.user_id == current_user.id).subquery()
@@ -116,17 +149,8 @@ def get_problem(problem_id: str, db: Session = Depends(get_db), current_user: Us
     if not p:
         raise HTTPException(status_code=404, detail="Problem not found")
         
-    if not p.practice_listed:
-        if current_user.role == "instructor" and p.creator_id != current_user.id:
-            raise HTTPException(status_code=403, detail="You don't have permission to view this problem.")
-        elif current_user.role == "student":
-            from app.models import ClassEnrollment, AssignmentClass, AssignmentProblem
-            assigned = db.query(AssignmentProblem.problem_id)\
-                .join(AssignmentClass, AssignmentClass.assignment_id == AssignmentProblem.assignment_id)\
-                .join(ClassEnrollment, ClassEnrollment.class_id == AssignmentClass.class_id)\
-                .filter(ClassEnrollment.student_id == current_user.id, AssignmentProblem.problem_id == p.id).first()
-            if not assigned:
-                raise HTTPException(status_code=403, detail="You don't have permission to view this problem.")
+    if not check_problem_access(db, current_user, p):
+        raise HTTPException(status_code=403, detail="You don't have permission to view this problem.")
                 
     subs = db.query(Submission.result).filter(
         Submission.user_id == current_user.id,
@@ -158,7 +182,10 @@ def get_problem(problem_id: str, db: Session = Depends(get_db), current_user: Us
                 if idx == 0:
                     resp.schema_sql = script.create_script
                     resp.seed_data = script.insert_script
-                    resp.reference_solution = tc.expected_query or ""
+                    if current_user.role in ["instructor", "admin"]:
+                        resp.reference_solution = tc.expected_query or ""
+                    else:
+                        resp.reference_solution = ""
         resp.test_cases = mapped_tcs
         
     return resp
@@ -348,6 +375,9 @@ def create_problem(problem: ProblemCreate, db: Session = Depends(get_db), curren
 
 @router.post("/validate")
 def validate_problem_solution(request: ProblemValidateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.role not in ["instructor", "admin"]:
+        raise HTTPException(status_code=403, detail="Chỉ Giảng viên mới có quyền sử dụng công cụ kiểm tra Sandbox.")
+        
     from app.services.sandbox import run_validate_sandbox
     result = run_validate_sandbox(db, request.schema_sql, request.seed_data, request.reference_solution)
     if result["status"] == "Error":
@@ -360,6 +390,9 @@ def run_query(problem_id: str, request: QueryRequest, db: Session = Depends(get_
     if not p:
         raise HTTPException(status_code=404, detail="Problem not found")
         
+    if not check_problem_access(db, current_user, p):
+        raise HTTPException(status_code=403, detail="You don't have permission to run this problem.")
+        
     result = run_sandbox(db, p, request.query, is_submit=False)
     return result
 
@@ -369,17 +402,32 @@ def submit_query(problem_id: str, request: QueryRequest, db: Session = Depends(g
     if not p:
         raise HTTPException(status_code=404, detail="Problem not found")
         
+    if not check_problem_access(db, current_user, p):
+        raise HTTPException(status_code=403, detail="You don't have permission to submit this problem.")
+        
     max_score = 100
     if request.source in ["Assignments", "Contests"] and request.context:
-        from app.models import Assignment, AssignmentProblem
+        from app.models import Assignment, AssignmentProblem, AssignmentClass, ClassEnrollment
         assignment = db.query(Assignment).filter(Assignment.id == request.context).first()
         if assignment:
             if current_user.role != "instructor":
+                if not assignment.published:
+                    raise HTTPException(status_code=403, detail="Bài tập/Kỳ thi chưa được công bố.")
                 now = datetime.datetime.utcnow()
                 if assignment.opens and now < assignment.opens:
                     raise HTTPException(status_code=403, detail="Bài tập/Kỳ thi chưa được mở.")
                 if assignment.closes and now > assignment.closes:
                     raise HTTPException(status_code=403, detail="Bài tập/Kỳ thi đã hết hạn nộp bài.")
+                    
+                # Check if the student is enrolled in any class assigned to this assignment
+                enrollment = db.query(ClassEnrollment).join(
+                    AssignmentClass, AssignmentClass.class_id == ClassEnrollment.class_id
+                ).filter(
+                    AssignmentClass.assignment_id == assignment.id,
+                    ClassEnrollment.student_id == current_user.id
+                ).first()
+                if not enrollment:
+                    raise HTTPException(status_code=403, detail="Bạn không thuộc lớp được giao bài tập này.")
                     
             ap = db.query(AssignmentProblem).filter(
                 AssignmentProblem.assignment_id == assignment.id,
