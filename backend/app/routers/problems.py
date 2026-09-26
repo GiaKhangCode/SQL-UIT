@@ -31,7 +31,8 @@ def check_problem_access(db: Session, current_user: User, p: Problem):
                 ClassEnrollment.student_id == current_user.id, 
                 AssignmentProblem.problem_id == p.id,
                 Assignment.published == True,
-                (Assignment.opens == None) | (Assignment.opens <= now)
+                (Assignment.opens == None) | (Assignment.opens <= now),
+                (Assignment.closes == None) | (Assignment.closes > now)
             ).first()
         if assigned:
             return True
@@ -192,14 +193,14 @@ def get_problem(problem_id: str, db: Session = Depends(get_db), current_user: Us
 
 @router.put("/{problem_id}", response_model=ProblemDetailResponse)
 def update_problem(problem_id: str, problem: ProblemCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.role != "instructor":
-        raise HTTPException(status_code=403, detail="Chỉ Giảng viên mới có quyền sửa bài tập.")
+    if current_user.role not in ["instructor", "admin"]:
+        raise HTTPException(status_code=403, detail="Chỉ Giảng viên và Admin mới có quyền sửa bài tập.")
         
     p = db.query(Problem).filter(Problem.id == problem_id).first()
     if not p:
         raise HTTPException(status_code=404, detail="Problem not found")
         
-    if p.creator_id and p.creator_id != current_user.id:
+    if p.creator_id and p.creator_id != current_user.id and current_user.role != "admin":
         raise HTTPException(status_code=403, detail="You don't have permission to edit this problem.")
         
     topics_list = [t.strip() for t in problem.topics.split(",")] if problem.topics else []
@@ -265,14 +266,14 @@ def update_problem(problem_id: str, problem: ProblemCreate, db: Session = Depend
 
 @router.delete("/{problem_id}")
 def delete_problem(problem_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.role != "instructor":
-        raise HTTPException(status_code=403, detail="Chỉ Giảng viên mới có quyền xóa bài tập.")
+    if current_user.role not in ["instructor", "admin"]:
+        raise HTTPException(status_code=403, detail="Chỉ Giảng viên và Admin mới có quyền xóa bài tập.")
         
     p = db.query(Problem).filter(Problem.id == problem_id).first()
     if not p:
         raise HTTPException(status_code=404, detail="Problem not found")
         
-    if p.creator_id and p.creator_id != current_user.id:
+    if p.creator_id and p.creator_id != current_user.id and current_user.role != "admin":
         raise HTTPException(status_code=403, detail="You don't have permission to delete this problem.")
         
     from app.models import ProblemTopic, TestCase, TestCaseScript, Submission, ProblemDraft, Favorite, ProblemListItem, AiChatSession, AssignmentProblem
@@ -305,8 +306,8 @@ def delete_problem(problem_id: str, db: Session = Depends(get_db), current_user:
 
 @router.post("", response_model=ProblemDetailResponse)
 def create_problem(problem: ProblemCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.role != "instructor":
-        raise HTTPException(status_code=403, detail="Chỉ Giảng viên mới có quyền tạo bài tập.")
+    if current_user.role not in ["instructor", "admin"]:
+        raise HTTPException(status_code=403, detail="Chỉ Giảng viên và Admin mới có quyền tạo bài tập.")
         
     prob_id = str(uuid.uuid4())
     topics_list = [t.strip() for t in problem.topics.split(",")] if problem.topics else []
@@ -406,11 +407,16 @@ def submit_query(problem_id: str, request: QueryRequest, db: Session = Depends(g
         raise HTTPException(status_code=403, detail="You don't have permission to submit this problem.")
         
     max_score = 100
+    
+    if not p.practice_listed:
+        if request.source not in ["Assignments", "Contests"] or not request.context:
+            raise HTTPException(status_code=403, detail="Bài tập này không cho phép nộp tự do (Practice). Cần nộp thông qua Assignment hợp lệ.")
+            
     if request.source in ["Assignments", "Contests"] and request.context:
         from app.models import Assignment, AssignmentProblem, AssignmentClass, ClassEnrollment
         assignment = db.query(Assignment).filter(Assignment.id == request.context).first()
         if assignment:
-            if current_user.role != "instructor":
+            if current_user.role not in ["instructor", "admin"]:
                 if not assignment.published:
                     raise HTTPException(status_code=403, detail="Bài tập/Kỳ thi chưa được công bố.")
                 now = datetime.datetime.utcnow()

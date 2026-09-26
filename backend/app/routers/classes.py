@@ -41,7 +41,10 @@ def get_all_students(db: Session = Depends(get_db), current_user: models.User = 
 
 @router.get("", response_model=List[schemas.ClassResponse])
 def get_classes(db: Session = Depends(get_db), current_user: models.User = Depends(check_instructor_role)):
-    classes = db.query(models.Class).filter(models.Class.instructor_id == current_user.id).all()
+    if current_user.role.lower() == "admin":
+        classes = db.query(models.Class).all()
+    else:
+        classes = db.query(models.Class).filter(models.Class.instructor_id == current_user.id).all()
     results = []
     for c in classes:
         students_count = db.query(models.ClassEnrollment).filter(models.ClassEnrollment.class_id == c.id).count()

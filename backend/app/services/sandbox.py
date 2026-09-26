@@ -120,11 +120,15 @@ def compare_results(actual: Dict[str, Any], expected: Dict[str, Any]) -> Tuple[b
     if len(act_rows) != len(exp_rows):
         return False, f"Số lượng dòng không khớp. Trả về {len(act_rows)} dòng, mong đợi {len(exp_rows)} dòng."
         
-    for i in range(len(act_rows)):
-        act_r = [str(x) if x is not None else "" for x in act_rows[i]]
-        exp_r = [str(x) if x is not None else "" for x in exp_rows[i]]
-        if act_r != exp_r:
-            return False, f"Dữ liệu không khớp ở dòng {i+1}."
+    def normalize_row(row):
+        return tuple(str(x) if x is not None else "" for x in row)
+        
+    act_normalized = sorted([normalize_row(r) for r in act_rows])
+    exp_normalized = sorted([normalize_row(r) for r in exp_rows])
+    
+    for i in range(len(act_normalized)):
+        if act_normalized[i] != exp_normalized[i]:
+            return False, "Dữ liệu không khớp sau khi đối chiếu (Sai khác ở dữ liệu hoặc tập hợp dòng)."
             
     return True, "Chính xác hoàn toàn!"
 

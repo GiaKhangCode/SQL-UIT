@@ -111,9 +111,9 @@ def get_submission(submission_id: str, db: Session = Depends(get_db), current_us
 
 @router.put("/{submission_id}/review", response_model=TeacherSubmissionResponse)
 def review_submission(submission_id: str, review: ReviewRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.role != "instructor":
+    if current_user.role not in ["instructor", "admin"]:
         from fastapi import HTTPException
-        raise HTTPException(status_code=403, detail="Chỉ Giảng viên mới có quyền chấm bài.")
+        raise HTTPException(status_code=403, detail="Chỉ Giảng viên và Admin mới có quyền chấm bài.")
         
     sub = db.query(Submission).filter(Submission.id == submission_id).first()
     from fastapi import HTTPException
@@ -123,17 +123,28 @@ def review_submission(submission_id: str, review: ReviewRequest, db: Session = D
     if sub.source in ["Assignments", "Contests"] and sub.context:
         from app.models import Assignment
         assignment = db.query(Assignment).filter(Assignment.id == sub.context).first()
-        if assignment and assignment.instructor_id != current_user.id:
+        if assignment and assignment.instructor_id != current_user.id and current_user.role != "admin":
             raise HTTPException(status_code=403, detail="Bạn không có quyền chấm bài của Assignment này.")
         
     sub.evaluated_score = review.finalScore
     sub.feedback = review.feedback
     
-    # Cập nhật trạng thái dựa vào điểm số (0 điểm thì đánh rớt, lớn hơn 0 điểm thì chấp nhận)
-    if review.finalScore == 0:
+    max_score = 100
+    if sub.source in ["Assignments", "Contests"] and sub.context:
+        from app.models import AssignmentProblem
+        ap = db.query(AssignmentProblem).filter(
+            AssignmentProblem.assignment_id == sub.context,
+            AssignmentProblem.problem_id == sub.problem_id
+        ).first()
+        if ap:
+            max_score = ap.points
+            
+    if review.finalScore <= 0:
         sub.result = "Rejected"
-    else:
+    elif review.finalScore >= max_score:
         sub.result = "Accepted"
+    else:
+        sub.result = "Partial"
     
     db.commit()
     db.refresh(sub)

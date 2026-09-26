@@ -16,8 +16,8 @@ router = APIRouter(
 
 @router.post("", response_model=AssignmentResponse)
 def create_assignment(assignment: AssignmentCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.role != "instructor":
-        raise HTTPException(status_code=403, detail="Chỉ Giảng viên mới có quyền tạo assignment/contest.")
+    if current_user.role not in ["instructor", "admin"]:
+        raise HTTPException(status_code=403, detail="Chỉ Giảng viên và Admin mới có quyền tạo assignment/contest.")
         
     assignment_id = str(uuid.uuid4())
     new_assignment = Assignment(
@@ -140,13 +140,25 @@ def get_assignments(db: Session = Depends(get_db), current_user: User = Depends(
             avg_score_query = db.query(func.avg(max_scores_subquery.c.max_score)).scalar()
             avg_score = int(avg_score_query) if avg_score_query else 0
             
-            awaiting_query = db.query(Submission).filter(
+            latest_subs_subquery = db.query(
+                Submission.user_id,
+                Submission.problem_id,
+                func.max(Submission.submitted_at).label('max_time')
+            ).filter(
                 Submission.user_id.in_(student_ids),
                 Submission.problem_id.in_(problem_ids),
                 Submission.context == a.id,
-                Submission.source.in_(["Assignments", "Contests"]),
-                Submission.evaluated_score == None
-            )
+                Submission.source.in_(["Assignments", "Contests"])
+            ).group_by(Submission.user_id, Submission.problem_id).subquery()
+            
+            latest_submissions_query = db.query(Submission).join(
+                latest_subs_subquery,
+                (Submission.user_id == latest_subs_subquery.c.user_id) &
+                (Submission.problem_id == latest_subs_subquery.c.problem_id) &
+                (Submission.submitted_at == latest_subs_subquery.c.max_time)
+            ).filter(Submission.context == a.id)
+            
+            awaiting_query = latest_submissions_query.filter(Submission.evaluated_score == None)
             awaiting = awaiting_query.count()
             first_awaiting = awaiting_query.first()
             review_id = first_awaiting.id if first_awaiting else None
@@ -313,8 +325,8 @@ def get_assignment(assignment_id: str, db: Session = Depends(get_db), current_us
 
 @router.put("/{assignment_id}", response_model=AssignmentResponse)
 def update_assignment(assignment_id: str, assignment: AssignmentCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.role != "instructor":
-        raise HTTPException(status_code=403, detail="Chỉ Giảng viên mới có quyền sửa assignment/contest.")
+    if current_user.role not in ["instructor", "admin"]:
+        raise HTTPException(status_code=403, detail="Chỉ Giảng viên và Admin mới có quyền sửa assignment/contest.")
         
     a = db.query(Assignment).filter(Assignment.id == assignment_id).first()
     if not a:
@@ -373,8 +385,8 @@ def update_assignment(assignment_id: str, assignment: AssignmentCreate, db: Sess
 
 @router.delete("/{assignment_id}")
 def delete_assignment(assignment_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    if current_user.role != "instructor":
-        raise HTTPException(status_code=403, detail="Chỉ Giảng viên mới có quyền xóa assignment/contest.")
+    if current_user.role not in ["instructor", "admin"]:
+        raise HTTPException(status_code=403, detail="Chỉ Giảng viên và Admin mới có quyền xóa assignment/contest.")
         
     a = db.query(Assignment).filter(Assignment.id == assignment_id).first()
     if not a:
@@ -429,11 +441,23 @@ def get_assignment_submissions(assignment_id: str, db: Session = Depends(get_db)
     if not problem_ids:
         return []
         
-    subs = db.query(Submission).filter(
+    from sqlalchemy import func
+    latest_subs_subquery = db.query(
+        Submission.user_id,
+        Submission.problem_id,
+        func.max(Submission.submitted_at).label('max_time')
+    ).filter(
         Submission.problem_id.in_(problem_ids),
         Submission.context == a.id,
         Submission.source.in_(["Assignments", "Contests"])
-    ).order_by(Submission.submitted_at.desc()).all()
+    ).group_by(Submission.user_id, Submission.problem_id).subquery()
+    
+    subs = db.query(Submission).join(
+        latest_subs_subquery,
+        (Submission.user_id == latest_subs_subquery.c.user_id) &
+        (Submission.problem_id == latest_subs_subquery.c.problem_id) &
+        (Submission.submitted_at == latest_subs_subquery.c.max_time)
+    ).filter(Submission.context == a.id).order_by(Submission.submitted_at.desc()).all()
     
     result = []
     for sub in subs:
