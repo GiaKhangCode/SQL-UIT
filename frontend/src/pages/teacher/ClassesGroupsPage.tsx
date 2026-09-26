@@ -235,7 +235,7 @@ export function ClassesGroupsPage() {
                     <td data-label="Term">{classInfo.term}</td>
                     <td data-label="Members">{classInfo.students}</td>
                     <td data-label="Work mode">{classInfo.mode}</td>
-                    <td data-label="Status" className="teacher-state-success">{classInfo.status}</td>
+                    <td data-label="Status" className={classInfo.status === "Active" ? "teacher-state-success" : "muted"}>{classInfo.status}</td>
                   </tr>
                 ))}
                 {!visibleClasses.length && (

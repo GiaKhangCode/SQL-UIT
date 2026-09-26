@@ -22,7 +22,7 @@ function AssignedWork({
       {items.map((a, i) => {
         const completed = a.status === "Solved";
         const solved = a.problemIds.filter(
-          (id) => problemProgress.find((p) => p.id === id)?.progress === "Solved",
+          (id) => (a.problemProgress ? a.problemProgress[id] : problemProgress.find((p) => p.id === id)?.progress) === "Solved",
         ).length;
         return (
           <article className="detail-work-row" key={a.id}>

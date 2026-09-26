@@ -38,6 +38,7 @@ export type Assignment = {
   time: string;
   status: Progress;
   problemIds: string[];
+  problemProgress?: Record<string, Progress>;
 };
 
 export type Contest = {

@@ -88,8 +88,9 @@ export const studentApi = {
     );
   },
 
-  getProblem: async (id: string) => {
-    return await apiFetch(`/api/problems/${id}`);
+  getProblem: async (id: string, context?: string) => {
+    const qs = context ? `?context=${encodeURIComponent(context)}` : "";
+    return await apiFetch(`/api/problems/${id}${qs}`);
   },
 
   getAssignments: async (): Promise<StudentAssignments> => {

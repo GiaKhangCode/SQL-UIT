@@ -144,8 +144,10 @@ def get_problems(db: Session = Depends(get_db), current_user: User = Depends(get
     
     return result_list
 
+from typing import Optional
+
 @router.get("/{problem_id}", response_model=ProblemDetailResponse)
-def get_problem(problem_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def get_problem(problem_id: str, context: Optional[str] = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     p = db.query(Problem).filter(Problem.id == problem_id).first()
     if not p:
         raise HTTPException(status_code=404, detail="Problem not found")
@@ -153,10 +155,14 @@ def get_problem(problem_id: str, db: Session = Depends(get_db), current_user: Us
     if not check_problem_access(db, current_user, p):
         raise HTTPException(status_code=403, detail="You don't have permission to view this problem.")
                 
-    subs = db.query(Submission.result).filter(
+    subs_query = db.query(Submission.result).filter(
         Submission.user_id == current_user.id,
         Submission.problem_id == p.id
-    ).all()
+    )
+    if context and context != "Practice":
+        subs_query = subs_query.filter(Submission.context == context)
+        
+    subs = subs_query.all()
     
     progress = None
     if subs:

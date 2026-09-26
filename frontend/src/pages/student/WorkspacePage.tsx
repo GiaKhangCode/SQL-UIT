@@ -39,9 +39,11 @@ const editorTheme = EditorView.theme({
 });
 export function WorkspacePage() {
   const { problemId = "" } = useParams();
+  const [params] = useSearchParams();
+  const context = params.get("context") || (params.get("source") || "Practice");
   const { data, loading, error } = useLoad(
-    () => studentApi.getProblem(problemId),
-    [problemId],
+    () => studentApi.getProblem(problemId, context),
+    [problemId, context],
   );
   if (loading)
     return (

@@ -183,7 +183,11 @@ function AssignmentSubmissionsDialog({ activity, onClose }: { activity: any, onC
                     <td>{sub.student}</td>
                     <td>{sub.problem}</td>
                     <td>{sub.score}</td>
-                    <td className={sub.status === "Needs review" ? "teacher-state-warning" : "teacher-state-success"}>{sub.status}</td>
+                    <td className={
+                      sub.status === "Needs review" || sub.status === "Partial" ? "teacher-state-warning" : 
+                      sub.status === "Accepted" ? "teacher-state-success" : 
+                      "teacher-state-failed"
+                    }>{sub.status}</td>
                     <td>
                       <button className="button teacher-small-button" type="button" onClick={() => navigate(`/teacher/results/review/${sub.id}`)}>Review</button>
                     </td>

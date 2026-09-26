@@ -12,6 +12,7 @@ import {
 import { adminService, type AdminUser } from "../../services/adminService";
 import { studentApi } from "../../services/studentApi";
 import { academicTerms } from "../../utils/academicTerms";
+import { localTime } from "../../utils/serverDateTime";
 
 function PageIntro({ title, sub, children }: { title: string; sub: string; children?: ReactNode }) {
   return <div className="admin-page-intro"><div><h1>{title}</h1><p>{sub}</p></div>{children && <div className="admin-page-actions">{children}</div>}</div>;
@@ -876,7 +877,7 @@ export function AdminOverviewPage() {
       <section className="admin-recent-activity">
         <h2 className="admin-section-heading">Recent activity</h2>
         <table className="admin-table admin-activity-table"><thead><tr><th>ACTION</th><th>BY</th><th>TIME</th></tr></thead><tbody>
-          {activities.length > 0 ? activities.map((item) => <tr key={item.id}><td>{item.action}</td><td>{item.by}</td><td>{item.time}</td></tr>) : <tr><td colSpan={3} className="admin-muted">No recent activity</td></tr>}
+          {activities.length > 0 ? activities.map((item) => <tr key={item.id}><td>{item.action}</td><td>{item.by}</td><td>{item.time ? localTime(item.time) : "Unknown"}</td></tr>) : <tr><td colSpan={3} className="admin-muted">No recent activity</td></tr>}
         </tbody></table>
       </section>
     </>} side={<>

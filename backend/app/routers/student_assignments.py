@@ -70,6 +70,16 @@ def get_student_assignments(db: Session = Depends(get_db), current_user: User = 
         else:
             status = "Not started"
             
+        problem_progress = {}
+        for p_id in p_ids:
+            p_subs = [s for s in subs if s.problem_id == p_id]
+            if not p_subs:
+                problem_progress[p_id] = "Not started"
+            elif any(s.result == "Accepted" for s in p_subs):
+                problem_progress[p_id] = "Solved"
+            else:
+                problem_progress[p_id] = "In progress"
+            
         assignments_res.append({
             "id": a.id,
             "title": a.title,
@@ -79,6 +89,7 @@ def get_student_assignments(db: Session = Depends(get_db), current_user: User = 
             "time": a.closes.strftime("%H:%M") if a.closes else "",
             "status": status,
             "problemIds": p_ids if is_open else [],
+            "problemProgress": problem_progress,
             "isContest": a.is_contest
         })
         

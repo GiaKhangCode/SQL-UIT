@@ -480,7 +480,7 @@ def get_assignment_submissions(assignment_id: str, db: Session = Depends(get_db)
             student=user.name if user else "Unknown",
             problem=problem.title if problem else "Unknown",
             score=sub.evaluated_score if sub.evaluated_score is not None else sub.score,
-            status="Needs review" if sub.evaluated_score is None else "Accepted",
+            status="Needs review" if sub.evaluated_score is None else sub.result,
             submittedAt=sub.submitted_at.strftime("%b %d, %H:%M")
         ))
         

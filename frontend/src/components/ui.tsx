@@ -10,13 +10,13 @@ export function Status({
 }) {
   const tone =
     explicitTone ||
-    (/Accepted|Solved|Active/.test(value)
+    (/Accepted|Solved|Active|Easy|Open/.test(value)
       ? "success"
       : /Wrong|Runtime|Hard|Rejected/.test(value)
         ? "danger"
-        : /Time Limit|Medium|Upcoming/.test(value)
+        : /Time Limit|Medium|Upcoming|Partial|Needs review/.test(value)
           ? "warning"
-          : /In progress/.test(value)
+          : /In progress|Scheduled/.test(value)
             ? "accent"
             : "neutral");
   return <span className={"status " + tone}>{value}</span>;

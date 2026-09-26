@@ -65,7 +65,7 @@ def get_activities(db: Session = Depends(get_db), admin_user: models.User = Depe
     logs = db.query(models.ActivityLog).order_by(models.ActivityLog.created_at.desc()).limit(10).all()
     results = []
     for log in logs:
-        time_str = log.created_at.strftime("%H:%M") if log.created_at else "Unknown"
+        time_str = log.created_at.isoformat() + "Z" if log.created_at else ""
         by_str = log.user.name if log.user else "System"
         results.append(schemas.ActivityLogResponse(
             id=log.id,
