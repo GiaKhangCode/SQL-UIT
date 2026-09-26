@@ -1,57 +1,56 @@
-# Student SQL frontend
+# SQL-UIT Frontend
 
-A frontend-only university SQL learning demonstration built with Vite, React, TypeScript, React Router and CodeMirror. The centralized `APP_NAME` in `src/data/mockData.ts` is a replaceable placeholder because the inspected Figma frames contain a logo but no approved product name.
+A modern React frontend for the SQL-UIT application, built with Vite, TypeScript, React Router, and CodeMirror.
 
-## Install and run
+## Prerequisites
 
-Use Node.js 18+ and npm:
+Before running the frontend, ensure you have:
+- **Node.js 18+** installed
+- **npm** (comes with Node.js)
+- The **SQL-UIT Backend** running on `http://127.0.0.1:8000` (see the backend README for instructions).
 
-```bash
-npm install
-npm start
-# Alternatively: npm run dev
-npm run test
-npm run build
-```
+## Installation & Setup
 
-Vite prints the local URL; the current development server is at http://127.0.0.1:5174/. `npm run test` checks the actual application TypeScript project and runs service regression checks. `npm run build` checks both TypeScript projects and creates `dist/`.
+1. **Navigate to the frontend directory:**
+   ```bash
+   cd frontend
+   ```
 
-## Demo sign-in
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
 
-Choose **Continue as demo student** to immediately create a mock session for Huy Lai / HL / student@demo.local. The normal form accepts any valid email and non-empty password. Use `invalid@demo.local` or password `invalid` for predictable rejection. Do not enter real secrets.
+3. **Start the development server:**
+   ```bash
+   npm run dev
+   ```
 
-Registration requires a full name, valid email and matching passwords with at least 8 characters, a letter and a number. It creates a mock Student session and enters Dashboard without OTP. Forgot password only displays a non-blocking explanation.
+Vite will start the development server, usually at `http://127.0.0.1:5174/`. 
 
-The session is stored under `sql-practice:mock-session:v1` and restored on refresh. Signed-out protected links redirect to Login with the intended path, query and hash preserved; successful login returns there. Existing sessions redirect Login/Register to Dashboard. Logout clears only the mock session and returns to Login; route guards also apply when navigating Back. Theme, favorites, notification read state and per-problem drafts persist separately. Storage failure falls back to an in-memory session.
+### API Connection (Proxy)
+You do **not** need to configure `.env` variables for the API URL in development. 
+The project uses Vite's proxy feature (configured in `vite.config.ts`) to automatically forward all requests starting with `/api` to `http://127.0.0.1:8000`. This avoids CORS issues and simplifies local development.
 
-## Student routes
+## Project Structure & Architecture
 
-| Route                   | Purpose                                                      |
-| ----------------------- | ------------------------------------------------------------ |
-| `/`                     | Redirect to Login or Dashboard according to session          |
-| `/login`                | Login and demo entry                                         |
-| `/register`             | Registration                                                 |
-| `/dashboard`            | Continue learning, solved summary, activity and deadlines    |
-| `/practice`             | Search and filter problems                                   |
-| `/workspace/:problemId` | Canonical editor, database, mock execution, grading and help |
-| `/assignments`          | Classes, joined groups, assignments and deadline calendar    |
-| `/contests`             | Featured contests, status filters and contest details        |
-| `/submissions`          | Searchable history and read-only submission details          |
+Unlike the initial mockup phase, this frontend is **fully integrated with the live FastAPI backend**. 
 
-Workspace IDs are `p1`–`p8`. Class detail lives at `/assignments/classes/:scopeId`, group detail at `/assignments/groups/:scopeId`, and contest detail at `/contests/:contestId`. These routes are protected and support intended-route restoration. Assignments and contests link to the same workspace with source/context query parameters. Unknown routes redirect to the appropriate entry page. No management routes or role switcher are provided.
+- **API Client (`src/services/apiClient.ts`)**: Handles all HTTP requests, automatically attaching the JWT `Authorization` header if a user is logged in.
+- **Authentication (`src/services/authService.ts`)**: Connects to the real backend login/registration endpoints. The JWT token is securely saved in `localStorage`.
+- **Student API (`src/services/studentApi.ts`)**: Handles fetching problems, submitting SQL queries for grading, and retrieving dashboard statistics.
+- **Teacher API (`src/services/teacherService.ts`)**: Handles instructor-facing features like reviewing submissions, managing classes, and creating assignments.
+- **Admin API (`src/services/adminService.ts`)**: Handles platform-wide management features.
 
-## Mock boundary
+## Available Scripts
 
-`src/services/mockAuthService.ts` owns login, registration, demo login, logout and session restoration. `src/services/studentApi.ts` owns dashboard/problem/assignment/contest/submission reads, query runs, submission simulation, database reset, hints and drafts. Data fixtures live in `src/data/mockData.ts`. Replace these services with backend adapters; see `docs/FRONTEND_HANDOFF.md`.
+- `npm run dev`: Starts the local development server.
+- `npm run build`: Compiles TypeScript and builds the production bundle into the `dist/` folder.
+- `npm run test`: Runs TypeScript type-checking (`tsc --noEmit`).
 
-The runner never executes SQL. It returns fixture rows and deterministic verdicts. Append `-- mock:error`, `-- mock:timeout` or `-- mock:wrong` to demonstrate errors (Wrong Answer applies to Submit). Submission simulation checks a few text markers only. Accepted attempts update Practice status and in-memory history until refresh. Database reset restores sample schema/data while retaining the SQL draft. AI returns guidance from fixtures.
+## Testing the Application
 
-Authentication, SQL execution, grading, AI, persistence and security are not production-ready. LocalStorage sessions and frontend guards are demo conveniences, not authorization. The backend must authenticate and authorize every request, enforce class/group scope, safely sandbox SQL, and grade on the server.
-
-## Design and verification limits
-
-The retrieved Figma node-level contexts and screenshots guided all six Student screens and Login/Register. The workspace uses continuous rule-divided panes, an in-pane bottom help drawer, and the Figma mobile Problem/SQL/Result tabs. Styles are rebuilt in one token/global/component system with light/dark modes. The exported Figma database icon is stored locally in `public/assets/database.svg`.
-
-Browser inspection was unavailable: Computer Use stopped because it could not confidently determine Chrome's current URL. It was not retried or bypassed. No application route was visually inspected at 1440×900 or 390×844 in either theme; no pixel-perfect or console-error verification is claimed. Responsive source checks, TypeScript, service tests, production build and localhost HTTP checks were used instead. Remaining differences and exact reference nodes are documented in `docs/FRONTEND_HANDOFF.md`.
-
-The latest Figma update adds shared notification/streak/account popovers, class/group/contest detail pages, a Favorite list, immutable submission SQL snapshots, and editor reset/indentation/expand actions. See [Figma update report](docs/FIGMA_UPDATE_REPORT.md) for inspected nodes, implementation choices and verification limits.
+Once both the backend and frontend are running, you can log in using the demo accounts created by the backend's seed script:
+- **Student:** `student@demo.local` / `password123`
+- **Instructor:** `instructor@demo.local` / `password123`
+- **Admin:** `admin@demo.local` / `password123`
