@@ -12,6 +12,40 @@ from sqlalchemy import func
 
 router = APIRouter()
 
+
+def activity_problem_access(db: Session, current_user: User, problem_id: str,
+                            activity_id: str, source: str, for_submit: bool = False):
+    from app.models import Assignment, AssignmentProblem, AssignmentClass, ClassEnrollment
+    activity = db.query(Assignment).filter(Assignment.id == activity_id).first() if activity_id else None
+    if not activity or activity.is_contest != (source == "Contests"):
+        raise HTTPException(status_code=404, detail="Assignment or contest not found.")
+    ap = db.query(AssignmentProblem).filter(
+        AssignmentProblem.assignment_id == activity.id,
+        AssignmentProblem.problem_id == problem_id
+    ).first()
+    if not ap:
+        raise HTTPException(status_code=403, detail="This problem is not part of the selected activity.")
+    if current_user.role == "instructor" and activity.instructor_id != current_user.id:
+        raise HTTPException(status_code=403, detail="This activity belongs to another teacher.")
+    if current_user.role == "student":
+        if current_user.status != "Active" or not activity.published:
+            raise HTTPException(status_code=403, detail="This activity is not available.")
+        now = datetime.datetime.utcnow()
+        if activity.opens and now < activity.opens:
+            raise HTTPException(status_code=403, detail="Problems become available when the activity starts.")
+        if for_submit and activity.closes and now >= activity.closes:
+            raise HTTPException(status_code=403, detail="Submissions are closed for this activity.")
+        if not (activity.is_contest and activity.audience_type == "all_students"):
+            enrollment = db.query(ClassEnrollment).join(
+                AssignmentClass, AssignmentClass.class_id == ClassEnrollment.class_id
+            ).filter(
+                AssignmentClass.assignment_id == activity.id,
+                ClassEnrollment.student_id == current_user.id
+            ).first()
+            if not enrollment:
+                raise HTTPException(status_code=403, detail="You are not in an assigned class.")
+    return activity, ap
+
 def check_problem_access(db: Session, current_user: User, p: Problem):
     if p.practice_listed:
         return True
@@ -152,7 +186,16 @@ def get_problem(problem_id: str, context: Optional[str] = None, db: Session = De
     if not p:
         raise HTTPException(status_code=404, detail="Problem not found")
         
-    if not check_problem_access(db, current_user, p):
+    activity = None
+    if context and context != "Practice":
+        from app.models import Assignment
+        linked = db.query(Assignment).filter(Assignment.id == context).first()
+        if linked:
+            activity, _ = activity_problem_access(db, current_user, p.id, context,
+                                                  "Contests" if linked.is_contest else "Assignments")
+        else:
+            raise HTTPException(status_code=404, detail="Activity not found.")
+    elif not check_problem_access(db, current_user, p):
         raise HTTPException(status_code=403, detail="You don't have permission to view this problem.")
                 
     subs_query = db.query(Submission.result).filter(
@@ -173,12 +216,16 @@ def get_problem(problem_id: str, context: Optional[str] = None, db: Session = De
             
     resp = ProblemDetailResponse.model_validate(p)
     resp.progress = progress
+    if activity and current_user.role == "student" and not activity.hints_enabled:
+        resp.hint = None
     
     from app.models import TestCase, TestCaseScript
     tcs = db.query(TestCase).filter(TestCase.problem_id == p.id).order_by(TestCase.order_index).all()
     if tcs:
         mapped_tcs = []
         for idx, tc in enumerate(tcs):
+            if tc.is_hidden and current_user.role == "student":
+                continue
             script = db.query(TestCaseScript).filter(TestCaseScript.test_case_id == tc.id).first()
             if script:
                 mapped_tcs.append({
@@ -397,7 +444,9 @@ def run_query(problem_id: str, request: QueryRequest, db: Session = Depends(get_
     if not p:
         raise HTTPException(status_code=404, detail="Problem not found")
         
-    if not check_problem_access(db, current_user, p):
+    if request.source in ["Assignments", "Contests"]:
+        activity_problem_access(db, current_user, p.id, request.context, request.source)
+    elif not check_problem_access(db, current_user, p):
         raise HTTPException(status_code=403, detail="You don't have permission to run this problem.")
         
     result = run_sandbox(db, p, request.query, is_submit=False)
@@ -409,7 +458,7 @@ def submit_query(problem_id: str, request: QueryRequest, db: Session = Depends(g
     if not p:
         raise HTTPException(status_code=404, detail="Problem not found")
         
-    if not check_problem_access(db, current_user, p):
+    if request.source not in ["Assignments", "Contests"] and not check_problem_access(db, current_user, p):
         raise HTTPException(status_code=403, detail="You don't have permission to submit this problem.")
         
     max_score = 100
@@ -418,35 +467,10 @@ def submit_query(problem_id: str, request: QueryRequest, db: Session = Depends(g
         if request.source not in ["Assignments", "Contests"] or not request.context:
             raise HTTPException(status_code=403, detail="Bài tập này không cho phép nộp tự do (Practice). Cần nộp thông qua Assignment hợp lệ.")
             
-    if request.source in ["Assignments", "Contests"] and request.context:
-        from app.models import Assignment, AssignmentProblem, AssignmentClass, ClassEnrollment
-        assignment = db.query(Assignment).filter(Assignment.id == request.context).first()
-        if assignment:
-            if current_user.role not in ["instructor", "admin"]:
-                if not assignment.published:
-                    raise HTTPException(status_code=403, detail="Bài tập/Kỳ thi chưa được công bố.")
-                now = datetime.datetime.utcnow()
-                if assignment.opens and now < assignment.opens:
-                    raise HTTPException(status_code=403, detail="Bài tập/Kỳ thi chưa được mở.")
-                if assignment.closes and now > assignment.closes:
-                    raise HTTPException(status_code=403, detail="Bài tập/Kỳ thi đã hết hạn nộp bài.")
-                    
-                # Check if the student is enrolled in any class assigned to this assignment
-                enrollment = db.query(ClassEnrollment).join(
-                    AssignmentClass, AssignmentClass.class_id == ClassEnrollment.class_id
-                ).filter(
-                    AssignmentClass.assignment_id == assignment.id,
-                    ClassEnrollment.student_id == current_user.id
-                ).first()
-                if not enrollment:
-                    raise HTTPException(status_code=403, detail="Bạn không thuộc lớp được giao bài tập này.")
-                    
-            ap = db.query(AssignmentProblem).filter(
-                AssignmentProblem.assignment_id == assignment.id,
-                AssignmentProblem.problem_id == p.id
-            ).first()
-            if ap:
-                max_score = ap.points
+    if request.source in ["Assignments", "Contests"]:
+        _, ap = activity_problem_access(db, current_user, p.id, request.context,
+                                        request.source, for_submit=True)
+        max_score = ap.points
                 
     result = run_sandbox(db, p, request.query, is_submit=True)
     

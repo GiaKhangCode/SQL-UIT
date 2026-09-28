@@ -14,11 +14,11 @@ let pendingSessionCheck = null;
 const futureUtc = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 16).split("T");
 const pastUtc = new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 16).split("T");
 const enrolled = {
-  classes: [{ id: "C1", code: "SQL", name: "SQL", lecturer: "Teacher", mode: "Individual" }],
-  groups: [],
+  classes: [{ id: "C1", code: "SQL", name: "SQL", lecturer: "Teacher" }],
   assignments: [
-    { id: "A1", title: "Exercise", classId: "C1", problemIds: ["P1"] },
-    { id: "T1", title: "Sprint", classId: "C1", problemIds: ["P1"] },
+    { id: "A1", title: "Exercise", instructions: "Solve the query.", isContest: false, classIds: ["C1"], problemIds: ["P1"], problemProgress: { P1: "Not started" } },
+    { id: "T1", title: "Sprint", isContest: true, classIds: ["C1"], audienceType: "classes", scope: "SQL", contestStatus: "Upcoming", shortDescription: "Quick SQL sprint", description: "## About", rules: "Solve both problems", opens: "2026-09-25T10:00:00Z", closes: "2026-09-25T11:30:00Z", problemIds: [], problemCount: 1, problemDetails: [], submitters: 0, score: 0, totalPoints: 20, rank: null, leaderboardEnabled: true, aiAllowed: false, leaderboard: [], problemProgress: { P1: "Not started" } },
+    { id: "T2", title: "Campus sprint", isContest: true, classIds: [], audienceType: "all_students", scope: "All students", contestStatus: "Live", shortDescription: "Open to campus", description: "## Campus", rules: "Submit before closing", opens: "2026-09-25T10:00:00Z", closes: "2026-09-25T11:30:00Z", problemIds: ["P1"], problemCount: 1, problemDetails: [{ id: "P1", title: "First query", difficulty: "Easy", topic: "SELECT" }], submitters: 2, score: 10, totalPoints: 20, rank: 2, leaderboardEnabled: true, aiAllowed: false, leaderboard: [], problemProgress: { P1: "In progress" } },
   ],
   deadlines: [
     { id: "A1", title: "Exercise", date: futureUtc[0], time: futureUtc[1], kind: "Assignment", to: "/assignments?work=A1" },
@@ -46,28 +46,32 @@ globalThis.fetch = async (url, options = {}) => {
     return response({ id: "teacher-1", name: "Teacher", initials: "T", email: "instructor@demo.local", role: "instructor" });
   }
   if (url === "/api/student/assignments") return response(enrolled);
-  if (url === "/api/student/dashboard") return response({ solved: 0, easy: 0, medium: 0, hard: 0, continuing: [], deadlines: [], currentStreak: 0, submissionsPerDay: [] });
+  if (url.startsWith("/api/student/dashboard?tz_offset=")) return response({ solved: 0, easy: 0, medium: 0, hard: 0, continuing: [], deadlines: [], currentStreak: 0, submissionsPerDay: [] });
   if (url === "/api/problems") return response([
     { id: "P1", title: "First query", number: "001", topic: "SELECT, WHERE", topics: ["SELECT", "WHERE"], difficulty: "Easy", progress: null, practiceListed: true },
     { id: "P2", title: "Private class query", number: "002", topic: "JOIN", topics: ["JOIN"], difficulty: "Hard", progress: null, practiceListed: false },
   ]);
   if (url === "/api/assignments") return response(catalog);
+  if (url.startsWith("/api/assignments/")) {
+    const item = catalog.find(activity => activity.id === decodeURIComponent(url.slice("/api/assignments/".length)));
+    return response(item || { detail: "Not found" }, item ? 200 : 404);
+  }
   if (url === "/api/failure") return response({ detail: "Specific server error" }, 400);
   throw new Error(`Unexpected request: ${url}`);
 };
 
 const output = await build({
   stdin: {
-    contents: "export * from './src/services/authService'; export * from './src/services/studentApi'; export * from './src/services/apiClient';",
+    contents: "export * from './src/services/authService'; export * from './src/services/studentApi'; export * from './src/services/apiClient'; export * from './src/utils/contestMarkdown';",
     resolveDir: process.cwd(), loader: "ts",
   },
   bundle: true, write: false, format: "esm", platform: "node",
 });
-const { authService, studentApi, apiFetch, TOKEN_KEY, SESSION_KEY } = await import(
+const { authService, studentApi, apiFetch, readContestMarkdown, TOKEN_KEY, SESSION_KEY } = await import(
   "data:text/javascript;base64," + Buffer.from(output.outputFiles[0].text).toString("base64")
 );
 
-const user = await authService.login("teacher", "123");
+const user = await authService.login("instructor@demo.local", "password123");
 assert.equal(user.role, "instructor");
 assert.equal(memory.get(TOKEN_KEY), "signed-token");
 const loginBody = JSON.parse(calls.find(call => call.url === "/api/auth/login").options.body);
@@ -77,22 +81,30 @@ assert.equal((await authService.restoreSessionAsync()).id, "teacher-1");
 
 const assignments = await studentApi.getAssignments();
 assert.deepEqual(assignments.assignments.map(item => item.id), ["A1"]);
+assert.equal(assignments.assignments[0].instructions, "Solve the query.");
 const dashboard = await studentApi.getDashboard();
 assert.deepEqual(dashboard.deadlines.map(item => item.id), ["A1"]);
 assert.equal(dashboard.deadlines[0].time, new Date(`${futureUtc[0]}T${futureUtc[1]}:00Z`).toTimeString().slice(0, 5));
 assert.deepEqual((await studentApi.getProblems({ progress: "Not started" })).map(item => item.id), ["P1"]);
 assert.deepEqual((await studentApi.getProblems({ topic: "WHERE" })).map(item => item.id), ["P1"]);
 const contests = await studentApi.getContests();
-assert.deepEqual(contests.map(item => item.id), ["T1"]);
-assert.deepEqual(contests[0].problemIds, ["P1"]);
-assert.equal(contests[0].submitters, 2);
+assert.deepEqual(contests.map(item => item.id), ["T1", "T2"]);
+assert.deepEqual(contests[0].problemIds, []);
+assert.equal(contests[0].problemCount, 1);
+assert.equal(contests[1].submitters, 2);
+assert.equal(contests[1].scope, "All students");
+assert.equal(contests[1].shortDescription, "Open to campus");
 assert.equal(contests[0].status, "Upcoming");
-assert.ok(calls.filter(call => call.url === "/api/assignments").every(call => call.options.headers.Authorization === "Bearer signed-token"));
+const markdown = "## Campus sprint\nSolve SQL problems.";
+assert.equal(await readContestMarkdown({ name: "contest.md", size: markdown.length, text: async () => markdown }), markdown);
+await assert.rejects(() => readContestMarkdown({ name: "contest.html", size: 4, text: async () => "bad" }), /Markdown/);
+assert.ok(calls.filter(call => call.url === "/api/student/assignments").every(call => call.options.headers.Authorization === "Bearer signed-token"));
+assert.equal(calls.filter(call => call.url.startsWith("/api/assignments/")).length, 0);
 await assert.rejects(() => apiFetch("/api/failure"), /Specific server error/);
 authService.logout();
 assert.equal(memory.get(TOKEN_KEY), undefined);
 deferSessionCheck = true;
-await authService.login("teacher", "123");
+await authService.login("instructor@demo.local", "password123");
 const staleRestore = authService.restoreSessionAsync();
 assert.ok(pendingSessionCheck);
 authService.logout();
@@ -100,10 +112,10 @@ pendingSessionCheck.resolve({ id: "teacher-1", name: "Teacher", initials: "T", e
 assert.equal(await staleRestore, null);
 assert.equal(memory.get(SESSION_KEY), undefined);
 
-await authService.login("teacher", "123");
+await authService.login("instructor@demo.local", "password123");
 const staleFailure = authService.restoreSessionAsync();
 authService.logout();
-await authService.login("teacher", "123");
+await authService.login("instructor@demo.local", "password123");
 pendingSessionCheck.reject(new Error("Old request failed"));
 assert.equal(await staleFailure, null);
 assert.equal(memory.get(TOKEN_KEY), "signed-token");

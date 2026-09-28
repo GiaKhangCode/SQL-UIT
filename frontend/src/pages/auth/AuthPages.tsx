@@ -2,6 +2,7 @@ import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { authService, validEmail } from "../../services/authService";
+import { APP_NAME } from "../../data/models";
 type Errors = Record<string, string>;
 function PasswordField({
   id,
@@ -77,22 +78,33 @@ function AuthLayout({
       className={`auth-page${centered ? " auth-page--centered" : ""}`}
     >
       {!centered && (
-      <section className="auth-brand-panel" aria-label="QueryLab introduction">
-        <div className="auth-wordmark"><span>Q</span><b>QueryLab</b></div>
+      <section className="auth-brand-panel" aria-label={`${APP_NAME} introduction`}>
+        <div className="auth-wordmark"><img src="/favicon.svg" width="32" height="32" alt="" /><b>{APP_NAME}</b></div>
         <div className="auth-pitch">
-          <div><h2>Write the query.<br />See the result.</h2><p>Practice on real schemas and check every run against the expected output.</p></div>
+          <div className="auth-pitch-copy"><span className="auth-eyebrow">SQL PRACTICE AT UIT</span><h2>Write queries.<br /><span>Understand data.</span></h2><p>Practice on real schemas, see the result of every query, and build your SQL skills one problem at a time.</p></div>
           <div className="editor-preview" aria-label="SQL editor preview">
             <div className="preview-bar"><b>join-orders.sql</b><span>Run</span></div>
             <pre><code><i>1</i>  <em>-- Orders per customer</em>{"\n"}<i>2</i>  <strong>SELECT</strong> c.name, COUNT(o.id) <strong>AS</strong> orders{"\n"}<i>3</i>  <strong>FROM</strong> customers c{"\n"}<i>4</i>  <strong>LEFT JOIN</strong> orders o <strong>ON</strong> o.customer_id = c.id{"\n"}<i>5</i>  <strong>GROUP BY</strong> c.name{"\n"}<i>6</i>  <strong>ORDER BY</strong> orders <strong>DESC</strong>;</code></pre>
-            <div className="preview-result"><code>name              orders{"\n"}Nguyen An              4{"\n"}Tran Binh               3{"\n"}Le Chi                  0</code><b>Accepted · 3 rows · 12 ms</b></div>
+            <div className="preview-result">
+              <table aria-label="Sample query result">
+                <thead><tr><th scope="col">name</th><th scope="col">orders</th></tr></thead>
+                <tbody>
+                  <tr><td>Nguyen An</td><td>4</td></tr>
+                  <tr><td>Tran Binh</td><td>3</td></tr>
+                  <tr><td>Le Chi</td><td>0</td></tr>
+                </tbody>
+              </table>
+              <b>Accepted · 3 rows · 12 ms</b>
+            </div>
           </div>
         </div>
-        <small>UIT · Web SQL Practice</small>
+        <small>{APP_NAME} · Viết truy vấn. Hiểu dữ liệu.</small>
       </section>
       )}
       <section className="auth-form-panel">
         <div className="auth-form-wrap">
           <div className="auth-heading">
+            <span className="auth-form-eyebrow">{APP_NAME} ACCOUNT</span>
             <h1>{title ?? (register ? "Create your account" : "Welcome back")}</h1>
             <p>
               {subtitle ??
@@ -561,7 +573,7 @@ export function RegisterLecturerPage() {
   }
 
   return (
-    <AuthLayout register title="Register as Lecturer" subtitle="Submit a request to become a lecturer on QueryLab." showTeacherNote={false}>
+    <AuthLayout register title="Register as Lecturer" subtitle={`Submit a request to become a lecturer on ${APP_NAME}.`} showTeacherNote={false}>
       <form onSubmit={(e) => void submit(e)} noValidate>
         <label className="field" htmlFor="reg-name">
           Full Name

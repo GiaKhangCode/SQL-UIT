@@ -1,6 +1,6 @@
-# SQL-UIT Backend
+# UIT-SQL Backend
 
-This is the backend for the SQL-UIT application, built with [FastAPI](https://fastapi.tiangolo.com/).
+This is the backend for the UIT-SQL application, built with [FastAPI](https://fastapi.tiangolo.com/).
 
 ## Prerequisites
 
@@ -53,7 +53,12 @@ cp .env.example .env
 
 Open the `.env` file and configure your environment variables:
 - **`DATABASE_URL`**: Ensure the connection string matches your SQL Server setup. Replace `@localhost` with your actual SQL Server instance name (e.g., `SQLEXPRESS` or your computer name, like `@DESKTOP-ABC123`). If you are using SQL Authentication instead of Windows Authentication, add your username and password, for example: `mssql+pyodbc://username:password@localhost/SQLUIT?driver=...`
-- **`GEMINI_API_KEY`**: Provide your actual Gemini API key for AI features to work.
+- **`AI_PROVIDER`**: Set to `upstage` to use Upstage for the student Ask AI chat.
+- **`UPSTAGE_API_KEY`**: Provide your Upstage API key in `backend/.env`. Keep it on the server; do not put it in the frontend environment.
+- **`UPSTAGE_BASE_URL`**: Use `https://api.upstage.ai/v1`.
+- **`UPSTAGE_MODEL`**: Use `solar-mini4`.
+
+The existing `POST /api/ai/chat` endpoint sends chat requests to Upstage when `AI_PROVIDER=upstage`. To use Gemini instead, set `AI_PROVIDER=gemini` and provide `GEMINI_API_KEY`.
 
 *(Tip: To find your SQL Server instance name, you can run `SELECT @@SERVERNAME;` in SQL Server Management Studio.)*
 
@@ -78,7 +83,27 @@ python scripts/seed.py
 **Important Note for Existing Users:**
 If you have already set up the project previously and recently pulled new code with database changes (e.g., new columns or tables), you might encounter missing column errors. Because this project currently does not use a migration tool (like Alembic), running `scripts/seed.py` only creates *new* tables but does *not* modify existing ones.
 
-To update your database to match the new schema, choose one of the following methods:
+For an existing database created before the assignment work-mode removal, run
+`python scripts/remove_assignment_work_modes.py` once. It removes only the
+obsolete `assignments.format` and `classes.mode` columns and can be rerun safely.
+
+For an existing database created before the Contest audience and description
+update, run `python scripts/add_contest_fields.py`. It adds the contest columns
+without changing class enrollments or submissions, and copies existing contest
+instructions into Rules when Rules are empty. The script is safe to rerun.
+Run it before starting the updated API; `create_all` does not add columns to an
+existing table.
+
+For an existing database created before Contest banner uploads, run
+`python scripts/add_contest_banner.py` before starting the updated API. Uploaded
+WebP banners and capped source images are kept in `backend/uploads/contest-banners`;
+keep this directory on persistent storage when deploying the API.
+
+For representative local Contest data (upcoming, live, closed, and all-students),
+run `python -m scripts.seed_dev_data` after the migration. The development seed
+refuses to run outside the local SQLUIT LocalDB database.
+
+For other schema changes, choose one of the following methods:
 - **Option 1 (Quickest - Dev Only):** Delete (Drop) the `SQLUIT` database in SQL Server Management Studio, then re-run both `create_db.py` and `seed.py`. (Note: This clears your local data).
 - **Option 2 (Manual):** Manually execute `ALTER TABLE ... ADD ...` SQL commands in SQL Server Management Studio to add the newly required columns to your existing tables.
 

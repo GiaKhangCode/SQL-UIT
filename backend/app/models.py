@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Float, ForeignKey, Text, UnicodeText, DateTime, JSON, Boolean
+from sqlalchemy import Column, String, Unicode, Integer, Float, ForeignKey, Text, UnicodeText, DateTime, JSON, Boolean
 from sqlalchemy.orm import relationship
 import datetime
 import uuid
@@ -155,7 +155,6 @@ class Class(Base):
     instructor_id = Column(String(50), ForeignKey("users.id"), nullable=True)
     start_date = Column(String(50), nullable=True)
     end_date = Column(String(50), nullable=True)
-    mode = Column(String(50), default="Individual")
     status = Column(String(50), default="Active")
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
@@ -173,8 +172,14 @@ class Assignment(Base):
     id = Column(String(50), primary_key=True, default=generate_uuid)
     title = Column(String(255), nullable=False)
     is_contest = Column(Boolean, default=False)
-    format = Column(String(50), default="Individual")
     instructions = Column(Text, nullable=True)
+    audience_type = Column(String(20), nullable=False, default="classes")
+    short_description = Column(Unicode(180), nullable=True)
+    description = Column(UnicodeText, nullable=True)
+    rules = Column(UnicodeText, nullable=True)
+    banner_url = Column(String(255), nullable=True)
+    banner_source_url = Column(String(255), nullable=True)
+    banner_crop = Column(String(160), nullable=True)
     opens = Column(DateTime, nullable=True)
     closes = Column(DateTime, nullable=True)
     published = Column(Boolean, default=False)

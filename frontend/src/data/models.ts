@@ -1,4 +1,4 @@
-export const APP_NAME = "QueryLab";
+export const APP_NAME = "UIT-SQL";
 
 export type Progress = "Solved" | "In progress" | "Not started";
 export type Verdict =
@@ -32,25 +32,39 @@ export type Problem = {
 export type Assignment = {
   id: string;
   title: string;
-  classId: string;
-  groupId?: string;
+  instructions: string;
+  classIds: string[];
   date: string;
   time: string;
   status: Progress;
   problemIds: string[];
-  problemProgress?: Record<string, Progress>;
+  problemProgress: Record<string, Progress>;
 };
 
 export type Contest = {
   id: string;
   title: string;
-  status: "Active" | "Upcoming" | "Closed";
+  status: "Live" | "Upcoming" | "Closed";
   date: string;
   time: string;
   endTime: string;
   endDate?: string;
   scope: string;
+  audienceType: "classes" | "all_students";
+  shortDescription: string;
   description: string;
+  rules: string;
+  bannerUrl?: string | null;
+  opensAt: string;
+  closesAt: string;
+  problemCount: number;
+  problemDetails: { id: string; title: string; difficulty: string; topic: string; points?: number }[];
+  totalPoints: number;
+  score: number;
+  rank: number | null;
+  leaderboardEnabled: boolean;
+  aiAllowed: boolean;
+  leaderboard: { rank: number; student: string; score: number }[];
   participants?: number;
   submitters?: number;
   problemIds: string[];

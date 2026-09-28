@@ -144,7 +144,7 @@ export function AdminUsersPage() {
   function exportCsv() {
     const csv = ["Name,Email,Role,Status", ...users.map((u) => [u.name, u.email, u.role, u.status].join(","))].join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
-    const link = document.createElement("a"); link.href = url; link.download = "querylab-users.csv"; link.click(); URL.revokeObjectURL(url);
+    const link = document.createElement("a"); link.href = url; link.download = "uit-sql-users.csv"; link.click(); URL.revokeObjectURL(url);
   }
 
   function requestStatusChange(userToUpdate: AdminUser) {

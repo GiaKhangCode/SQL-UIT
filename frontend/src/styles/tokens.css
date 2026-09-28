@@ -5,51 +5,54 @@
   --student-sidebar-width: 320px;
 
   /* Semantic Color Tokens (Light) */
-  --canvas: #f6f8fa;
+  --canvas: #f7f7fc;
   --surface: #ffffff;
-  --subtle: #eaeef2;
-  --text-primary: #0f1115;
+  --subtle: #f0f1f9;
+  --text-primary: #171831;
   --text: var(--text-primary);
-  --text-secondary: #656d76;
+  --text-secondary: #626981;
   --muted: var(--text-secondary);
-  --border-default: #d8dee4;
+  --border-default: #dce0ed;
   --border: var(--border-default);
-  --border-subtle: #eaeef2;
-  --accent: #5b5ce2;
-  --accent-subtle: #eef0ff;
+  --border-subtle: #eceefa;
+  --brand-primary: #4f46c8;
+  --accent: var(--brand-primary);
+  --accent-subtle: #efedff;
   --on-accent: #ffffff;
+  --brand-mint: #a6ffe9;
+  --brand-night: #171942;
   --success: #1f883d;
   --warning: #9a6700;
   --danger: #cf222e;
 
   /* State & Feature Colors */
-  --scrollbar-thumb: #5c5ce3;
-  --scrollbar-track: #e5ebf0;
+  --scrollbar-thumb: #7269d9;
+  --scrollbar-track: #eaeaf6;
   --success-subtle: #daf5df;
   --warning-subtle: #fff1c2;
   --danger-subtle: #ffebe9;
-  --selection: #d8d6ff;
+  --selection: #dcd9ff;
   --backdrop: #0f111580;
 
   /* Activity Heatmap & Calendar */
-  --heat-0: #eaeef2;
-  --heat-1: #dcdbfa;
-  --heat-2: #bebcf5;
-  --heat-3: #9591f0;
-  --heat-4: #5b5ce2;
-  --calendar-0: #eef1f5;
-  --calendar-1: #e7e7ff;
-  --calendar-2: #c8c7ff;
-  --calendar-3: #8e8cf2;
-  --calendar-4: #5b5ce2;
+  --heat-0: #eceefa;
+  --heat-1: #dedbfb;
+  --heat-2: #c1baf4;
+  --heat-3: #9188e7;
+  --heat-4: var(--brand-primary);
+  --calendar-0: #eff0f8;
+  --calendar-1: #e7e3fb;
+  --calendar-2: #c9c2f6;
+  --calendar-3: #9289e7;
+  --calendar-4: var(--brand-primary);
   --calendar-text-0: #667085;
-  --calendar-text-1: #5556c9;
-  --calendar-text-2: #3435a8;
+  --calendar-text-1: #5147be;
+  --calendar-text-2: #30278e;
   --calendar-text-strong: #ffffff;
 
   /* Feature Gradients & Marks */
-  --feature-0-start: #1f1447;
-  --feature-0-end: #5c30d1;
+  --feature-0-start: #171942;
+  --feature-0-end: var(--brand-primary);
   --feature-1-start: #083f55;
   --feature-1-end: #078da5;
   --feature-2-start: #57210a;
@@ -80,10 +83,10 @@
   --space-6: 32px;
 
   /* Radii */
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius: 6px;
-  --radius-lg: 8px;
+  --radius-sm: 5px;
+  --radius-md: 8px;
+  --radius: 8px;
+  --radius-lg: 12px;
   --radius-popover: 10px;
   --radius-full: 999px;
   --radius-circle: 999px;
@@ -101,41 +104,45 @@
   color-scheme: dark;
 
   /* Semantic Color Tokens (Dark) */
-  --canvas: #0f1115;
-  --surface: #17191f;
-  --subtle: #21262d;
-  --text-primary: #e6edf3;
+  --canvas: #0e1122;
+  --surface: #171b2e;
+  --subtle: #222740;
+  --text-primary: #f2f3ff;
   --text: var(--text-primary);
-  --text-secondary: #8b949e;
+  --text-secondary: #a7aec8;
   --muted: var(--text-secondary);
-  --border-default: #30363d;
+  --border-default: #363d5a;
   --border: var(--border-default);
-  --border-subtle: #21262d;
-  --accent: #7c83ff;
-  --accent-subtle: #17183b;
-  --on-accent: #17183b;
+  --border-subtle: #2a3049;
+  --brand-primary: #4f46c8;
+  --accent: #aaa5ff;
+  --accent-subtle: #2b2a54;
+  --on-accent: #14152e;
+  --brand-mint: #a6ffe9;
+  --brand-night: #151735;
   --success: #3fb950;
   --warning: #d29922;
   --danger: #f85149;
 
   /* State & Feature Colors */
-  --scrollbar-track: #2e333d;
+  --scrollbar-thumb: #aaa5ff;
+  --scrollbar-track: #2a3049;
   --success-subtle: #173923;
   --warning-subtle: #403314;
   --danger-subtle: #432322;
-  --selection: #35365f;
+  --selection: #413c75;
 
   /* Activity Heatmap & Calendar */
-  --heat-0: #21262d;
-  --heat-1: #30334c;
-  --heat-2: #454a78;
-  --heat-3: #6166b0;
-  --heat-4: #7c83ff;
-  --calendar-0: #252a33;
-  --calendar-1: #2f3156;
-  --calendar-2: #3f427a;
-  --calendar-3: #5558b9;
-  --calendar-4: #7477ff;
+  --heat-0: #222740;
+  --heat-1: #33345a;
+  --heat-2: #4b4981;
+  --heat-3: #7771bd;
+  --heat-4: #aaa5ff;
+  --calendar-0: #242943;
+  --calendar-1: #33345c;
+  --calendar-2: #4a4881;
+  --calendar-3: #7770bc;
+  --calendar-4: #aaa5ff;
   --calendar-text-0: #8f98a8;
   --calendar-text-1: #b8b9ff;
   --calendar-text-2: #d5d6ff;

@@ -1,7 +1,7 @@
 import { AssignmentWorkPage } from "../pages/student/AssignmentWorkPage";
 import { lazy, Suspense, useEffect } from "react";
 import { APP_NAME } from "../data/models";
-import { Navigate, Outlet, Route, Routes } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { AppHeader } from "../components/AppHeader";
 import { TeacherHeader } from "../components/TeacherHeader";
@@ -37,7 +37,7 @@ import { ProblemEditorPage } from "../pages/teacher/ProblemEditorPage";
 import { AssignmentBuilderPage, ContestBuilderPage } from "../pages/teacher/BuilderPages";
 import { AssignmentsListPage, ProblemLibraryPage } from "../pages/teacher/TeacherLandingPages";
 import { ContestsListPage } from "../pages/teacher/ContestListPage";
-import { ClassesGroupsPage } from "../pages/teacher/ClassesGroupsPage";
+import { ClassesPage } from "../pages/teacher/ClassesPage";
 import { ManualReviewPage, ResultsDashboardPage } from "../pages/teacher/ResultsPages";
 import {
   AdminCoursesPage,
@@ -55,7 +55,7 @@ function Shell() {
     <>
       <AppHeader />
       <main id="main-content">
-        <Outlet />
+        <RouteContent />
       </main>
     </>
   );
@@ -65,7 +65,7 @@ function TeacherShell() {
     <>
       <TeacherHeader />
       <main id="main-content" className="teacher-main">
-        <Outlet />
+        <RouteContent />
       </main>
     </>
   );
@@ -75,10 +75,14 @@ function AdminShell() {
     <>
       <AdminHeader />
       <main id="main-content" className="admin-main">
-        <Outlet />
+        <RouteContent />
       </main>
     </>
   );
+}
+function RouteContent() {
+  const { pathname } = useLocation();
+  return <div className="route-content" key={pathname}><Outlet /></div>;
 }
 export function App() {
   useEffect(() => {
@@ -121,10 +125,6 @@ export function App() {
               path="/assignments/classes/:scopeId"
               element={<AssignmentDetailPage />}
             />
-            <Route
-              path="/assignments/groups/:scopeId"
-              element={<AssignmentDetailPage group />}
-            />
             <Route path="/contests" element={<ContestsPage />} />
             <Route
               path="/contests/:contestId"
@@ -153,7 +153,7 @@ export function App() {
             <Route path="contests" element={<ContestsListPage />} />
             <Route path="contests/new" element={<ContestBuilderPage />} />
             <Route path="contests/:id/edit" element={<ContestBuilderPage />} />
-            <Route path="classes" element={<ClassesGroupsPage />} />
+            <Route path="classes" element={<ClassesPage />} />
             <Route path="results" element={<ResultsDashboardPage />} />
             <Route path="results/review/:submissionId" element={<ManualReviewPage />} />
           </Route>

@@ -424,24 +424,8 @@ body:has(.practice-page) {
 .assignments-page .scope-toolbar input {
   min-width: 0;
 }
-.assignments-page .class-card-top .status {
-  font-size: 10px;
-}
 .assignments-page .class-card-identity small {
   font-size: 11px;
-  color: var(--muted);
-}
-.group-card-members {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin: 8px 0;
-}
-.group-card-members .avatar {
-  width: 22px;
-  height: 22px;
-  font-size: 8px;
-  background: var(--subtle);
   color: var(--muted);
 }
 .assignment-deadline-panel {
@@ -738,14 +722,6 @@ body:has(.practice-page) {
 .assignment-work-progress .completed {
   color: var(--success);
 }
-.group-open-button {
-  width: 100%;
-  border: 0;
-  background: var(--accent-subtle);
-  color: var(--accent);
-  font-size: 11px;
-  margin-top: 12px;
-}
 @media (max-width: 1100px) {
   .detail-work-row {
     grid-template-columns: 50px minmax(0, 1fr) 100px 28px;
@@ -791,7 +767,13 @@ body:has(.practice-page) {
   border-radius: 6px;
   padding: 24px;
   margin-bottom: 24px;
+  background-size: cover;
+  background-position: center;
 }
+.contest-detail-banner.has-image { aspect-ratio: 3/1; min-height: 240px; color: #fff; }
+.contest-detail-banner.has-image small { color: #e3e4ff; }
+.contest-detail-banner.has-image > * { position: relative; z-index: 1; }
+.contest-detail-banner .button:disabled { opacity: 1; cursor: default; }
 .contest-detail-banner h1 {
   font-size: 24px;
   margin: 8px 0;
@@ -802,9 +784,22 @@ body:has(.practice-page) {
 }
 .contest-detail-banner .button {
   background: #fff;
-  color: #5b5ce2;
+  color: var(--brand-primary);
   border-color: #fff;
 }
+.contest-banner-summary { text-align:right; }
+.contest-information-section { margin-bottom:28px; }
+.contest-information-section h2 { margin:0 0 12px; }
+.contest-information-section .section-heading { margin:0 0 8px; }
+.contest-markdown { color:var(--text); font-size:12px; line-height:1.7; overflow-wrap:anywhere; }
+.contest-markdown p { margin:0 0 10px; }
+.contest-markdown ul,.contest-markdown ol { padding-left:20px; }
+.contest-markdown pre { overflow-x:auto; padding:10px; border:1px solid var(--border); background:var(--surface); }
+.contest-rules { white-space:pre-line; line-height:1.6; }
+.contest-leaderboard { margin-top:20px; }
+.contest-leaderboard h3 { font-size:13px; }
+.contest-leaderboard ol { margin:8px 0; padding:0; list-style:none; }
+.contest-leaderboard li { display:flex; justify-content:space-between; gap:12px; padding:8px 0; border-top:1px solid var(--border); font-size:11px; }
 .contest-detail-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--student-sidebar-width);
@@ -1177,6 +1172,7 @@ body:has(.practice-page) {
     flex-direction: column;
     align-items: stretch;
   }
+  .contest-banner-summary { text-align:left; }
   .contest-problem-row {
     align-items: flex-start;
     flex-direction: column;
@@ -1205,6 +1201,9 @@ body:has(.assignment-work-page), body:has(.scope-detail-page) { background: var(
 .assignment-summary dt { color: var(--muted); font-size: 11px; margin-bottom: 8px; }
 .assignment-summary dd { margin: 0; font-size: 14px; font-weight: 600; }
 .assignment-summary-progress { color: var(--accent); }
+.assignment-instructions { margin:0 0 24px; padding:20px; border:1px solid var(--border); border-radius:6px; background:var(--surface); }
+.assignment-instructions h2 { margin:0 0 10px; font-size:16px; }
+.assignment-instructions p { margin:0; color:var(--muted); font-size:12px; line-height:1.6; white-space:pre-line; }
 .assignment-problems-card { border: 1px solid var(--border); border-radius: 6px; padding: 20px; background: var(--surface); }
 .assignment-problems-card > .section-heading { padding-bottom: 16px; }
 .assignment-problem-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) 140px 150px 28px; align-items: center; gap: 20px; min-height: 80px; border-top: 1px solid var(--border); padding: 16px 0; }

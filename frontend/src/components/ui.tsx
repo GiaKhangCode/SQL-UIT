@@ -10,7 +10,7 @@ export function Status({
 }) {
   const tone =
     explicitTone ||
-    (/Accepted|Solved|Active|Easy|Open/.test(value)
+    (/Accepted|Solved|Active|Live|Easy|Open/.test(value)
       ? "success"
       : /Wrong|Runtime|Hard|Rejected/.test(value)
         ? "danger"

@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="13" fill="#5556d9"/>
-  <ellipse cx="32" cy="18" rx="18" ry="7" fill="none" stroke="#fff" stroke-width="4"/>
-  <path d="M14 18v27c0 4 8 7 18 7s18-3 18-7V18M14 31c0 4 8 7 18 7s18-3 18-7" fill="none" stroke="#fff" stroke-width="4"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="UIT-SQL">
+  <rect width="64" height="64" rx="14" fill="#4F46C8"/>
+  <path d="M17 16v21c0 10 6 16 15 16s15-6 15-16V16" fill="none" stroke="#FFF" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m26 23 5 5-5 5M35 36h6" fill="none" stroke="#A6FFE9" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

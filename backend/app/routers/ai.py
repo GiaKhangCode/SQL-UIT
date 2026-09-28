@@ -40,20 +40,27 @@ async def chat_with_ai(
         
         active_restricted_assignments = db.query(Assignment).join(
             AssignmentProblem, AssignmentProblem.assignment_id == Assignment.id
-        ).join(
-            AssignmentClass, AssignmentClass.assignment_id == Assignment.id
-        ).join(
-            ClassEnrollment, ClassEnrollment.class_id == AssignmentClass.class_id
         ).filter(
-            ClassEnrollment.student_id == current_user.id,
             AssignmentProblem.problem_id == request.problem_context.id,
             Assignment.published == True,
             Assignment.ai_allowed == False,
             (Assignment.opens == None) | (Assignment.opens <= now),
             (Assignment.closes == None) | (Assignment.closes > now)
-        ).first()
+        ).all()
 
-        if active_restricted_assignments:
+        restricted = False
+        for activity in active_restricted_assignments:
+            if activity.is_contest and activity.audience_type == "all_students" and current_user.status == "Active":
+                restricted = True
+                break
+            if db.query(ClassEnrollment).join(
+                AssignmentClass, AssignmentClass.class_id == ClassEnrollment.class_id
+            ).filter(AssignmentClass.assignment_id == activity.id,
+                     ClassEnrollment.student_id == current_user.id).first():
+                restricted = True
+                break
+
+        if restricted:
             raise HTTPException(
                 status_code=403, 
                 detail="Hệ thống phát hiện bạn đang trong thời gian làm Kỳ thi/Bài tập không cho phép dùng AI."

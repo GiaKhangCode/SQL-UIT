@@ -9,7 +9,7 @@ import { TeacherField, TeacherPageIntro } from "./TeacherPageParts";
 import { teacherService } from "../../services/teacherService";
 import { academicTerms } from "../../utils/academicTerms";
 
-export function ClassesGroupsPage() {
+export function ClassesPage() {
   const [classes, setClasses] = useState<TeacherClass[]>([]);
   const [classesLoading, setClassesLoading] = useState(true);
   const [classesError, setClassesError] = useState("");
@@ -34,7 +34,6 @@ export function ClassesGroupsPage() {
     id: "",
     course: "",
     term: "",
-    mode: "Individual",
     startDate: "",
     endDate: ""
   });
@@ -141,7 +140,7 @@ export function ClassesGroupsPage() {
       setClasses((curr) => [...curr, created]);
       setSelectedClassId(created.id);
       setDialog(null);
-      setNewClassForm({ id: "", course: "", term: "", mode: "Individual", startDate: "", endDate: "" });
+      setNewClassForm({ id: "", course: "", term: "", startDate: "", endDate: "" });
     }).catch((error) => setDialogError(error instanceof Error ? error.message : "Could not create class.")).finally(() => setDialogBusy(false));
   }
 
@@ -151,7 +150,6 @@ export function ClassesGroupsPage() {
       id: "",
       course: "",
       term: "",
-      mode: "Individual",
       startDate: "",
       endDate: ""
     });
@@ -161,7 +159,7 @@ export function ClassesGroupsPage() {
   return (
     <section className="teacher-page teacher-classes-page">
       <TeacherPageIntro
-        title="Classes & groups"
+        title="Classes"
         context={classesError ? "Classes unavailable" : `${term} · ${visibleClasses.length} ${visibleClasses.length === 1 ? "class" : "classes"}`}
       >
         <button className="button primary" type="button" disabled={classesLoading || !!classesError} onClick={openCreateClass}>New class</button>
@@ -174,7 +172,7 @@ export function ClassesGroupsPage() {
       <div className="teacher-divider" />
 
       {classesLoading ? <Loading label="Loading classes…" /> : classesError ? <ErrorState title="Could not load classes" message={classesError} onRetry={() => window.location.reload()} /> : classes.length === 0 ? <div className="teacher-empty-state">
-        <div><h2>No classes yet</h2><p>Create a class to invite students and organize groups.</p><div className="teacher-empty-actions"><button className="button primary" type="button" onClick={openCreateClass}>New class</button></div></div>
+        <div><h2>No classes yet</h2><p>Create a class to enroll students and assign work.</p><div className="teacher-empty-actions"><button className="button primary" type="button" onClick={openCreateClass}>New class</button></div></div>
       </div> : <>
       <div className="teacher-class-filters">
         <TeacherField label="ACADEMIC TERM">
@@ -206,7 +204,6 @@ export function ClassesGroupsPage() {
                   <th>Class</th>
                   <th>Term</th>
                   <th>Members</th>
-                  <th>Work mode</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -234,12 +231,11 @@ export function ClassesGroupsPage() {
                     </td>
                     <td data-label="Term">{classInfo.term}</td>
                     <td data-label="Members">{classInfo.students}</td>
-                    <td data-label="Work mode">{classInfo.mode}</td>
                     <td data-label="Status" className={classInfo.status === "Active" ? "teacher-state-success" : "muted"}>{classInfo.status}</td>
                   </tr>
                 ))}
                 {!visibleClasses.length && (
-                  <tr><td colSpan={5} className="muted">No classes match this term and search.</td></tr>
+                  <tr><td colSpan={4} className="muted">No classes match this term and search.</td></tr>
                 )}
               </tbody>
             </table>
@@ -257,7 +253,6 @@ export function ClassesGroupsPage() {
               </div>
               <span className={selectedClass.status === "Active" ? "teacher-state-success" : "muted"}>{selectedClass.status}</span>
             </div>
-            <p className="teacher-class-detail-meta">{selectedClass.mode}</p>
 
             <div className="teacher-class-metrics teacher-class-summary-metrics">
               <div><span>STUDENTS</span><strong>{selectedClass.students}</strong></div>
@@ -352,7 +347,7 @@ export function ClassesGroupsPage() {
           onClose={() => setClassDetailsOpen(false)}
         >
           <div className="teacher-class-detail-dialog-content">
-            <p className="muted">{selectedClass.course} · {selectedClass.term} · {selectedClass.mode}</p>
+            <p className="muted">{selectedClass.course} · {selectedClass.term}</p>
             {(selectedClass.startDate && selectedClass.endDate) && (
               <p className="muted" style={{ fontSize: "0.85rem", marginTop: "-0.5rem" }}>
                 {selectedClass.startDate} to {selectedClass.endDate}

@@ -297,7 +297,7 @@ export function ManualReviewPage() {
             <h2>Reference SQL</h2>
             <pre className="teacher-readonly-code"><code>{submission.referenceSolution || "No reference solution provided"}</code></pre>
           </section>
-          <p className="tiny muted">Individual test case results are unavailable for this submission.</p>
+          <p className="tiny muted">Per-test-case results are unavailable for this submission.</p>
         </div>
         <aside className="teacher-grading-panel">
           <TeacherSectionTitle title="Grading" />

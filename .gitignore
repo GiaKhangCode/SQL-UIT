@@ -52,6 +52,7 @@ env/
 env.bak/
 venv.bak/
 backend/venv/
+backend/uploads/
 
 # Testing / coverage
 .pytest_cache/

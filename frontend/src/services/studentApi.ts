@@ -5,11 +5,10 @@ import type { Contest } from "../data/models";
 import { localDate, localTime, parseServerDateTime } from "../utils/serverDateTime";
 
 export interface StudentAssignments {
-  classes: { id: string; code: string; name: string; lecturer: string; mode: string }[];
-  groups: { id: string; name: string; code: string; classId: string; members: number }[];
+  classes: { id: string; code: string; name: string; lecturer: string }[];
   assignments: Assignment[];
   deadlines: Deadline[];
-  problems: { id: string; title: string; topic: string; difficulty: string; progress: string }[];
+  problems: { id: string; title: string; topic: string; difficulty: string }[];
 }
 
 export type ProblemFilters = {
@@ -104,24 +103,32 @@ export const studentApi = {
 
   getContests: async (): Promise<Contest[]> => {
     const enrolled = (await apiFetch("/api/student/assignments")) as StudentAssignments;
-    const contestIds = enrolled.assignments.filter((item: any) => item.isContest).map(item => item.id);
-    
-    const contests = await Promise.all(
-      contestIds.map(id => apiFetch(`/api/assignments/${encodeURIComponent(id)}`))
-    );
-    
-    return contests.map((item: any) => {
+    return enrolled.assignments.filter((item: any) => item.isContest).map((item: any) => {
       return {
         id: item.id, title: item.title,
-        status: item.status === "Scheduled" ? "Upcoming" : item.status === "Closed" ? "Closed" : "Active",
+        status: item.contestStatus,
         date: item.opens ? localDate(item.opens) : "",
         time: item.opens ? localTime(item.opens) : "",
         endDate: item.closes ? localDate(item.closes) : "",
         endTime: item.closes ? localTime(item.closes) : "",
-        scope: item.classes || "Assigned classes",
-        description: item.instructions || "Timed SQL challenge",
-        submitters: Number.parseInt(item.submitted || "", 10) || 0,
-        problemIds: (item.problemList || []).map((problem: { id: string }) => problem.id),
+        opensAt: item.opens,
+        closesAt: item.closes,
+        scope: item.scope,
+        audienceType: item.audienceType,
+        shortDescription: item.shortDescription,
+        description: item.description,
+          rules: item.rules,
+          bannerUrl: item.bannerUrl,
+        submitters: item.submitters,
+        problemIds: item.problemIds,
+        problemCount: item.problemCount,
+        problemDetails: item.problemDetails,
+        totalPoints: item.totalPoints,
+        score: item.score,
+        rank: item.rank,
+        leaderboardEnabled: item.leaderboardEnabled,
+        aiAllowed: item.aiAllowed,
+        leaderboard: item.leaderboard,
       } as Contest;
     });
   },
@@ -147,8 +154,8 @@ export const studentApi = {
     });
   },
 
-  getHint: async (id: string) => {
-    const problem = await apiFetch(`/api/problems/${id}`);
+  getHint: async (id: string, context?: string) => {
+    const problem = await apiFetch(`/api/problems/${id}${context ? `?context=${encodeURIComponent(context)}` : ""}`);
     return problem.hint || "Không có gợi ý cho bài tập này.";
   },
 

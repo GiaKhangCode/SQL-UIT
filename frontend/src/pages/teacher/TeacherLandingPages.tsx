@@ -177,7 +177,7 @@ function TeacherEmptyState({ title, description, primaryLabel, primaryTo, second
   return <div className="empty-state"><h2>{title}</h2><p>{description}</p><div className="teacher-empty-actions"><Link className="button primary" to={primaryTo}>{primaryLabel}</Link><Link className="button" to={secondaryTo}>{secondaryLabel}</Link></div></div>;
 }
 
-type AssignmentRow = { id: string; title: string; classes: string; problems: number; due: string; submitted: string; status: "Open" | "Scheduled" | "Closed" | "Draft" };
+type AssignmentRow = { id: string; title: string; classes: string; problems: number; due: string; submitted: string; eligibleStudents: number; status: "Open" | "Scheduled" | "Closed" | "Draft" };
 export function AssignmentsListPage() {
   const navigate = useNavigate();
   const [assignments, setAssignments] = useState<AssignmentRow[]>([]);
@@ -273,6 +273,7 @@ export function AssignmentsListPage() {
               <h2>{selectedAssignment.title}</h2>
               <p className="muted">{selectedAssignment.classes}</p>
               <dl className="teacher-list-detail-facts">
+                <div><dt>Assigned students</dt><dd>{selectedAssignment.eligibleStudents}</dd></div>
                 <div><dt>Problems</dt><dd>{selectedAssignment.problems}</dd></div>
                 <div><dt>Due date</dt><dd>{selectedAssignment.due}</dd></div>
                 <div><dt>Submitted</dt><dd>{selectedAssignment.submitted}</dd></div>

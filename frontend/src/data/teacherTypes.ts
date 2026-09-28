@@ -23,15 +23,9 @@ export type TeacherClass = {
   course: string;
   term: string;
   students: number;
-  mode: "Group work" | "Individual" | string;
   status: "Active" | "Archived" | string;
   startDate?: string;
   endDate?: string;
-  groups: {
-    id: string;
-    members: number;
-    lastSubmission: string;
-  }[];
 };
 
 export type TeacherClassMember = {

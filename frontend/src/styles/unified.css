@@ -69,7 +69,7 @@
 .teacher-list-detail-facts dd,.admin-side p { font-size:12px; line-height:18px; }
 .teacher-list-filters,.teacher-problem-filters,.teacher-activity-filters,.teacher-results-filters { width:100%; grid-template-columns:minmax(210px,2fr) repeat(3,minmax(130px,1fr)); gap:12px; }
 .admin-practice-filters { width:100%; grid-template-columns:minmax(210px,2fr) repeat(2,minmax(130px,1fr)); gap:12px; }
-.teacher-small-button,.teacher-editor-validation > .button,.teacher-preview-button,.teacher-empty-actions .button,.teacher-attempt-switcher .button { min-height:38px; padding:8px 11px; font-size:12px; }
+.teacher-small-button,.teacher-editor-validation > .button,.teacher-empty-actions .button,.teacher-attempt-switcher .button { min-height:38px; padding:8px 11px; font-size:12px; }
 .teacher-list-summary small,.teacher-result-metrics small,.teacher-list-footer,.teacher-results-footer small,.admin-table-footer { font-size:11px; line-height:17px; }
 .teacher-list-detail-panel > p,.teacher-list-detail-facts > div,.teacher-empty-state p,.teacher-preview-dialog p,.teacher-draft-visibility,.teacher-form-message,.teacher-option-row b,.teacher-option-row small,.teacher-publish-checklist li,.teacher-timezone,.teacher-visibility-help,.teacher-editor-state,.teacher-seed-summary,.teacher-code-title { font-size:12px; line-height:18px; }
 .teacher-code-editor,.teacher-readonly-code { font-size:12px; }
@@ -134,4 +134,202 @@
   .teacher-list-summary > div,.teacher-result-metrics > div { border-right:0; border-bottom:1px solid var(--border-subtle); }
   .teacher-list-summary > div:last-child,.teacher-result-metrics > div:last-child { border-bottom:0; }
   .teacher-editor-details,.teacher-builder-main,.teacher-review-main,.teacher-classes-main,.teacher-editor-validation,.teacher-builder-sidebar,.teacher-grading-panel,.teacher-class-details { padding:16px; }
+}
+
+/* UIT-SQL identity, shared by student, lecturer, and admin screens. */
+.role-header {
+  box-shadow: 0 1px 10px #1719420a;
+}
+.role-header::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, var(--brand-primary) 0%, #7168dc 76%, var(--brand-mint) 100%);
+  pointer-events: none;
+}
+.role-header .brand-name {
+  color: var(--text);
+  letter-spacing: -0.04em;
+}
+.role-header .brand:hover .brand-name {
+  color: var(--accent);
+}
+.role-header nav a:hover,
+.role-header nav a.active {
+  background: var(--accent-subtle);
+}
+.role-header .mobile-menu:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.auth-brand-panel {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  color: #f8f9ff;
+  border-right-color: #403b83;
+  background:
+    radial-gradient(circle at 88% 14%, #a6ffe929 0, transparent 31%),
+    radial-gradient(circle at 14% 86%, #8276ee66 0, transparent 36%),
+    linear-gradient(150deg, var(--brand-night) 0%, #292663 58%, var(--brand-primary) 100%);
+}
+.auth-brand-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(#ffffff16 1px, transparent 1px),
+    linear-gradient(90deg, #ffffff16 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: linear-gradient(120deg, transparent 5%, #000 95%);
+  pointer-events: none;
+}
+.auth-wordmark {
+  gap: 12px;
+  font-size: 19px;
+  letter-spacing: -0.04em;
+}
+.auth-wordmark img {
+  width: 40px;
+  height: 40px;
+  filter: drop-shadow(0 4px 14px #0a0c3070);
+}
+.auth-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 18px;
+  color: var(--brand-mint);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+.auth-eyebrow::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--brand-mint);
+  box-shadow: 0 0 0 5px #a6ffe923;
+}
+.auth-pitch h2 {
+  max-width: 520px;
+  color: #fff;
+  font-size: clamp(30px, 3vw, 42px);
+  line-height: 1.2;
+  letter-spacing: -0.055em;
+}
+.auth-pitch h2 span {
+  color: var(--brand-mint);
+}
+.auth-pitch p {
+  max-width: 440px;
+  margin-top: 18px;
+  color: #d8dcfa;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.auth-brand-panel > small {
+  color: #d2d7f7;
+}
+.auth-brand-panel .editor-preview {
+  color: #f4f6ff;
+  background: #151a3a;
+  border-color: #7275ae;
+  border-radius: 12px;
+  box-shadow: 0 22px 55px #0b0d3280;
+}
+.auth-brand-panel .preview-bar {
+  background: #202650;
+  border-bottom-color: #495285;
+}
+.auth-brand-panel .preview-bar span,
+.auth-brand-panel .editor-preview pre strong,
+.auth-brand-panel .preview-result b {
+  color: var(--brand-mint);
+}
+.auth-brand-panel .editor-preview pre i,
+.auth-brand-panel .editor-preview pre em {
+  color: #aeb7dc;
+}
+.auth-brand-panel .preview-result {
+  background: #111731;
+  border-top-color: #495285;
+}
+
+.auth-form-panel {
+  background: radial-gradient(circle at 100% 0%, var(--accent-subtle), transparent 35%), var(--surface);
+}
+.auth-form-wrap {
+  width: min(390px, calc(100% - 48px));
+}
+.auth-form-eyebrow {
+  align-self: flex-start;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--accent-subtle);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+.auth-form-wrap .auth-heading h1 {
+  font-size: 25px;
+  line-height: 1.25;
+  letter-spacing: -0.04em;
+}
+.auth-form-wrap input:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+.auth-form-wrap .button.primary {
+  min-height: 44px;
+  box-shadow: 0 7px 18px #4f46c829;
+}
+
+@media (max-width: 980px) {
+  .auth-brand-panel {
+    border-right: 0;
+    border-bottom-color: #403b83;
+  }
+  .auth-eyebrow {
+    margin-bottom: 10px;
+  }
+  .auth-pitch h2 {
+    font-size: 25px;
+    line-height: 1.25;
+  }
+  .auth-pitch p {
+    margin-top: 10px;
+    font-size: 12px;
+  }
+}
+@media (max-width: 760px) {
+  .role-header:not(.workspace-header) .brand {
+    width: auto;
+    justify-content: flex-start;
+  }
+  .role-header:not(.workspace-header) .brand-name {
+    display: inline;
+  }
+}
+@media (max-width: 480px) {
+  .auth-brand-panel {
+    padding: 22px 20px;
+  }
+  .auth-wordmark {
+    font-size: 16px;
+  }
+  .auth-wordmark img {
+    width: 36px;
+    height: 36px;
+  }
+  .auth-pitch h2 {
+    font-size: 23px;
+  }
 }

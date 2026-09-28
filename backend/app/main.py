@@ -7,7 +7,7 @@ import app.models # Ensure models are loaded before create_all
 # (Trong thực tế nên dùng Alembic để migration)
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="SQL-UIT Backend", version="1.0.0")
+app = FastAPI(title="UIT-SQL API", version="1.0.0")
 
 # Cho phép Frontend Vite gọi API (CORS)
 app.add_middleware(

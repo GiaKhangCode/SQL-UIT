@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { LogOut, Moon, Sun } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
+import { APP_NAME } from "../data/models";
 
 type Role = "student" | "teacher" | "admin";
 const links: Record<Role, [string, string][]> = {
@@ -20,6 +21,8 @@ export function RoleHeader({ role, workspace }: { role: Role; workspace?: { titl
   const [accountOpen, setAccountOpen] = useState(false);
   const accountRef = useRef<HTMLDivElement>(null);
   const accountButton = useRef<HTMLButtonElement>(null);
+  const navRef = useRef<HTMLElement>(null);
+  const [indicator, setIndicator] = useState<{ left: number; width: number } | null>(null);
   useEffect(() => { setMenuOpen(false); setAccountOpen(false); }, [location.pathname]);
   useEffect(() => {
     if (!accountOpen) return;
@@ -42,12 +45,38 @@ export function RoleHeader({ role, workspace }: { role: Role; workspace?: { titl
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [menuOpen]);
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const updateIndicator = () => {
+      if (getComputedStyle(nav).display === "none") return;
+      const active = nav.querySelector<HTMLElement>("a.active");
+      if (!active) return;
+      const navBounds = nav.getBoundingClientRect();
+      const activeBounds = active.getBoundingClientRect();
+      const next = {
+        left: activeBounds.left - navBounds.left,
+        width: activeBounds.width,
+      };
+      setIndicator((current) => current?.left === next.left && current.width === next.width ? current : next);
+    };
+    updateIndicator();
+    const observer = new ResizeObserver(updateIndicator);
+    observer.observe(nav);
+    nav.querySelectorAll("a").forEach((link) => observer.observe(link));
+    window.addEventListener("resize", updateIndicator);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateIndicator);
+    };
+  }, [location.pathname, role, menuOpen, workspace]);
   const home = links[role][0][1];
   return <header className={`global-header role-header role-${role}${workspace ? " workspace-header" : ""}`}>
-    <Link className="brand" to={home} aria-label="QueryLab home"><img src="/assets/database.svg" width="20" height="20" alt="" /></Link>
+    <Link className="brand" to={home} aria-label={`${APP_NAME} home`}><img src="/favicon.svg" width="40" height="40" alt="" /><span className="brand-name">{APP_NAME}</span></Link>
     {workspace ? <><Link className="back-link" to={workspace.backTo || "/practice"}>← {workspace.source || "Practice"}</Link><div className="workspace-identity"><b>{workspace.number}. {workspace.title}</b><small>{workspace.source || "Practice"} / {workspace.context || workspace.topic}</small></div></> : <>
       <button type="button" className="mobile-menu" aria-label={menuOpen ? "Close navigation" : "Open navigation"} aria-expanded={menuOpen} aria-controls={`${role}-navigation`} onClick={() => setMenuOpen(value => !value)}>{menuOpen ? "Close" : "Menu"}</button>
-      <nav id={`${role}-navigation`} className={menuOpen ? "open" : ""} aria-label={`${role} navigation`}>
+      <nav ref={navRef} id={`${role}-navigation`} className={`${menuOpen ? "open " : ""}${indicator ? "has-indicator" : ""}`} aria-label={`${role} navigation`}>
+        {indicator && <span className="nav-active-indicator" aria-hidden="true" style={{ transform: `translateX(${indicator.left}px)`, width: indicator.width }} />}
         {links[role].map(([label, path]) => <NavLink key={path} to={path} className={({ isActive }) => isActive || location.pathname.startsWith(path + "/") ? "active" : undefined} onClick={() => setMenuOpen(false)}>{label}</NavLink>)}
       </nav>
     </>}

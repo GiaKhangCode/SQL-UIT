@@ -1,6 +1,6 @@
-from pydantic import BaseModel, EmailStr, ConfigDict, Field
+from pydantic import BaseModel, EmailStr, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime
 
 # ========================
@@ -302,10 +302,10 @@ class AdminClassUpdate(CamelModel):
 # Pydantic models cho Teacher Classes
 # ========================
 class ClassCreate(CamelModel):
+    model_config = ConfigDict(extra="forbid")
     id: str
     course: str
     term: str
-    mode: str = "Individual"
     start_date: Optional[str] = None
     end_date: Optional[str] = None
 
@@ -313,17 +313,14 @@ class ClassUpdate(CamelModel):
     course: Optional[str] = None
     term: Optional[str] = None
     status: Optional[str] = None
-    mode: Optional[str] = None
 
 class ClassResponse(CamelModel):
     id: str
     course: str
     term: str
     instructor_id: str
-    mode: str
     status: str
     students: int = 0
-    groups: List[Any] = Field(default_factory=list)
     start_date: Optional[str] = None
     end_date: Optional[str] = None
 
@@ -345,27 +342,51 @@ class BuilderProblem(CamelModel):
     points: int
 
 class StudentOptions(CamelModel):
-    hints: bool
-    comments: bool
-    leaderboard: bool
-    ai_allowed: bool = Field(..., alias="aiAllowed")
+    hints: bool = True
+    comments: bool = True
+    leaderboard: bool = False
+    ai_allowed: bool = Field(default=True, alias="aiAllowed")
 
 class AssignmentCreate(CamelModel):
+    model_config = ConfigDict(extra="forbid")
     title: str
     is_contest: bool = Field(default=False, alias="isContest")
-    class_ids: List[str] = Field(..., alias="classIds")
-    format: str
-    instructions: str
+    class_ids: List[str] = Field(default_factory=list, alias="classIds")
+    audience_type: Literal["classes", "all_students"] = Field(default="classes", alias="audienceType")
+    short_description: str = Field(default="", max_length=180, alias="shortDescription")
+    description: str = ""
+    rules: str = ""
+    banner_url: Optional[str] = Field(default=None, alias="bannerUrl")
+    banner_source_url: Optional[str] = Field(default=None, alias="bannerSourceUrl")
+    banner_crop: Optional[str] = Field(default=None, alias="bannerCrop")
+    instructions: str = ""
     opens: datetime
     closes: datetime
     problems: List[BuilderProblem]
     student_options: StudentOptions = Field(..., alias="studentOptions")
     published: bool
 
+    @model_validator(mode="after")
+    def validate_activity_kind(self):
+        if self.is_contest:
+            if self.audience_type == "all_students" and self.class_ids:
+                raise ValueError("All-students contests cannot select classes.")
+        elif self.audience_type != "classes":
+            raise ValueError("Assignments must be assigned to classes.")
+        return self
+
 class AssignmentResponse(CamelModel):
     id: str
     title: str
     is_contest: bool = Field(..., alias="isContest")
+    audience_type: Literal["classes", "all_students"] = Field(..., alias="audienceType")
+    short_description: str = Field(default="", alias="shortDescription")
+    description: str = ""
+    rules: str = ""
+    banner_url: Optional[str] = Field(default=None, alias="bannerUrl")
+    banner_source_url: Optional[str] = Field(default=None, alias="bannerSourceUrl")
+    banner_crop: Optional[str] = Field(default=None, alias="bannerCrop")
+    eligible_students: int = Field(default=0, alias="eligibleStudents")
     classes: str # For list view
     problems: int # For list view
     due: str # For list view
@@ -374,7 +395,6 @@ class AssignmentResponse(CamelModel):
     awaiting: int = 0 # For list view
     review_id: Optional[str] = Field(default=None, alias="reviewId")
     status: str # For list view
-    format: str
     instructions: str
     opens: datetime
     closes: datetime

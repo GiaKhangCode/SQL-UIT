@@ -58,7 +58,7 @@ export function AssignmentsPage() {
     ...c,
     context: c.code,
     description: c.lecturer + " · Lecturer",
-    work: data.assignments.filter((a) => a.classId === c.id),
+    work: data.assignments.filter((a) => a.classIds.includes(c.id)),
   }));
   const filtered = cards.filter((c) =>
     (c.name + " " + c.context + " " + c.description)
@@ -110,14 +110,13 @@ export function AssignmentsPage() {
                   >
                     <div className="class-card-top">
                       <span className="class-glyph">{c.name[0]}</span>
-                      <span className="status neutral">{c.mode}</span>
                     </div>
                     <div className="class-card-identity">
                       <small>{c.context}</small>
                       <h2>{c.name}</h2>
                       <p>{c.description}</p>
                       <span className="class-mobile-summary">
-                        {c.mode} · {pending.length} pending
+                        {pending.length} pending
                       </span>
                     </div>
                     <div className="class-card-footer">
@@ -173,12 +172,8 @@ export function AssignmentsPage() {
         >
           <Status value={selectedWork.status} />
           <p className="tiny muted">
-            {data.classes.find((c) => c.id === selectedWork.classId)!.name}
-            {selectedWork.groupId
-              ? " · " +
-                data.groups.find((g) => g.id === selectedWork.groupId)!.name
-              : " · Individual"}{" "}
-            · Due {dateLabel(selectedWork.date)} {selectedWork.time}
+            {data.classes.filter((c) => selectedWork.classIds.includes(c.id)).map((c) => c.name).join(", ")}
+            {" · Due "}{dateLabel(selectedWork.date)} {selectedWork.time}
           </p>
           {selectedWork.problemIds.map((id) => (
             <Link

@@ -18,16 +18,16 @@ export function ContestsPage() {
       (tab === "All" ||
         c.status ===
           (tab === "Live"
-            ? "Active"
+            ? "Live"
             : tab === "Past"
               ? "Closed"
               : "Upcoming")) &&
-      c.title.toLowerCase().includes(search.toLowerCase()),
+      `${c.title} ${c.shortDescription} ${c.scope}`.toLowerCase().includes(search.toLowerCase()),
   );
   const contestCounts = {
     All: data.length,
     Upcoming: data.filter((c) => c.status === "Upcoming").length,
-    Live: data.filter((c) => c.status === "Active").length,
+    Live: data.filter((c) => c.status === "Live").length,
     Past: data.filter((c) => c.status === "Closed").length,
   };
   function details(c: Contest) {
@@ -36,7 +36,7 @@ export function ContestsPage() {
   if (selected) return <Navigate replace to={"/contests/" + selected.id} />;
   return (
     <section className="page contests-page">
-      <div className="page-heading"><h1>Contests</h1><p>Timed SQL challenges for your classes</p></div>
+      <div className="page-heading"><h1>Contests</h1><p>Timed SQL challenges</p></div>
       <div className="contest-toolbar">
         <div
           className="underline-tabs"
@@ -82,10 +82,10 @@ export function ContestsPage() {
                   <Status value={c.status} />
                 </div>
                 <small>{c.scope}</small>
-                <p>{c.description}</p>
+                <p>{c.shortDescription}</p>
                 <span className="tiny">
-                  {c.date} {c.time} → {c.endDate || c.date} {c.endTime} · {c.problemIds.length}{" "}
-                  problem{c.problemIds.length === 1 ? "" : "s"} · {c.submitters ?? "—"} student{c.submitters === 1 ? "" : "s"} submitted on included problems
+                  {c.date} {c.time} → {c.endDate || c.date} {c.endTime} · {c.problemCount}{" "}
+                  problem{c.problemCount === 1 ? "" : "s"} · {c.submitters ?? 0} student{c.submitters === 1 ? "" : "s"} participated
                 </span>
               </div>
               <button className="text-button" onClick={() => details(c)}>
@@ -97,7 +97,7 @@ export function ContestsPage() {
         </div>
         <aside className="hall-of-fame" aria-label="Contest guidance">
           <h2>Ready to compete?</h2>
-          <p className="tiny muted">Open a contest to see its schedule and problems. Your submissions are saved to your account.</p>
+          <p className="tiny muted">Open a contest for its schedule and rules. Problems unlock when the contest starts.</p>
           <Link className="fame-results-link" to="/submissions">View your submissions →</Link>
         </aside>
       </div>

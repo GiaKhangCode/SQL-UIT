@@ -81,7 +81,9 @@ function Workspace({ problem }: { problem: Problem }) {
         : "Practice";
   const context = params.get("context") || source;
   const contextTitle = params.get("contextTitle") || context;
-  const contestMode = source === "Contests" && Boolean(params.get("contest"));
+  const contestMode = source === "Contests";
+  const contestClosed = contestMode && params.get("closed") === "1";
+  const contestAiAllowed = !contestMode || params.get("aiAllowed") === "1";
   const [favorite, setFavorite] = useState(false);
   const [favoriteBusy, setFavoriteBusy] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -139,7 +141,7 @@ function Workspace({ problem }: { problem: Problem }) {
     let active = true;
     if (help) {
       setHelpText("Loading guidance…");
-      studentApi.getHint(problem.id).then((t) => {
+      studentApi.getHint(problem.id, source === "Practice" ? undefined : context).then((t) => {
         if (active) setHelpText(t);
       }).catch(() => { if (active) setHelpText("Guidance is unavailable right now."); });
       helpClose.current?.focus();
@@ -338,9 +340,9 @@ function Workspace({ problem }: { problem: Problem }) {
                 Show hint
               </button>
               <button
-                disabled={contestMode}
+                disabled={!contestAiAllowed}
                 title={
-                  contestMode
+                  !contestAiAllowed
                     ? "AI assistance is disabled during contests"
                     : undefined
                 }
@@ -462,12 +464,13 @@ function Workspace({ problem }: { problem: Problem }) {
                 </button>
                 <button
                   className="button primary"
-                  disabled={busy}
+                  disabled={busy || contestClosed}
+                  title={contestClosed ? "Contest submissions are closed" : undefined}
                   onClick={() => void run("submit")}
                 >
                   {busy && resultTab === "Submissions"
                     ? "Submitting…"
-                    : "Submit"}
+                    : contestClosed ? "Submissions closed" : "Submit"}
                 </button>
               </div>
             </section>

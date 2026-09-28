@@ -53,10 +53,8 @@ def get_classes(db: Session = Depends(get_db), current_user: models.User = Depen
             course=c.course,
             term=c.term,
             instructor_id=c.instructor_id,
-            mode=c.mode,
             status=c.status,
             students=students_count,
-            groups=[],
             start_date=c.start_date,
             end_date=c.end_date
         ))
@@ -79,7 +77,6 @@ def create_class(
         instructor_id=current_user.id,
         start_date=class_data.start_date,
         end_date=class_data.end_date,
-        mode=class_data.mode,
         status="Active",
         created_at=datetime.utcnow()
     )
@@ -92,10 +89,8 @@ def create_class(
         course=new_class.course,
         term=new_class.term,
         instructor_id=new_class.instructor_id,
-        mode=new_class.mode,
         status=new_class.status,
         students=0,
-        groups=[],
         start_date=new_class.start_date,
         end_date=new_class.end_date
     )

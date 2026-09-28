@@ -1,12 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import File, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List
 import uuid
 import datetime
+import json
+import math
+from pathlib import Path
+import re
 
 from app.database import get_db
 from app.routers.auth import get_current_user
-from app.models import User, Assignment, AssignmentClass, AssignmentProblem, Class
+from app.models import User, Assignment, AssignmentClass, AssignmentProblem, Class, ClassEnrollment
 from app.schemas import AssignmentCreate, AssignmentResponse
 
 router = APIRouter(
@@ -14,35 +20,150 @@ router = APIRouter(
     tags=["Assignments"]
 )
 
+BANNER_DIR = Path(__file__).resolve().parents[2] / "uploads" / "contest-banners"
+BANNER_URL = "/api/assignments/banners/"
+BANNER_NAME = re.compile(r"^[0-9a-f]{32}\.webp$")
+
+
+def validate_banner_fields(assignment: AssignmentCreate):
+    fields = (assignment.banner_url, assignment.banner_source_url, assignment.banner_crop)
+    if not assignment.is_contest and any(fields):
+        raise HTTPException(status_code=400, detail="Banner images are for contests only.")
+    for url in fields[:2]:
+        if url and not (url.startswith(BANNER_URL) and BANNER_NAME.fullmatch(url[len(BANNER_URL):])
+                        and (BANNER_DIR / url[len(BANNER_URL):]).is_file()):
+            raise HTTPException(status_code=400, detail="Invalid contest banner reference.")
+    if bool(assignment.banner_url) != bool(assignment.banner_source_url):
+        raise HTTPException(status_code=400, detail="Contest banner and source must be provided together.")
+    if assignment.banner_crop:
+        if not assignment.banner_url or len(assignment.banner_crop) > 160:
+            raise HTTPException(status_code=400, detail="Invalid contest banner crop.")
+        try:
+            crop = json.loads(assignment.banner_crop)
+            values = (crop["x"], crop["y"], crop["zoom"])
+            if not all(isinstance(value, (float, int)) and math.isfinite(value) for value in values):
+                raise ValueError()
+            if not (0 <= crop["x"] <= 1 and 0 <= crop["y"] <= 1 and 1 <= crop["zoom"] <= 3):
+                raise ValueError()
+        except (ValueError, KeyError, TypeError):
+            raise HTTPException(status_code=400, detail="Invalid contest banner crop.")
+
+
+async def save_banner_file(file: UploadFile, max_bytes: int) -> str:
+    if file.content_type != "image/webp":
+        raise HTTPException(status_code=400, detail="Banner crop must be a WebP image.")
+    data = await file.read(max_bytes + 1)
+    if len(data) > max_bytes or len(data) < 16:
+        raise HTTPException(status_code=400, detail="Banner image exceeds the upload limit or is empty.")
+    if (data[:4] != b"RIFF" or data[8:12] != b"WEBP" or
+            int.from_bytes(data[4:8], "little") != len(data) - 8 or
+            data[12:16] not in (b"VP8 ", b"VP8L", b"VP8X")):
+        raise HTTPException(status_code=400, detail="Invalid WebP image.")
+    BANNER_DIR.mkdir(parents=True, exist_ok=True)
+    filename = f"{uuid.uuid4().hex}.webp"
+    (BANNER_DIR / filename).write_bytes(data)
+    return BANNER_URL + filename
+
+
+@router.post("/banners")
+async def upload_contest_banner(banner: UploadFile = File(...), source: UploadFile = File(...),
+                                current_user: User = Depends(get_current_user)):
+    if current_user.role not in ["instructor", "admin"]:
+        raise HTTPException(status_code=403, detail="Only teachers can upload contest banners.")
+    banner_url = await save_banner_file(banner, 4 * 1024 * 1024)
+    try:
+        source_url = await save_banner_file(source, 6 * 1024 * 1024)
+    except Exception:
+        (BANNER_DIR / banner_url[len(BANNER_URL):]).unlink(missing_ok=True)
+        raise
+    return {"bannerUrl": banner_url, "bannerSourceUrl": source_url}
+
+
+@router.get("/banners/{filename}")
+def get_contest_banner(filename: str):
+    if not BANNER_NAME.fullmatch(filename):
+        raise HTTPException(status_code=404, detail="Banner not found.")
+    path = BANNER_DIR / filename
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Banner not found.")
+    return FileResponse(path, media_type="image/webp", headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+def validate_assignment_classes(assignment: AssignmentCreate, db: Session, current_user: User):
+    validate_banner_fields(assignment)
+    if assignment.published and (not assignment.problems or
+                                 (assignment.audience_type == "classes" and not assignment.class_ids)):
+        raise HTTPException(status_code=400, detail="Published activities need an audience and at least one problem.")
+    if assignment.published and assignment.is_contest and not all((
+        assignment.short_description.strip(), assignment.description.strip(), assignment.rules.strip()
+    )):
+        raise HTTPException(status_code=400, detail="Published contests need a short description, description, and rules.")
+    if assignment.opens >= assignment.closes:
+        raise HTTPException(status_code=400, detail="End time must be after start time.")
+    if assignment.is_contest and assignment.audience_type == "all_students" and assignment.class_ids:
+        raise HTTPException(status_code=400, detail="All-students contests cannot select classes.")
+    if len(set(assignment.class_ids)) != len(assignment.class_ids):
+        raise HTTPException(status_code=400, detail="Each class can be selected only once.")
+    if not assignment.class_ids:
+        return
+    query = db.query(Class.id).filter(Class.id.in_(assignment.class_ids), Class.status == "Active")
+    if current_user.role == "instructor":
+        query = query.filter(Class.instructor_id == current_user.id)
+    if query.count() != len(assignment.class_ids):
+        raise HTTPException(status_code=400, detail="One or more selected classes are unavailable.")
+
+
+def eligible_student_ids(db: Session, audience_type: str, class_ids: List[str]) -> List[str]:
+    query = db.query(User.id).filter(User.role == "student", User.status == "Active")
+    if audience_type == "classes":
+        if not class_ids:
+            return []
+        query = query.join(ClassEnrollment, ClassEnrollment.student_id == User.id).filter(
+            ClassEnrollment.class_id.in_(class_ids)
+        )
+    return [row[0] for row in query.distinct().all()]
+
+
+@router.get("/audience-count")
+def get_audience_count(audience_type: str = "classes", class_ids: List[str] = Query(default=[]),
+                       db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.role not in ["instructor", "admin"]:
+        raise HTTPException(status_code=403, detail="Only teachers can view audience counts.")
+    if audience_type not in ["classes", "all_students"]:
+        raise HTTPException(status_code=400, detail="Invalid audience type.")
+    if audience_type == "classes" and class_ids:
+        query = db.query(Class.id).filter(Class.id.in_(class_ids), Class.status == "Active")
+        if current_user.role == "instructor":
+            query = query.filter(Class.instructor_id == current_user.id)
+        if query.count() != len(set(class_ids)):
+            raise HTTPException(status_code=400, detail="One or more selected classes are unavailable.")
+    return {"eligibleStudents": len(eligible_student_ids(db, audience_type, class_ids))}
+
 @router.post("", response_model=AssignmentResponse)
 def create_assignment(assignment: AssignmentCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role not in ["instructor", "admin"]:
         raise HTTPException(status_code=403, detail="Chỉ Giảng viên và Admin mới có quyền tạo assignment/contest.")
         
-    if assignment.class_ids:
-        active_classes = db.query(Class.id).filter(
-            Class.id.in_(assignment.class_ids),
-            Class.status == "Active"
-        ).all()
-        if len(active_classes) != len(assignment.class_ids):
-            raise HTTPException(
-                status_code=400, 
-                detail="Một hoặc nhiều lớp học đã chọn không hợp lệ hoặc đã bị lưu trữ (Archived)."
-            )
+    validate_assignment_classes(assignment, db, current_user)
             
     assignment_id = str(uuid.uuid4())
     new_assignment = Assignment(
         id=assignment_id,
         title=assignment.title,
         is_contest=assignment.is_contest,
-        format=assignment.format,
+        audience_type=assignment.audience_type,
+        short_description=assignment.short_description if assignment.is_contest else "",
+        description=assignment.description if assignment.is_contest else "",
+        rules=assignment.rules if assignment.is_contest else "",
+        banner_url=assignment.banner_url if assignment.is_contest else None,
+        banner_source_url=assignment.banner_source_url if assignment.is_contest else None,
+        banner_crop=assignment.banner_crop if assignment.is_contest else None,
         instructions=assignment.instructions,
         opens=assignment.opens,
         closes=assignment.closes,
         published=assignment.published,
-        hints_enabled=assignment.student_options.hints,
-        comments_enabled=assignment.student_options.comments,
-        leaderboard_enabled=assignment.student_options.leaderboard,
+        hints_enabled=assignment.student_options.hints if not assignment.is_contest else False,
+        comments_enabled=assignment.student_options.comments if not assignment.is_contest else False,
+        leaderboard_enabled=assignment.student_options.leaderboard if assignment.is_contest else False,
         ai_allowed=assignment.student_options.ai_allowed,
         instructor_id=current_user.id
     )
@@ -112,17 +233,13 @@ def get_assignments(db: Session = Depends(get_db), current_user: User = Depends(
             status = "Open"
             
         due = a.closes.strftime("%b %d") if a.closes else ""
-        class_str = ", ".join(class_ids) if class_ids else "No classes"
+        audience_type = a.audience_type or "classes"
+        class_str = "All students" if a.is_contest and audience_type == "all_students" else ", ".join(class_ids) if class_ids else "No classes"
         problems_list = [{"id": p.problem_id, "points": p.points} for p in problems]
         
         # Calculate total students assigned
-        if class_ids:
-            total_students_query = db.query(ClassEnrollment.student_id).filter(ClassEnrollment.class_id.in_(class_ids)).distinct().all()
-            total_students = len(total_students_query)
-            student_ids = [s[0] for s in total_students_query]
-        else:
-            total_students = 0
-            student_ids = []
+        student_ids = eligible_student_ids(db, audience_type, class_ids)
+        total_students = len(student_ids)
             
         # Calculate how many students have attempted at least one problem
         if student_ids and problem_ids:
@@ -184,6 +301,14 @@ def get_assignments(db: Session = Depends(get_db), current_user: User = Depends(
             "id": a.id,
             "title": a.title,
             "isContest": a.is_contest,
+            "audienceType": audience_type,
+            "shortDescription": a.short_description or "",
+            "description": a.description or "",
+            "rules": a.rules or "",
+            "bannerUrl": a.banner_url if a.is_contest else None,
+            "bannerSourceUrl": a.banner_source_url if a.is_contest else None,
+            "bannerCrop": a.banner_crop if a.is_contest else None,
+            "eligibleStudents": total_students,
             "classes": class_str,
             "problems": len(problems),
             "due": due,
@@ -192,8 +317,7 @@ def get_assignments(db: Session = Depends(get_db), current_user: User = Depends(
             "awaiting": awaiting,
             "reviewId": review_id,
             "status": status,
-            "format": a.format,
-            "instructions": a.instructions,
+            "instructions": a.instructions or "",
             "opens": a.opens,
             "closes": a.closes,
             "published": a.published,
@@ -221,9 +345,11 @@ def get_assignment(assignment_id: str, db: Session = Depends(get_db), current_us
     class_ids = [c.class_id for c in classes]
     
     if current_user.role == "student":
+        if current_user.status != "Active":
+            raise HTTPException(status_code=403, detail="This activity is available to active students only.")
         if not a.published:
             raise HTTPException(status_code=403, detail="Bài tập này chưa được công bố.")
-        if class_ids:
+        if not (a.is_contest and a.audience_type == "all_students") and class_ids:
             from app.models import ClassEnrollment
             enrollment = db.query(ClassEnrollment).filter(
                 ClassEnrollment.student_id == current_user.id,
@@ -231,7 +357,7 @@ def get_assignment(assignment_id: str, db: Session = Depends(get_db), current_us
             ).first()
             if not enrollment:
                 raise HTTPException(status_code=403, detail="Bạn không thuộc lớp được giao bài tập này.")
-        else:
+        elif not (a.is_contest and a.audience_type == "all_students"):
             raise HTTPException(status_code=403, detail="Bài tập này chưa được giao cho bất kỳ lớp nào.")
     problems = db.query(AssignmentProblem).filter(AssignmentProblem.assignment_id == a.id).order_by(AssignmentProblem.order_index).all()
     problems_list = [{"id": p.problem_id, "points": p.points} for p in problems]
@@ -252,17 +378,13 @@ def get_assignment(assignment_id: str, db: Session = Depends(get_db), current_us
         status = "Open"
     
     due = a.closes.strftime("%b %d") if a.closes else ""
-    class_str = ", ".join(class_ids) if class_ids else "No classes"
+    audience_type = a.audience_type or "classes"
+    class_str = "All students" if a.is_contest and audience_type == "all_students" else ", ".join(class_ids) if class_ids else "No classes"
     
     from app.models import ClassEnrollment, Submission
     
-    if class_ids:
-        total_students_query = db.query(ClassEnrollment.student_id).filter(ClassEnrollment.class_id.in_(class_ids)).distinct().all()
-        total_students = len(total_students_query)
-        student_ids = [s[0] for s in total_students_query]
-    else:
-        total_students = 0
-        student_ids = []
+    student_ids = eligible_student_ids(db, audience_type, class_ids)
+    total_students = len(student_ids)
         
     problem_ids = [p["id"] for p in problems_list]
     if student_ids and problem_ids:
@@ -311,6 +433,14 @@ def get_assignment(assignment_id: str, db: Session = Depends(get_db), current_us
         "id": a.id,
         "title": a.title,
         "isContest": a.is_contest,
+        "audienceType": audience_type,
+        "shortDescription": a.short_description or "",
+        "description": a.description or "",
+        "rules": a.rules or "",
+        "bannerUrl": a.banner_url if a.is_contest else None,
+        "bannerSourceUrl": a.banner_source_url if a.is_contest and current_user.role in ("instructor", "admin") else None,
+        "bannerCrop": a.banner_crop if a.is_contest and current_user.role in ("instructor", "admin") else None,
+        "eligibleStudents": total_students,
         "classes": class_str,
         "problems": len(problems),
         "due": due,
@@ -319,8 +449,7 @@ def get_assignment(assignment_id: str, db: Session = Depends(get_db), current_us
         "awaiting": awaiting,
         "reviewId": review_id,
         "status": status,
-        "format": a.format,
-        "instructions": a.instructions,
+        "instructions": a.instructions or "",
         "opens": a.opens,
         "closes": a.closes,
         "published": a.published,
@@ -345,17 +474,24 @@ def update_assignment(assignment_id: str, assignment: AssignmentCreate, db: Sess
         
     if current_user.role == "instructor" and a.instructor_id != current_user.id:
         raise HTTPException(status_code=403, detail="You do not have permission to modify this assignment.")
+    validate_assignment_classes(assignment, db, current_user)
         
     a.title = assignment.title
     a.is_contest = assignment.is_contest
-    a.format = assignment.format
+    a.audience_type = assignment.audience_type
+    a.short_description = assignment.short_description if assignment.is_contest else ""
+    a.description = assignment.description if assignment.is_contest else ""
+    a.rules = assignment.rules if assignment.is_contest else ""
+    a.banner_url = assignment.banner_url if assignment.is_contest else None
+    a.banner_source_url = assignment.banner_source_url if assignment.is_contest else None
+    a.banner_crop = assignment.banner_crop if assignment.is_contest else None
     a.instructions = assignment.instructions
     a.opens = assignment.opens
     a.closes = assignment.closes
     a.published = assignment.published
-    a.hints_enabled = assignment.student_options.hints
-    a.comments_enabled = assignment.student_options.comments
-    a.leaderboard_enabled = assignment.student_options.leaderboard
+    a.hints_enabled = assignment.student_options.hints if not assignment.is_contest else False
+    a.comments_enabled = assignment.student_options.comments if not assignment.is_contest else False
+    a.leaderboard_enabled = assignment.student_options.leaderboard if assignment.is_contest else False
     a.ai_allowed = assignment.student_options.ai_allowed
     a.updated_at = datetime.datetime.utcnow()
     

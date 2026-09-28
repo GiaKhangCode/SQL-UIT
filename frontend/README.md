@@ -1,13 +1,13 @@
-# SQL-UIT Frontend
+# UIT-SQL Frontend
 
-A modern React frontend for the SQL-UIT application, built with Vite, TypeScript, React Router, and CodeMirror.
+A modern React frontend for UIT-SQL, built with Vite, TypeScript, React Router, and CodeMirror.
 
 ## Prerequisites
 
 Before running the frontend, ensure you have:
 - **Node.js 18+** installed
 - **npm** (comes with Node.js)
-- The **SQL-UIT Backend** running on `http://127.0.0.1:8000` (see the backend README for instructions).
+- The **UIT-SQL Backend** running on `http://127.0.0.1:8000` (see the backend README for instructions).
 
 ## Installation & Setup
 

@@ -5,7 +5,6 @@ export interface ClassCreate {
   id: string;
   course: string;
   term: string;
-  mode?: string;
   startDate?: string;
   endDate?: string;
 }
@@ -86,8 +85,21 @@ export const teacherService = {
     return apiFetch("/api/assignments");
   },
 
+  async getAudienceCount(audienceType: "classes" | "all_students", classIds: string[]): Promise<{ eligibleStudents: number }> {
+    const params = new URLSearchParams({ audience_type: audienceType });
+    classIds.forEach((id) => params.append("class_ids", id));
+    return apiFetch(`/api/assignments/audience-count?${params.toString()}`);
+  },
+
   async getAssignment(id: string): Promise<any> {
     return apiFetch(`/api/assignments/${encodeURIComponent(id)}`);
+  },
+
+  async uploadContestBanner(banner: Blob, source: Blob): Promise<{ bannerUrl: string; bannerSourceUrl: string }> {
+    const body = new FormData();
+    body.append("banner", banner, "contest-banner.webp");
+    body.append("source", source, "contest-banner-source.webp");
+    return apiFetch("/api/assignments/banners", { method: "POST", body });
   },
 
   async createAssignment(data: any): Promise<any> {
