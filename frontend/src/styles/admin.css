@@ -76,9 +76,9 @@
 .admin-field input,.admin-field select,.admin-field textarea { width: 100%; min-height: 35px; padding: 7px 9px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text); font-size: 10px; font-weight: 400; line-height: 17px; }
 .admin-field textarea { min-height: 58px; resize: vertical; }
 .admin-course-filters { display: grid; grid-template-columns: minmax(0,280px) minmax(0,420px); width: min(100%, 716px); gap: 16px; margin-bottom: 16px; }
-.admin-split { display: grid; grid-template-columns: minmax(0, 2.08fr) minmax(260px, .92fr); gap: 16px; align-items: stretch; }
+.admin-split { display: grid; grid-template-columns: minmax(0, 2.08fr) minmax(260px, .92fr); gap: 24px; align-items: start; }
 .admin-primary { min-width: 0; }
-.admin-side { min-width: 0; min-height: 400px; padding-left: 16px; border-left: 1px solid var(--border-subtle); }
+.admin-side { min-width: 0; }
 .admin-side h2 { margin: 0 0 12px; font-size: 12px; line-height: 18px; }
 .admin-side h3 { margin: 0; }
 .admin-detail-title { margin: 2px 0 8px !important; font-size: 16px !important; line-height: 24px !important; }
@@ -147,7 +147,7 @@
 .admin-approval-table th:nth-child(3) { width: 15%; }
 .admin-approval-table th:nth-child(4) { width: 15%; }
 .admin-practice-filters { display: grid; grid-template-columns: minmax(0,440px) minmax(0,250px) minmax(0,250px); width: min(100%, 972px); gap: 16px; margin: 0 0 16px; }
-.admin-practice-split { grid-template-columns: minmax(0,870px) minmax(330px,1fr); gap: 49px; }
+.admin-practice-split { grid-template-columns: minmax(0,870px) minmax(280px,340px); gap: 24px; }
 .admin-practice-table th:nth-child(1) { width: 30%; }
 .admin-practice-table th:nth-child(2) { width: 17%; }
 .admin-practice-table th:nth-child(3) { width: 12%; }
@@ -191,7 +191,6 @@
   .admin-profile-text { display: none; }
   .admin-split { grid-template-columns: minmax(0, 1.6fr) minmax(240px, 1fr); gap: 14px; }
   .admin-practice-split { grid-template-columns: minmax(0,1.6fr) minmax(240px,1fr); gap: 14px; }
-  .admin-side { padding-left: 14px; }
 }
 @media (max-width: 800px) {
   .admin-header { height: 44px; gap: 10px; padding: 0 10px; }
@@ -220,7 +219,7 @@
   .admin-field { font-size: 8px; }
   .admin-field input,.admin-field select,.admin-field textarea { min-height: 35px; }
   .admin-split { display: flex; flex-direction: column; gap: 20px; }
-  .admin-side { min-height: 0; padding: 18px 0 0; border-left: 0; border-top: 1px solid var(--border-subtle); }
+  .admin-side { min-height: 0; }
   .admin-side h2 { font-size: 12px; }
   .admin-table-wrap { overflow: visible; }
   .admin-table { display: block; width: 100%; }

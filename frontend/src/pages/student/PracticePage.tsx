@@ -7,6 +7,25 @@ import {
   PracticeActivity,
   PracticeTrending,
 } from "../../components/PracticeSidebar";
+
+const PAGE_SIZE = 20;
+
+function paginationItems(current: number, total: number): (number | "ellipsis")[] {
+  if (total <= 7) return Array.from({ length: total }, (_, index) => index + 1);
+  const visible = new Set([1, total, current - 1, current, current + 1]);
+  if (current <= 3) [2, 3, 4, 5].forEach((page) => visible.add(page));
+  if (current >= total - 2) [total - 4, total - 3, total - 2, total - 1].forEach((page) => visible.add(page));
+  const pages = [...visible].filter((page) => page >= 1 && page <= total).sort((a, b) => a - b);
+  const items: (number | "ellipsis")[] = [];
+  pages.forEach((page, index) => {
+    const gap = page - (pages[index - 1] || 0);
+    if (index && gap === 2) items.push(page - 1);
+    if (index && gap > 2) items.push("ellipsis");
+    items.push(page);
+  });
+  return items;
+}
+
 export function PracticePage() {
   const [search, setSearch] = useState("");
   const [topic, setTopic] = useState("");
@@ -25,8 +44,8 @@ export function PracticePage() {
   const [listName, setListName] = useState("");
   const [listError, setListError] = useState("");
   const [listBusy, setListBusy] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(8);
-  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const [page, setPage] = useState(1);
+  const resultsStartRef = useRef<HTMLDivElement | null>(null);
 
   const { data: prefData, loading: prefLoading, error: prefError, mutate: mutatePref } = useLoad(
     studentApi.getPreferences,
@@ -66,23 +85,24 @@ export function PracticePage() {
             .find((list: any) => list.id === selectedList)
             ?.problemIds.includes(p.id)),
     ) || [];
+  const pageCount = Math.max(1, Math.ceil(data.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const firstIndex = (currentPage - 1) * PAGE_SIZE;
+  const pageProblems = data.slice(firstIndex, firstIndex + PAGE_SIZE);
+
   useEffect(() => {
-    setVisibleCount(8);
+    setPage(1);
   }, [search, topic, difficulty, progress, favoritesOnly, selectedList]);
-  useEffect(() => {
-    const target = loadMoreRef.current;
-    if (!target || !data || visibleCount >= data.length) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          setVisibleCount((count) => Math.min(count + 8, data.length));
-        }
-      },
-      { rootMargin: "240px" },
-    );
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [data, visibleCount]);
+  function goToPage(nextPage: number) {
+    if (nextPage < 1 || nextPage > pageCount || nextPage === currentPage) return;
+    setPage(nextPage);
+    requestAnimationFrame(() => {
+      resultsStartRef.current?.scrollIntoView({
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+        block: "start",
+      });
+    });
+  }
   function clear() {
     setSearch("");
     setTopic("");
@@ -172,7 +192,7 @@ export function PracticePage() {
               <option value="create">+ New list</option>
             </select>
           </div>
-          <div className="problem-list" aria-busy={loading}>
+          <div className="problem-list" ref={resultsStartRef} aria-busy={loading}>
             {prefError && (favoritesOnly || selectedList) && <p role="alert">Could not load saved problems and lists.</p>}
             {loading && rawProblems && (
               <span className="sr-only" role="status">
@@ -205,7 +225,7 @@ export function PracticePage() {
                   <span>Difficulty</span>
                   <span>Status</span>
                 </div>
-                {data.slice(0, visibleCount).map((p) => (
+                {pageProblems.map((p) => (
                   <Link
                     className="problem-row"
                     key={p.id}
@@ -224,14 +244,18 @@ export function PracticePage() {
                     <Status value={p.progress} />
                   </Link>
                 ))}
-                <div
-                  ref={loadMoreRef}
-                  className="practice-load-more"
-                  aria-live="polite"
-                >
-                  {visibleCount < data.length
-                    ? "Loading more problems…"
-                    : `Showing all ${data.length} problem${data.length === 1 ? "" : "s"}`}
+                <div className="practice-results-footer">
+                  <p aria-live="polite">Showing {firstIndex + 1}–{Math.min(firstIndex + PAGE_SIZE, data.length)} of {data.length} problems</p>
+                  {pageCount > 1 && <nav className="practice-pagination" aria-label="Problem pages">
+                    <button type="button" disabled={currentPage === 1} onClick={() => goToPage(currentPage - 1)}>← Previous</button>
+                    <span className="practice-pagination-pages">
+                      {paginationItems(currentPage, pageCount).map((item, index) => item === "ellipsis"
+                        ? <span className="practice-pagination-ellipsis" aria-hidden="true" key={`ellipsis-${index}`}>…</span>
+                        : <button type="button" key={item} aria-label={`Page ${item}`} aria-current={currentPage === item ? "page" : undefined} onClick={() => goToPage(item)}>{item}</button>)}
+                    </span>
+                    <span className="practice-pagination-mobile">Page {currentPage} of {pageCount}</span>
+                    <button type="button" disabled={currentPage === pageCount} onClick={() => goToPage(currentPage + 1)}>Next →</button>
+                  </nav>}
                 </div>
               </>
             )}

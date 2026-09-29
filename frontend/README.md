@@ -53,4 +53,4 @@ Unlike the initial mockup phase, this frontend is **fully integrated with the li
 Once both the backend and frontend are running, you can log in using the demo accounts created by the backend's seed script:
 - **Student:** `student@demo.local` / `password123`
 - **Instructor:** `instructor@demo.local` / `password123`
-- **Admin:** `admin@demo.local` / `password123`
+- **Admin:** `admin@demo.local` / `123`

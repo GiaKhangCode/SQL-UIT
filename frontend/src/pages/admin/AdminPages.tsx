@@ -866,7 +866,7 @@ export function AdminOverviewPage() {
   return <div className="admin-page">
     <PageIntro title="System overview" sub="Activity & service health" />
     <div className="admin-metrics"><div><strong>{stats.users.toLocaleString()}</strong><small>Total users</small></div><div><strong>{stats.classes}</strong><small>Active classes</small></div><div><strong>{stats.submissionsToday.toLocaleString()}</strong><small>Submissions today</small></div><div><strong className={stats.gradingErrors > 0 ? "admin-warning" : ""}>{stats.gradingErrors}</strong><small>Grading errors</small></div></div>
-    <Split main={<>
+    <Split className="admin-overview-split" main={<>
       <section className="admin-attention">
         <h2 className="admin-section-heading">Needs attention</h2>
         <table className="admin-table admin-attention-table"><thead><tr><th>ITEM</th><th>COUNT</th><th>ACTION</th></tr></thead><tbody>

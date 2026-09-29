@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import CodeMirror from "@uiw/react-codemirror";
 import { sql, MSSQL } from "@codemirror/lang-sql";
@@ -10,8 +17,41 @@ import { DataGrid, Dialog, Empty, Loading, Status } from "../../components/ui";
 import { useLoad } from "../../components/useLoad";
 import { useTheme } from "../../context/ThemeContext";
 import { studentApi, type QueryResult } from "../../services/studentApi";
+import { storage } from "../../services/storage";
 import type { Problem, Submission } from "../../data/models";
 import { AiChatPanel } from "../../components/AiChatPanel";
+
+const WORKSPACE_LAYOUT_KEY = "sql-practice:workspace-layout";
+const DEFAULT_PROBLEM_WIDTH = 34;
+const DEFAULT_EDITOR_HEIGHT = 58;
+const MIN_PROBLEM_WIDTH = 22;
+const MAX_PROBLEM_WIDTH = 50;
+const MIN_EDITOR_HEIGHT = 30;
+const MAX_EDITOR_HEIGHT = 75;
+
+function clampPaneSize(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, Math.round(value * 10) / 10));
+}
+
+function readWorkspaceLayout() {
+  try {
+    const value = JSON.parse(storage.get(WORKSPACE_LAYOUT_KEY) || "null");
+    return {
+      problemWidth: Number.isFinite(value?.problemWidth)
+        ? clampPaneSize(value.problemWidth, MIN_PROBLEM_WIDTH, MAX_PROBLEM_WIDTH)
+        : DEFAULT_PROBLEM_WIDTH,
+      editorHeight: Number.isFinite(value?.editorHeight)
+        ? clampPaneSize(value.editorHeight, MIN_EDITOR_HEIGHT, MAX_EDITOR_HEIGHT)
+        : DEFAULT_EDITOR_HEIGHT,
+    };
+  } catch {
+    return {
+      problemWidth: DEFAULT_PROBLEM_WIDTH,
+      editorHeight: DEFAULT_EDITOR_HEIGHT,
+    };
+  }
+}
+
 const editorTheme = EditorView.theme({
   "&": {
     backgroundColor: "var(--surface)",
@@ -87,9 +127,15 @@ function Workspace({ problem }: { problem: Problem }) {
   const [favorite, setFavorite] = useState(false);
   const [favoriteBusy, setFavoriteBusy] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [problemWidth, setProblemWidth] = useState(34);
+  const [initialLayout] = useState(readWorkspaceLayout);
+  const [problemWidth, setProblemWidth] = useState(initialLayout.problemWidth);
+  const [editorHeight, setEditorHeight] = useState(initialLayout.editorHeight);
+  const [resizing, setResizing] = useState<"vertical" | "horizontal" | null>(null);
   const [cursor, setCursor] = useState({ line: 1, column: 1 });
   const editor = useRef<EditorView | null>(null);
+  const workspaceLayout = useRef<HTMLDivElement | null>(null);
+  const editorResults = useRef<HTMLDivElement | null>(null);
+  const activeResize = useRef<"vertical" | "horizontal" | null>(null);
   const expandTrigger = useRef<HTMLButtonElement>(null);
   const [code, setCode] = useState(
     () => studentApi.getDraft(problem.id) ?? (problem.draft || ""),
@@ -108,6 +154,7 @@ function Workspace({ problem }: { problem: Problem }) {
   const [notice, setNotice] = useState("");
   const helpTrigger = useRef<HTMLButtonElement | null>(null);
   const helpClose = useRef<HTMLButtonElement>(null);
+  const aiTrigger = useRef<HTMLButtonElement | null>(null);
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -118,6 +165,15 @@ function Workspace({ problem }: { problem: Problem }) {
   useEffect(() => {
     studentApi.saveDraft(problem.id, code);
   }, [code, problem.id]);
+  useEffect(() => {
+    const save = window.setTimeout(() => {
+      storage.set(
+        WORKSPACE_LAYOUT_KEY,
+        JSON.stringify({ problemWidth, editorHeight }),
+      );
+    }, 120);
+    return () => window.clearTimeout(save);
+  }, [problemWidth, editorHeight]);
   useEffect(() => {
     let active = true;
     studentApi.getPreferences().then((preferences) => {
@@ -153,6 +209,10 @@ function Workspace({ problem }: { problem: Problem }) {
   function closeHelp() {
     setHelp(null);
     helpTrigger.current?.focus();
+  }
+  function closeAiPanel() {
+    setIsAiPanelOpen(false);
+    aiTrigger.current?.focus();
   }
   useEffect(() => {
     function escape(e: KeyboardEvent) {
@@ -209,9 +269,81 @@ function Workspace({ problem }: { problem: Problem }) {
       if (alive.current) setBusy(false);
     }
   }
+  function resizeFromPointer(
+    orientation: "vertical" | "horizontal",
+    clientX: number,
+    clientY: number,
+  ) {
+    if (orientation === "vertical") {
+      const bounds = workspaceLayout.current?.getBoundingClientRect();
+      if (!bounds?.width) return;
+      setProblemWidth(
+        clampPaneSize(
+          ((clientX - bounds.left) / bounds.width) * 100,
+          MIN_PROBLEM_WIDTH,
+          MAX_PROBLEM_WIDTH,
+        ),
+      );
+      return;
+    }
+    const bounds = editorResults.current?.getBoundingClientRect();
+    if (!bounds?.height) return;
+    setEditorHeight(
+      clampPaneSize(
+        ((clientY - bounds.top) / bounds.height) * 100,
+        MIN_EDITOR_HEIGHT,
+        MAX_EDITOR_HEIGHT,
+      ),
+    );
+  }
+  function startResize(
+    orientation: "vertical" | "horizontal",
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.currentTarget.focus();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    activeResize.current = orientation;
+    setResizing(orientation);
+    resizeFromPointer(orientation, event.clientX, event.clientY);
+  }
+  function moveResize(
+    orientation: "vertical" | "horizontal",
+    event: ReactPointerEvent<HTMLDivElement>,
+  ) {
+    if (activeResize.current !== orientation) return;
+    resizeFromPointer(orientation, event.clientX, event.clientY);
+  }
+  function stopResize(event: ReactPointerEvent<HTMLDivElement>) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    activeResize.current = null;
+    setResizing(null);
+  }
+  function resizeWithKeyboard(
+    orientation: "vertical" | "horizontal",
+    event: ReactKeyboardEvent<HTMLDivElement>,
+  ) {
+    const direction = orientation === "vertical"
+      ? event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0
+      : event.key === "ArrowUp" ? -1 : event.key === "ArrowDown" ? 1 : 0;
+    if (!direction) return;
+    event.preventDefault();
+    if (orientation === "vertical") {
+      setProblemWidth((value) =>
+        clampPaneSize(value + direction * 2, MIN_PROBLEM_WIDTH, MAX_PROBLEM_WIDTH),
+      );
+    } else {
+      setEditorHeight((value) =>
+        clampPaneSize(value + direction * 2, MIN_EDITOR_HEIGHT, MAX_EDITOR_HEIGHT),
+      );
+    }
+  }
   const display = resultTab === "Submissions" ? lastSubmit : result;
   return (
-    <div className={"workspace" + (expanded ? " editor-expanded" : "")}>
+    <div className={"workspace" + (expanded ? " editor-expanded" : "") + (resizing ? ` is-resizing resizing-${resizing}` : "")}>
       <AppHeader
         workspace={{
           title: problem.title,
@@ -240,8 +372,16 @@ function Workspace({ problem }: { problem: Problem }) {
             </button>
           ))}
         </div>
-        <div className={`workspace-layout ${isAiPanelOpen ? "with-ai" : ""}`} style={{ "--problem-pane-width": `${problemWidth}%` } as CSSProperties}>
+        <div
+          ref={workspaceLayout}
+          className={`workspace-layout ${isAiPanelOpen ? "with-ai" : ""}`}
+          style={{
+            "--problem-pane-width": `${problemWidth}%`,
+            "--editor-pane-height": `${editorHeight}%`,
+          } as CSSProperties}
+        >
           <section
+            id="workspace-problem-pane"
             className={
               "problem-pane mobile-pane" +
               (mobileTab === "Problem" ? " mobile-visible" : "")
@@ -264,7 +404,6 @@ function Workspace({ problem }: { problem: Problem }) {
                   {t}
                 </button>
               ))}
-              {!isAiPanelOpen && <label className="workspace-pane-size" title="Resize problem panel"><span>Panel width</span><input type="range" min="25" max="55" value={problemWidth} onChange={(event) => setProblemWidth(Number(event.target.value))} aria-label="Problem panel width" /></label>}
             </div>
             <div className="problem-scroll">
               {problemTab === "Description" ? (
@@ -297,58 +436,73 @@ function Workspace({ problem }: { problem: Problem }) {
                 </>
               )}
             </div>
-            {help && (
-              <section className="help-drawer" aria-label="Problem help">
-                <div className="section-heading">
-                  <div className="help-tabs">
-                    {(["Hint"] as const).map((t) => (
-                      <button
-                        className={help === t ? "active" : ""}
-                        onClick={() => setHelp(t)}
-                        key={t}
-                      >
-                        {t}
-                      </button>
-                    ))}
+            <div
+              id="workspace-hint-panel"
+              className={"help-drawer-region" + (help ? " is-open" : "")}
+              aria-hidden={!help}
+            >
+              <div className="help-drawer-region-inner">
+                <section className="help-drawer" aria-label="Problem help">
+                  <div className="section-heading">
+                    <div className="help-tabs">
+                      {(["Hint"] as const).map((t) => (
+                        <button
+                          className={help === t ? "active" : ""}
+                          onClick={() => setHelp(t)}
+                          key={t}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      className="icon-button"
+                      ref={helpClose}
+                      onClick={closeHelp}
+                      aria-label="Collapse help"
+                    >
+                      <X size={18} />
+                    </button>
                   </div>
-                  <button
-                    className="icon-button"
-                    ref={helpClose}
-                    onClick={closeHelp}
-                    aria-label="Collapse help"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-                <p aria-live="polite">{helpText}</p>
-                <small className="muted">
-                  Guidance only · no complete solution.
-                </small>
-              </section>
-            )}
+                  <p aria-live="polite">{helpText}</p>
+                  <small className="muted">
+                    Guidance only · no complete solution.
+                  </small>
+                </section>
+              </div>
+            </div>
             <div className="help-dock">
               <button
+                ref={helpTrigger}
                 disabled={contestMode}
+                aria-expanded={!!help}
+                aria-controls="workspace-hint-panel"
                 title={
                   contestMode ? "Hints are disabled during contests" : undefined
                 }
-                onClick={(e) => {
-                  helpTrigger.current = e.currentTarget;
-                  setHelp("Hint");
+                onClick={() => {
+                  if (help) closeHelp();
+                  else setHelp("Hint");
                 }}
               >
-                Show hint
+                {help ? "Hide hint" : "Show hint"}
               </button>
               <button
+                ref={aiTrigger}
                 disabled={!contestAiAllowed}
+                aria-expanded={isAiPanelOpen}
+                aria-controls="workspace-ai-panel"
                 title={
                   !contestAiAllowed
                     ? "AI assistance is disabled during contests"
                     : undefined
                 }
-                onClick={(e) => {
-                  setIsAiPanelOpen(true);
-                  if (expanded) setExpanded(false);
+                onClick={() => {
+                  if (isAiPanelOpen) closeAiPanel();
+                  else {
+                    setIsAiPanelOpen(true);
+                    if (expanded) setExpanded(false);
+                  }
                 }}
               >
                 Ask AI
@@ -364,8 +518,31 @@ function Workspace({ problem }: { problem: Problem }) {
               </button>
             </div>
           </section>
-          <div className="editor-results">
+          <div
+            className="workspace-splitter workspace-splitter-vertical"
+            role="separator"
+            aria-label="Resize problem and editor panes"
+            aria-orientation="vertical"
+            aria-controls="workspace-problem-pane workspace-editor-results"
+            aria-valuemin={MIN_PROBLEM_WIDTH}
+            aria-valuemax={MAX_PROBLEM_WIDTH}
+            aria-valuenow={Math.round(problemWidth)}
+            aria-valuetext={`Problem pane ${Math.round(problemWidth)} percent`}
+            tabIndex={0}
+            onPointerDown={(event) => startResize("vertical", event)}
+            onPointerMove={(event) => moveResize("vertical", event)}
+            onPointerUp={stopResize}
+            onPointerCancel={stopResize}
+            onLostPointerCapture={() => {
+              activeResize.current = null;
+              setResizing(null);
+            }}
+            onDoubleClick={() => setProblemWidth(DEFAULT_PROBLEM_WIDTH)}
+            onKeyDown={(event) => resizeWithKeyboard("vertical", event)}
+          />
+          <div id="workspace-editor-results" className="editor-results" ref={editorResults}>
             <section
+              id="workspace-editor-pane"
               className={
                 "editor-pane mobile-pane" +
                 (mobileTab === "SQL" ? " mobile-visible" : "")
@@ -474,7 +651,30 @@ function Workspace({ problem }: { problem: Problem }) {
                 </button>
               </div>
             </section>
+            <div
+              className="workspace-splitter workspace-splitter-horizontal"
+              role="separator"
+              aria-label="Resize editor and result panes"
+              aria-orientation="horizontal"
+              aria-controls="workspace-editor-pane workspace-result-pane"
+              aria-valuemin={MIN_EDITOR_HEIGHT}
+              aria-valuemax={MAX_EDITOR_HEIGHT}
+              aria-valuenow={Math.round(editorHeight)}
+              aria-valuetext={`Editor pane ${Math.round(editorHeight)} percent`}
+              tabIndex={0}
+              onPointerDown={(event) => startResize("horizontal", event)}
+              onPointerMove={(event) => moveResize("horizontal", event)}
+              onPointerUp={stopResize}
+              onPointerCancel={stopResize}
+              onLostPointerCapture={() => {
+                activeResize.current = null;
+                setResizing(null);
+              }}
+              onDoubleClick={() => setEditorHeight(DEFAULT_EDITOR_HEIGHT)}
+              onKeyDown={(event) => resizeWithKeyboard("horizontal", event)}
+            />
             <section
+              id="workspace-result-pane"
               className={
                 "result-pane mobile-pane" +
                 (mobileTab === "Result" ? " mobile-visible" : "")
@@ -544,13 +744,17 @@ function Workspace({ problem }: { problem: Problem }) {
               </div>
             </section>
           </div>
-          {isAiPanelOpen && (
-            <AiChatPanel 
-              problem={problem} 
-              code={code} 
-              onClose={() => setIsAiPanelOpen(false)} 
+          <div
+            id="workspace-ai-panel"
+            className="workspace-ai-region"
+            aria-hidden={!isAiPanelOpen}
+          >
+            <AiChatPanel
+              problem={problem}
+              code={code}
+              onClose={closeAiPanel}
             />
-          )}
+          </div>
         </div>
       </main>
       {confirmResetQuery && <Dialog title="Reset SQL query?" onClose={() => setConfirmResetQuery(false)}><p>Your current SQL draft will be cleared from this browser.</p><div className="dialog-actions"><button className="button" type="button" onClick={() => setConfirmResetQuery(false)}>Cancel</button><button className="button primary" type="button" onClick={() => { setCode(""); setResult(null); setLastSubmit(null); setConfirmResetQuery(false); }}>Clear query</button></div></Dialog>}
