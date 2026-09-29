@@ -32,7 +32,7 @@ export function ContestsListPage() {
   const filtered = contests.filter(item => `${item.title} ${item.classes} ${item.shortDescription || ""}`.toLowerCase().includes(search.toLowerCase()) && (status === "All statuses" || contestStatus(item.status) === status));
   const selected = filtered.find(item => item.id === selectedId) || filtered[0];
   return <section className="teacher-page teacher-list-page">
-    <TeacherPageIntro title="Contests" context={error ? "Contests unavailable" : `${contests.length} contest${contests.length === 1 ? "" : "s"} · ${contests.filter(item => item.status === "Open").length} live`}>
+    <TeacherPageIntro compact title="Contests" context={error ? "Contests unavailable" : `${contests.length} contest${contests.length === 1 ? "" : "s"} · ${contests.filter(item => item.status === "Open").length} live`}>
       <Link className="button primary" to="/teacher/contests/new">New contest</Link>
     </TeacherPageIntro>
     {loading ? <Loading label="Loading contests…" /> : error ? <ErrorState title="Could not load contests" message={error} onRetry={() => window.location.reload()} /> : <>
@@ -41,7 +41,7 @@ export function ContestsListPage() {
         <TeacherField label="STATUS"><select value={status} onChange={event => setStatus(event.target.value)}><option>All statuses</option><option>Live</option><option>Upcoming</option><option>Closed</option><option>Draft</option></select></TeacherField>
       </div>
       {!contests.length ? <Empty title="No contests yet">Create a timed contest for selected classes or all students.</Empty> : <div className="teacher-list-detail-layout">
-        <div className="teacher-list-detail-main"><div className="teacher-table-scroll"><table className="teacher-table"><thead><tr><th>CONTEST</th><th>AUDIENCE</th><th>STARTS</th><th>ENDS</th><th>DURATION</th><th>STATUS</th></tr></thead><tbody>
+        <div className="teacher-list-detail-main"><div className="teacher-table-scroll sticky-list-table-wrap"><table className="teacher-table teacher-contest-list-table sticky-list-table"><thead><tr><th>CONTEST</th><th>AUDIENCE</th><th>STARTS</th><th>ENDS</th><th>DURATION</th><th>STATUS</th></tr></thead><tbody>
           {filtered.map(item => <tr key={item.id} className={selected?.id === item.id ? "is-selected" : ""}>
             <td data-label="CONTEST"><button type="button" className="teacher-selectable-row-title" onClick={() => setSelectedId(item.id)}>{item.title}</button></td>
             <td data-label="AUDIENCE">{item.classes}</td><td data-label="STARTS">{date(item.opens)}</td><td data-label="ENDS">{date(item.closes)}</td><td data-label="DURATION">{duration(item.opens, item.closes)}</td><td data-label="STATUS"><Status value={contestStatus(item.status)} /></td>

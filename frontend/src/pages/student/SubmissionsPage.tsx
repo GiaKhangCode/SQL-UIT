@@ -5,7 +5,7 @@ import { studentApi } from "../../services/studentApi";
 import { type Submission } from "../../data/models";
 import { SubmissionDetails } from "../../components/SubmissionDetails";
 import { useLoad } from "../../components/useLoad";
-import { Empty, ErrorState, Loading, PageHeading, Status } from "../../components/ui";
+import { Empty, ErrorState, Loading, Status } from "../../components/ui";
 import { submissionTimeLabel } from "../../utils/serverDateTime";
 
 export function SubmissionsPage() {
@@ -21,10 +21,7 @@ export function SubmissionsPage() {
   const { data: problemsList } = useLoad(() => studentApi.getProblems({ includePrivate: true }), []);
   return (
     <section className="page submissions-page">
-      <PageHeading
-        title="Submissions"
-        sub="Your SQL attempts, results and feedback."
-      />
+      <h1 className="sr-only">Submissions</h1>
       <div className="filters submissions-filters">
         <label className="field search-field">
           Search
@@ -72,12 +69,12 @@ export function SubmissionsPage() {
         <>
           <p className="tiny muted">{data.length} submission{data.length === 1 ? "" : "s"}</p>
           <div
-            className="table-scroll submissions-desktop"
+            className="table-scroll submissions-desktop sticky-list-table-wrap"
             aria-busy={loading}
             tabIndex={0}
             aria-label="Submission history"
           >
-            <table className="submissions-table">
+            <table className="submissions-table sticky-list-table">
               <thead>
                 <tr>
                   <th>SQL problem</th>

@@ -14,6 +14,10 @@
 .teacher-page-intro,.admin-page-intro { min-height:unset; margin-bottom:20px; padding:0 0 18px; border-bottom:1px solid var(--border); }
 .teacher-page-intro h1,.admin-page-intro h1 { font-size:22px; line-height:30px; }
 .teacher-page-intro p,.admin-page-intro p { font-size:12px; line-height:18px; }
+/* Top-level lists retain context and actions without repeating the navigation title. */
+.page-list-intro { align-items:center; min-height:0; margin-bottom:18px; padding:0; border:0; }
+.page-list-intro p { margin:0; }
+.page-list-intro .teacher-page-actions,.page-list-intro .admin-page-actions { margin-top:0; }
 .teacher-divider { display:none; }
 .teacher-field,.admin-field { gap:6px; font-size:11px; line-height:16px; }
 .teacher-field input,.teacher-field select,.teacher-field textarea,.admin-field input,.admin-field select,.admin-field textarea { min-height:40px; padding:9px 11px; font-size:12px; line-height:20px; border-radius:var(--radius-md); }
@@ -89,6 +93,26 @@
 .admin-section-tabs > a,.admin-section-tabs > button,.admin-role-tabs button { min-height:40px; padding:9px 10px; font-size:12px; }
 .admin-section-heading,.admin-side h2 { font-size:15px; line-height:22px; }
 .admin-preview-section pre { font-size:12px; line-height:18px; }
+/* Only table context sticks. Visible overflow lets the document own vertical scrolling. */
+@media (min-width:801px) {
+  .sticky-list-table-wrap { overflow:visible; }
+  :is(.teacher-list-detail-main,.teacher-classes-main,.admin-primary):has(.sticky-list-table) { overflow:visible; }
+  .sticky-list-table { width:100%; min-width:0; table-layout:fixed; }
+  /*
+   * The card must keep visible overflow so this header can stick to the
+   * document. Clip the sticky table group itself instead of rounding its edge
+   * cells: it follows the card's inner radius without creating a scroll
+   * container or a second rounded surface.
+   */
+  .sticky-list-table > thead { position:sticky; top:var(--header-height); z-index:5; background:var(--subtle); box-shadow:0 1px 0 var(--border); clip-path:inset(0 round calc(var(--radius-lg) - 1px) calc(var(--radius-lg) - 1px) 0 0); }
+  .sticky-list-table :is(th,td) { overflow-wrap:anywhere; }
+  .sticky-list-table th { white-space:normal; }
+  .sticky-list-table > thead > tr > th { border-radius:0; }
+  .sticky-list-table .teacher-list-actions { white-space:normal; }
+  .teacher-results-table.teacher-activity-results-table th:first-child { width:22%; }
+  .teacher-results-table.teacher-activity-results-table th:nth-child(2) { width:14%; }
+}
+:is(.page,.teacher-page,.admin-page) :is(input,select,button,a,[tabindex]) { scroll-margin-top:calc(var(--header-height) + 64px); }
 @media (max-width:900px) {
   .teacher-page,.admin-page { padding:22px 20px 44px; }
   .teacher-list-detail-layout,.admin-split,.teacher-builder-layout,.teacher-classes-layout { grid-template-columns:minmax(0,1fr); gap:20px; }
@@ -102,6 +126,7 @@
   .teacher-list-filters,.teacher-problem-filters,.teacher-activity-filters,.teacher-results-filters,.admin-practice-filters { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
 @media (max-width:800px) {
+  .page-list-intro { align-items:flex-start; }
   .admin-edit-access { position:static; }
   .teacher-page table td,.admin-page table td { font-size:12px; line-height:18px; }
   .teacher-page table td:first-child,.admin-page table td:first-child { font-size:13px; line-height:20px; }

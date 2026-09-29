@@ -113,6 +113,7 @@ export function PracticePage() {
   }
   return (
     <section className="page practice-page" aria-label="Practice problems">
+      <h1 className="sr-only">Practice</h1>
       <div className="practice-layout">
         <div className="practice-main">
           <div className="filters">

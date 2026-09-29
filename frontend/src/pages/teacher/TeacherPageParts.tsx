@@ -4,15 +4,17 @@ export function TeacherPageIntro({
   title,
   context,
   children,
+  compact = false,
 }: {
   title: string;
   context: string;
   children?: ReactNode;
+  compact?: boolean;
 }) {
   return (
-    <div className="teacher-page-intro">
+    <div className={`teacher-page-intro${compact ? " page-list-intro" : ""}`}>
       <div>
-        <h1>{title}</h1>
+        <h1 className={compact ? "sr-only" : undefined}>{title}</h1>
         <p>{context}</p>
       </div>
       {children && <div className="teacher-page-actions">{children}</div>}

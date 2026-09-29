@@ -18,7 +18,7 @@ const enrolled = {
   assignments: [
     { id: "A1", title: "Exercise", instructions: "Solve the query.", isContest: false, classIds: ["C1"], problemIds: ["P1"], problemProgress: { P1: "Not started" } },
     { id: "T1", title: "Sprint", isContest: true, classIds: ["C1"], audienceType: "classes", scope: "SQL", contestStatus: "Upcoming", shortDescription: "Quick SQL sprint", description: "## About", rules: "Solve both problems", opens: "2026-09-25T10:00:00Z", closes: "2026-09-25T11:30:00Z", problemIds: [], problemCount: 1, problemDetails: [], submitters: 0, score: 0, totalPoints: 20, rank: null, leaderboardEnabled: true, aiAllowed: false, leaderboard: [], problemProgress: { P1: "Not started" } },
-    { id: "T2", title: "Campus sprint", isContest: true, classIds: [], audienceType: "all_students", scope: "All students", contestStatus: "Live", shortDescription: "Open to campus", description: "## Campus", rules: "Submit before closing", opens: "2026-09-25T10:00:00Z", closes: "2026-09-25T11:30:00Z", problemIds: ["P1"], problemCount: 1, problemDetails: [{ id: "P1", title: "First query", difficulty: "Easy", topic: "SELECT" }], submitters: 2, score: 10, totalPoints: 20, rank: 2, leaderboardEnabled: true, aiAllowed: false, leaderboard: [], problemProgress: { P1: "In progress" } },
+    { id: "T2", title: "Campus sprint", isContest: true, classIds: [], audienceType: "all_students", scope: "All students", contestStatus: "Live", shortDescription: "Open to campus", description: "## Campus", rules: "Submit before closing", bannerUrl: "/api/assignments/banners/campus.webp", opens: "2026-09-25T10:00:00Z", closes: "2026-09-25T11:30:00Z", problemIds: ["P1"], problemCount: 1, problemDetails: [{ id: "P1", title: "First query", difficulty: "Easy", topic: "SELECT" }], submitters: 2, score: 10, totalPoints: 20, rank: 2, leaderboardEnabled: true, aiAllowed: false, leaderboard: [], problemProgress: { P1: "In progress" } },
   ],
   deadlines: [
     { id: "A1", title: "Exercise", date: futureUtc[0], time: futureUtc[1], kind: "Assignment", to: "/assignments?work=A1" },
@@ -62,12 +62,12 @@ globalThis.fetch = async (url, options = {}) => {
 
 const output = await build({
   stdin: {
-    contents: "export * from './src/services/authService'; export * from './src/services/studentApi'; export * from './src/services/apiClient'; export * from './src/utils/contestMarkdown';",
+    contents: "export * from './src/services/authService'; export * from './src/services/studentApi'; export * from './src/services/apiClient'; export * from './src/utils/contestMarkdown'; export * from './src/utils/contestBanner'; export * from './src/utils/featuredContests';",
     resolveDir: process.cwd(), loader: "ts",
   },
   bundle: true, write: false, format: "esm", platform: "node",
 });
-const { authService, studentApi, apiFetch, readContestMarkdown, TOKEN_KEY, SESSION_KEY } = await import(
+const { authService, studentApi, apiFetch, readContestMarkdown, contestBannerClass, contestBannerStyle, selectFeaturedContests, TOKEN_KEY, SESSION_KEY } = await import(
   "data:text/javascript;base64," + Buffer.from(output.outputFiles[0].text).toString("base64")
 );
 
@@ -94,7 +94,43 @@ assert.equal(contests[0].problemCount, 1);
 assert.equal(contests[1].submitters, 2);
 assert.equal(contests[1].scope, "All students");
 assert.equal(contests[1].shortDescription, "Open to campus");
+assert.equal(contests[1].bannerUrl, "/api/assignments/banners/campus.webp");
 assert.equal(contests[0].status, "Upcoming");
+assert.equal(contestBannerClass("T2"), contestBannerClass("T2"));
+assert.match(contestBannerStyle(contests[1].bannerUrl).backgroundImage, /campus\.webp/);
+assert.equal(contestBannerStyle(null), undefined);
+const featuredCandidate = (id, status, opensAt) => ({ id, title: id, status, opensAt });
+assert.deepEqual(selectFeaturedContests([]), []);
+assert.deepEqual(selectFeaturedContests([featuredCandidate("U1", "Upcoming", "2026-10-01T09:00:00Z")]).map(item => item.id), ["U1"]);
+assert.deepEqual(selectFeaturedContests([
+  featuredCandidate("U2", "Upcoming", "2026-10-02T09:00:00Z"),
+  featuredCandidate("L2", "Live", "2026-10-02T10:00:00Z"),
+]).map(item => item.id), ["L2", "U2"]);
+assert.deepEqual(selectFeaturedContests([
+  featuredCandidate("C1", "Closed", "2026-09-01T09:00:00Z"),
+  featuredCandidate("U3", "Upcoming", "2026-10-03T09:00:00Z"),
+  featuredCandidate("U1", "Upcoming", "2026-10-01T09:00:00Z"),
+  featuredCandidate("L1", "Live", "2026-10-04T09:00:00Z"),
+  featuredCandidate("L0", "Live", "2026-10-03T09:00:00Z"),
+]).map(item => item.id), ["L0", "L1", "U1", "U3"]);
+assert.deepEqual(selectFeaturedContests([
+  featuredCandidate("L3", "Live", "2026-10-03T09:00:00Z"),
+  featuredCandidate("L1", "Live", "2026-10-01T09:00:00Z"),
+  featuredCandidate("L2", "Live", "2026-10-02T09:00:00Z"),
+]).map(item => item.id), ["L1", "L2", "L3"]);
+assert.deepEqual(selectFeaturedContests(Array.from({ length: 4 }, (_, index) =>
+  featuredCandidate(`U${index}`, "Upcoming", `2026-10-${String(index + 1).padStart(2, "0")}T09:00:00Z`),
+)).map(item => item.id), ["U0", "U1", "U2", "U3"]);
+assert.deepEqual(selectFeaturedContests([
+  featuredCandidate("L1", "Live", "2026-10-01T09:00:00Z"),
+  ...Array.from({ length: 5 }, (_, index) => featuredCandidate(`U${index}`, "Upcoming", `2026-10-${String(index + 2).padStart(2, "0")}T09:00:00Z`)),
+]).map(item => item.id), ["L1", "U0", "U1", "U2", "U3", "U4"]);
+assert.equal(selectFeaturedContests(Array.from({ length: 6 }, (_, index) =>
+  featuredCandidate(`L${index}`, "Live", `2026-10-${String(index + 1).padStart(2, "0")}T09:00:00Z`),
+)).length, 6);
+assert.equal(selectFeaturedContests(Array.from({ length: 8 }, (_, index) =>
+  featuredCandidate(`U${index}`, "Upcoming", `2026-10-${String(index + 1).padStart(2, "0")}T09:00:00Z`),
+)).length, 6);
 const markdown = "## Campus sprint\nSolve SQL problems.";
 assert.equal(await readContestMarkdown({ name: "contest.md", size: markdown.length, text: async () => markdown }), markdown);
 await assert.rejects(() => readContestMarkdown({ name: "contest.html", size: 4, text: async () => "bad" }), /Markdown/);

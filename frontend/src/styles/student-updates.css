@@ -1348,21 +1348,21 @@ body:has(.assignment-work-page), body:has(.scope-detail-page) { background: var(
 @media (max-width:1100px) { .dashboard-layout { grid-template-columns:minmax(0,1fr) 320px; gap:20px; } .dashboard-activity-body { grid-template-columns:220px minmax(0,1fr); gap:20px; } }
 @media (max-width:760px) { .dashboard-page { padding-top:20px; } .dashboard-layout { grid-template-columns:1fr; gap:20px; } .dashboard-deadlines { order:-1; } .dashboard-activity-body { grid-template-columns:1fr; } .dashboard-activity-card { padding:16px; } .dashboard-activity-card .activity { overflow-x:auto; } .dashboard-heading-actions { gap:8px; } .continue-row { align-items:flex-start; } .dashboard-resume { padding:6px 10px; } }
 
-/* Practice results, with one offset shared by the sticky filters and table heading. */
-.practice-page { --practice-filter-height:70px; max-width:1314px; padding-top:32px; }
+/* Filters scroll normally; only the problem columns remain below the navigation. */
+.practice-page { max-width:1314px; padding-top:32px; }
 .practice-layout { align-items:start; grid-template-columns:minmax(0,1fr) 400px; gap:32px; }
 .practice-main { min-width:0; }
-.practice-page .filters { position:sticky; top:var(--header-height); z-index:4; display:grid; grid-template-columns:minmax(0,1.8fr) repeat(3,minmax(0,1fr)); gap:10px; height:var(--practice-filter-height); margin-bottom:8px; padding:0 0 8px; background:var(--surface); }
+.practice-page .filters { display:grid; grid-template-columns:minmax(0,1.8fr) repeat(3,minmax(0,1fr)); gap:10px; margin-bottom:8px; padding:0 0 8px; }
 .practice-page .filters .field { min-width:0; font-size:10px; }
 .practice-page .filters input, .practice-page .filters select { height:36px; padding:0 10px; font-size:11px; }
-.practice-page .problem-list { border:0; scroll-margin-top:calc(var(--header-height) + var(--practice-filter-height) + 8px); }
-.practice-page .problem-list-heading { position:sticky; top:calc(var(--header-height) + var(--practice-filter-height)); z-index:3; min-height:29px; padding:0 14px; background:var(--subtle); font-size:9px; }
+.practice-page .problem-list { border:0; scroll-margin-top:calc(var(--header-height) + 8px); }
+.practice-page .problem-list-heading { position:sticky; top:var(--header-height); z-index:5; min-height:29px; padding:0 14px; background:var(--subtle); box-shadow:0 1px 0 var(--border); font-size:9px; }
 .practice-page .problem-row { min-height:62px; padding:14px; border-bottom:1px solid var(--border); }
 .practice-page .practice-sidebar { position:sticky; top:calc(var(--header-height) + 16px); }
 @media (max-width:1100px) { .practice-layout { grid-template-columns:minmax(0,1fr) 320px; gap:20px; } }
 @media (max-width:760px) {
   .practice-layout { grid-template-columns:minmax(0,1fr); gap:0; }
-  .practice-page .filters { position:static; grid-template-columns:1fr; height:auto; margin-bottom:12px; }
+  .practice-page .filters { grid-template-columns:1fr; height:auto; margin-bottom:12px; }
   .practice-page .problem-list { scroll-margin-top:calc(var(--header-height) + 8px); }
   .practice-page .problem-list-heading { position:static; }
   .practice-page .practice-sidebar { position:static; }
@@ -1398,8 +1398,6 @@ body:has(.assignment-work-page), body:has(.scope-detail-page) { background: var(
 .submission-detail-footer { flex:none; background:var(--surface); }
 
 @media (max-width:760px) {
-  .featured-contests { display:flex; gap:12px; overflow-x:auto; scroll-snap-type:x mandatory; padding-bottom:4px; }
-  .featured-contest { flex:0 0 100%; scroll-snap-align:start; }
   .contest-tab-count { font-size:9px; }
   .submissions-page { padding-top:20px; }
   .submissions-filters { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }

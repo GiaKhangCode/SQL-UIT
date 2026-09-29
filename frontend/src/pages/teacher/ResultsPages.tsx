@@ -54,12 +54,11 @@ export function ResultsDashboardPage() {
   }
 
   if (loading) return <div className="teacher-page"><Loading label="Loading results…" /></div>;
-  if (error) return <div className="teacher-page"><TeacherPageIntro title="Results" context="Results unavailable" /><ErrorState title="Could not load results" message={error} onRetry={() => window.location.reload()} /></div>;
+  if (error) return <div className="teacher-page"><TeacherPageIntro compact title="Results" context="Results unavailable" /><ErrorState title="Could not load results" message={error} onRetry={() => window.location.reload()} /></div>;
 
   return (
     <section className="teacher-page teacher-results-page">
-      <TeacherPageIntro title="Results" context={`${assignments?.length || 0} assignments and contests · ${assignments?.filter((a: any) => a.awaiting > 0).length || 0} awaiting review`} />
-      <div className="teacher-divider" />
+      <TeacherPageIntro compact title="Results" context={`${assignments?.length || 0} assignments and contests · ${assignments?.filter((a: any) => a.awaiting > 0).length || 0} awaiting review`} />
 
       <div className="teacher-list-filters teacher-results-filters">
         <TeacherField label="SEARCH">
@@ -101,8 +100,8 @@ export function ResultsDashboardPage() {
 
       <div className="teacher-list-detail-layout teacher-results-detail-layout">
         <div className="teacher-list-detail-main teacher-results-table-wrap">
-          <div className="teacher-table-scroll">
-            <table className="teacher-table teacher-results-table teacher-activity-results-table">
+          <div className="teacher-table-scroll sticky-list-table-wrap">
+            <table className="teacher-table teacher-results-table teacher-activity-results-table sticky-list-table">
               <thead>
                 <tr>
                   <th>ASSIGNMENT / CONTEST</th><th>TYPE</th><th>CLASSES</th><th>SUBMITTED</th><th>AVG SCORE</th><th>AWAITING REVIEW</th><th>ACTIONS</th>

@@ -246,7 +246,10 @@ def seed():
             ("open-four-pass", students[4], "dev-null", "dev-assignment-open", "Accepted", 100, 0.5, None, None, None),
             ("practice-demo", students[0], "dev-order", None, "Accepted", 100, 0.25, None, None, None),
             ("contest-one", students[3], "dev-cte", "dev-contest-open", "Accepted", 40, 0.01, None, None, None),
+            ("contest-ended-winner-order", students[1], "dev-order", "dev-contest-ended", "Accepted", 20, 5 - 1 / 48, None, None, None),
+            ("contest-ended-winner-group", students[1], "dev-group", "dev-contest-ended", "Accepted", 30, 5 - 1 / 48, None, None, None),
             ("contest-ended", students[0], "dev-order", "dev-contest-ended", "Accepted", 20, 5 - 1 / 48, None, None, None),
+            ("contest-ended-runner", students[2], "dev-order", "dev-contest-ended", "Accepted", 20, 5 - 1 / 48, None, None, None),
         ]
         for slug, student, problem_id, activity_id, result, score, days_ago, query, evaluated, feedback in submission_specs:
             record_id = f"dev-sub-{slug}"

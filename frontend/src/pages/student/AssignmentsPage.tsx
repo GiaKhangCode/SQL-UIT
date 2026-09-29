@@ -67,6 +67,7 @@ export function AssignmentsPage() {
   );
   return (
     <section className="page assignments-page">
+      <h1 className="sr-only">Assignments</h1>
       <div className="assignment-mobile-deadlines">
         <b>
           Deadlines · Next:{" "}

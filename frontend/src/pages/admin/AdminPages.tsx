@@ -14,8 +14,8 @@ import { studentApi } from "../../services/studentApi";
 import { academicTerms } from "../../utils/academicTerms";
 import { localTime } from "../../utils/serverDateTime";
 
-function PageIntro({ title, sub, children }: { title: string; sub: string; children?: ReactNode }) {
-  return <div className="admin-page-intro"><div><h1>{title}</h1><p>{sub}</p></div>{children && <div className="admin-page-actions">{children}</div>}</div>;
+function PageIntro({ title, sub, children, compact = false }: { title: string; sub?: string; children?: ReactNode; compact?: boolean }) {
+  return <div className={`admin-page-intro${compact ? " page-list-intro" : ""}`}><div><h1 className={compact ? "sr-only" : undefined}>{title}</h1>{sub && <p>{sub}</p>}</div>{children && <div className="admin-page-actions">{children}</div>}</div>;
 }
 
 function Split({ main, side, className = "" }: { main: ReactNode; side: ReactNode; className?: string }) {
@@ -155,10 +155,10 @@ export function AdminUsersPage() {
     setStatusError("");
     setConfirmDeactivation(userToUpdate);
   }
-  if (loading) return <div className="admin-page"><Loading label="Loading users…" /></div>;
-  if (loadError) return <div className="admin-page"><PageIntro title="Users" sub="People & access" /><ErrorState title="Could not load users" message={loadError} onRetry={() => window.location.reload()} /></div>;
+  if (loading) return <div className="admin-page"><h1 className="sr-only">Users</h1><Loading label="Loading users…" /></div>;
+  if (loadError) return <div className="admin-page"><h1 className="sr-only">Users</h1><ErrorState title="Could not load users" message={loadError} onRetry={() => window.location.reload()} /></div>;
   return <div className="admin-page">
-    <PageIntro title="Users" sub={`People & access / ${users.length.toLocaleString()} accounts`}>
+    <PageIntro compact title="Users" sub={`${users.length.toLocaleString()} accounts`}>
       <button className="button admin-button" onClick={exportCsv} disabled={users.length === 0}>Export all CSV</button><button className="button primary admin-button" onClick={() => setDialog(true)}>Add user</button>
     </PageIntro>
     {pendingRequestCount > 0 && <div className="admin-pending-banner"><span>{pendingRequestCount} lecturer registrations are awaiting approval. Lecturer access stays locked until approved.</span><Link className="text-button" to="/admin/users/approvals">Review requests →</Link></div>}
@@ -169,7 +169,7 @@ export function AdminUsersPage() {
     </div>
     {notice && <Notice>{notice}</Notice>}
     <Split main={<>
-      <div className="admin-table-wrap"><table className="admin-table admin-users-table"><thead><tr><th>NAME / EMAIL</th><th>ROLE</th><th>STATUS</th><th>LAST ACTIVE</th></tr></thead><tbody>
+      <div className="admin-table-wrap sticky-list-table-wrap"><table className="admin-table sticky-list-table admin-users-table"><thead><tr><th>NAME / EMAIL</th><th>ROLE</th><th>STATUS</th><th>LAST ACTIVE</th></tr></thead><tbody>
         {filtered.map((user) => <tr key={user.email} className={selectedEmail === user.email ? "is-selected" : ""} onClick={() => setSelectedEmail(user.email)}>
           <td data-label="NAME / EMAIL"><button className="admin-row-link" onClick={() => setSelectedEmail(user.email)}>{user.name}</button><small>{user.email}</small></td><td data-label="ROLE">{user.role}</td><td data-label="STATUS" className={user.status === "Active" ? "admin-success" : ""}>{user.status}</td><td data-label="LAST ACTIVE">{user.lastActive}</td>
         </tr>)}
@@ -350,8 +350,8 @@ export function AdminLecturerApprovalsPage() {
     }
   }
 
-  return <div className="admin-page">
-    <PageIntro title="Users" sub={`People & access / ${requests.length} pending lecturer requests`} />
+  return <div className="admin-page admin-approvals-page">
+    <PageIntro title="Lecturer approvals" sub={`People & access / ${requests.length} pending lecturer requests`} />
     <div className="admin-section-tabs">
       <Link to="/admin/users">All users</Link>
       <Link className="active" to="/admin/users/approvals">Lecturer approvals ({requests.length})</Link>
@@ -359,7 +359,7 @@ export function AdminLecturerApprovalsPage() {
     {notice && <Notice>{notice}</Notice>}
     {loading ? <Loading label="Loading lecturer requests…" /> : loadError ? <p className="admin-notice" role="alert">{loadError}</p> :
     <Split main={<>
-      <div className="admin-table-wrap"><table className="admin-table admin-approval-table"><thead><tr><th>NAME / EMAIL</th><th>DEPARTMENT</th><th>SUBMITTED</th><th>STATUS</th></tr></thead><tbody>
+      <div className="admin-table-wrap sticky-list-table-wrap"><table className="admin-table sticky-list-table admin-approval-table"><thead><tr><th>NAME / EMAIL</th><th>DEPARTMENT</th><th>SUBMITTED</th><th>STATUS</th></tr></thead><tbody>
         {requests.map((request) => <tr key={request.email} className={request.email === selected?.email ? "is-selected" : ""} onClick={() => setSelectedEmail(request.email)}>
           <td data-label="NAME / EMAIL"><button className="admin-row-link" type="button" onClick={() => setSelectedEmail(request.email)}>{request.name}</button><small>{request.email}</small></td>
           <td data-label="DEPARTMENT">{request.department}</td><td data-label="SUBMITTED">{request.submitted}</td><td data-label="STATUS" className="admin-warning">Pending</td>
@@ -391,8 +391,8 @@ export function AdminRolesPage() {
   };
   const enabledCount = adminCapabilities.filter(({ key }) => policy.permissions[key]?.[selectedRole]).length;
   return <div className="admin-page">
-    <PageIntro title="Roles & permissions" sub="Illustrative role guide · read only" />
-    <Split main={<div className="admin-table-wrap"><table className="admin-table admin-permissions-table"><thead><tr><th>CAPABILITY</th><th>STUDENT</th><th>LECTURER</th><th>ADMIN</th></tr></thead><tbody>{adminCapabilities.map(({ key, label }) => <tr key={key}><td data-label="CAPABILITY">{label}</td>{(["Student", "Lecturer", "Admin"] as const).map((role) => {
+    <PageIntro compact title="Roles & permissions" sub="Illustrative role guide · read only" />
+    <Split main={<div className="admin-table-wrap sticky-list-table-wrap"><table className="admin-table sticky-list-table admin-permissions-table"><thead><tr><th>CAPABILITY</th><th>STUDENT</th><th>LECTURER</th><th>ADMIN</th></tr></thead><tbody>{adminCapabilities.map(({ key, label }) => <tr key={key}><td data-label="CAPABILITY">{label}</td>{(["Student", "Lecturer", "Admin"] as const).map((role) => {
       const enabled = policy.permissions[key]?.[role] ?? false;
       return <td data-label={role.toUpperCase()} key={role}><span className={enabled ? "admin-success" : "admin-muted"}>{enabled ? "Allowed" : "—"}</span></td>;
     })}</tr>)}</tbody></table></div>} side={<>
@@ -510,13 +510,13 @@ export function AdminCoursesPage() {
     (semester === "All semesters" || item.semester === semester));
   const semesters = [...new Set(classes.map((item) => item.semester).filter(Boolean))].sort().reverse();
 
-  if (loading) return <div className="admin-page"><Loading label="Loading courses and classes…" /></div>;
-  if (loadError) return <div className="admin-page"><PageIntro title="Courses & classes" sub="Academic structure" /><ErrorState title="Could not load courses" message={loadError} onRetry={() => window.location.reload()} /></div>;
+  if (loading) return <div className="admin-page"><h1 className="sr-only">Courses & classes</h1><Loading label="Loading courses and classes…" /></div>;
+  if (loadError) return <div className="admin-page"><h1 className="sr-only">Courses & classes</h1><ErrorState title="Could not load courses" message={loadError} onRetry={() => window.location.reload()} /></div>;
 
   return <div className="admin-page">
-    <PageIntro title="Courses & classes" sub="Academic structure / Manage class rosters and access"><button className="button primary admin-button" onClick={() => { setCreateError(""); setDialog(true); }}>Add class</button></PageIntro>
+    <PageIntro compact title="Courses & classes" sub={`${classes.length.toLocaleString()} classes`}><button className="button primary admin-button" onClick={() => { setCreateError(""); setDialog(true); }}>Add class</button></PageIntro>
     <div className="admin-course-filters"><Field label="SEMESTER"><select value={semester} onChange={(event) => setSemester(event.target.value)}><option>All semesters</option>{semesters.map((term) => <option key={term}>{term}</option>)}</select></Field><Field label="SEARCH"><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search course or class..." /></Field></div>{loadError && <Notice>{loadError}</Notice>}{notice && <Notice>{notice}</Notice>}
-    <Split main={<div className="admin-table-wrap"><table className="admin-table admin-course-table"><thead><tr><th>COURSE / CLASS</th><th>LECTURER</th><th>STUDENTS</th><th>STATUS</th></tr></thead><tbody>{visible.map((item) => <tr key={item.id} className={item.id === selectedId ? "is-selected" : ""} onClick={() => setSelectedId(item.id)}><td data-label="COURSE / CLASS"><button className="admin-row-link" onClick={() => setSelectedId(item.id)}>{item.course}</button><small>{item.id}</small></td><td data-label="LECTURER" className={item.lecturer === "Unassigned" ? "admin-warning" : ""}>{item.lecturer}</td><td data-label="STUDENTS">{item.students}</td><td data-label="STATUS" className={item.status === "Active" ? "admin-success" : "admin-warning"}>{item.status}</td></tr>)}</tbody></table>{!loadError && classes.length === 0 && <p className="admin-table-footer">No classes yet. Add a class to get started.</p>}{!loadError && classes.length > 0 && visible.length === 0 && <p className="admin-table-footer">No classes match these filters.</p>}</div>} side={selected ? <>
+    <Split main={<div className="admin-table-wrap sticky-list-table-wrap"><table className="admin-table sticky-list-table admin-course-table"><thead><tr><th>COURSE / CLASS</th><th>LECTURER</th><th>STUDENTS</th><th>STATUS</th></tr></thead><tbody>{visible.map((item) => <tr key={item.id} className={item.id === selectedId ? "is-selected" : ""} onClick={() => setSelectedId(item.id)}><td data-label="COURSE / CLASS"><button className="admin-row-link" onClick={() => setSelectedId(item.id)}>{item.course}</button><small>{item.id}</small></td><td data-label="LECTURER" className={item.lecturer === "Unassigned" ? "admin-warning" : ""}>{item.lecturer}</td><td data-label="STUDENTS">{item.students}</td><td data-label="STATUS" className={item.status === "Active" ? "admin-success" : "admin-warning"}>{item.status}</td></tr>)}</tbody></table>{!loadError && classes.length === 0 && <p className="admin-table-footer">No classes yet. Add a class to get started.</p>}{!loadError && classes.length > 0 && visible.length === 0 && <p className="admin-table-footer">No classes match these filters.</p>}</div>} side={selected ? <>
       <h2>{selected.id}</h2><h3 className="admin-detail-title">{selected.course.split(" · ")[1] || selected.course}</h3><p className={selected.status === "Active" ? "admin-success" : "admin-warning"}>{selected.status}{selected.lecturer === "Unassigned" ? " · Lecturer needed" : ""}</p><div className="admin-detail-divider" />
       <Field label="SEMESTER"><select value={selected.semester} onChange={async (event) => {
         const newSemester = event.target.value;
@@ -692,7 +692,7 @@ export function AdminLecturersPage() {
       }}>{saving ? "Saving…" : "Save assignment"}</button>
     </PageIntro>{notice && <Notice>{notice}</Notice>}
     {loading ? <Loading label="Loading classes and lecturers…" /> : loadError ? <p className="admin-notice" role="alert">{loadError}</p> : assignments.length === 0 ? <p className="admin-muted">No classes are available for lecturer assignment.</p> :
-    <Split main={<div className="admin-table-wrap"><table className="admin-table admin-lecturer-table"><thead><tr><th>CLASS</th><th>CURRENT LECTURER</th><th>STATUS</th></tr></thead><tbody>{assignments.map((item) => <tr key={item.id} className={item.id === selectedId ? "is-selected" : ""} onClick={() => { setSelectedId(item.id); setLecturer(item.lecturerId || "Unassigned"); }}><td data-label="CLASS"><b>{item.id}</b></td><td data-label="CURRENT LECTURER" className={item.lecturer === "Unassigned" ? "admin-warning" : ""}>{item.lecturer}</td><td data-label="STATUS">{item.lecturer === "Unassigned" ? "Needs lecturer" : "Assigned"}</td></tr>)}</tbody></table></div>} side={selected ? <>
+    <Split main={<div className="admin-table-wrap sticky-list-table-wrap"><table className="admin-table sticky-list-table admin-lecturer-table"><thead><tr><th>CLASS</th><th>CURRENT LECTURER</th><th>STATUS</th></tr></thead><tbody>{assignments.map((item) => <tr key={item.id} className={item.id === selectedId ? "is-selected" : ""} onClick={() => { setSelectedId(item.id); setLecturer(item.lecturerId || "Unassigned"); }}><td data-label="CLASS"><b>{item.id}</b></td><td data-label="CURRENT LECTURER" className={item.lecturer === "Unassigned" ? "admin-warning" : ""}>{item.lecturer}</td><td data-label="STATUS">{item.lecturer === "Unassigned" ? "Needs lecturer" : "Assigned"}</td></tr>)}</tbody></table></div>} side={selected ? <>
       <h2>Assign {selected.id}</h2><p className="admin-muted">{selected.course.split(" · ")[1] || selected.course} · {selected.semester} · {selected.students} student{selected.students === 1 ? "" : "s"}</p><Field label="LECTURER"><select value={lecturer} onChange={(e) => setLecturer(e.target.value)}><option value="Unassigned">Unassigned</option>{lecturers.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></Field><div className="admin-detail-divider" /><h3 className="admin-subheading">Access preview</h3><p className="admin-muted">The selected lecturer can manage assignments, view class results and review submissions after assignment is saved.</p>
     </> : <h2>No class selected</h2>} />}
   </div>;
@@ -796,28 +796,28 @@ export function AdminPracticeCatalogPage() {
   }, [problems]);
 
   if (loading) {
-    return <div className="admin-page"><Loading label="Loading catalog…" /></div>;
+    return <div className="admin-page"><h1 className="sr-only">Practice catalog</h1><Loading label="Loading catalog…" /></div>;
   }
-  if (catalogError) return <div className="admin-page"><PageIntro title="Practice catalog" sub="Shared SQL problems" /><ErrorState title="Could not load catalog" message={catalogError} onRetry={() => window.location.reload()} /></div>;
+  if (catalogError) return <div className="admin-page"><h1 className="sr-only">Practice catalog</h1><ErrorState title="Could not load catalog" message={catalogError} onRetry={() => window.location.reload()} /></div>;
 
-  return <div className="admin-page">
-    <PageIntro title="Practice catalog" sub={`${problems.filter(p => p.status === "Visible").length} public problem${problems.filter(p => p.status === "Visible").length === 1 ? "" : "s"} · Catalog view`} />
+  return <div className="admin-page admin-practice-page">
+    <PageIntro compact title="Practice catalog" sub={`${problems.filter(p => p.status === "Visible").length} public problem${problems.filter(p => p.status === "Visible").length === 1 ? "" : "s"}`} />
+    {notice && <Notice>{notice}</Notice>}
     <div className="admin-section-tabs" role="tablist" aria-label="Practice catalog sections">
       <button type="button" role="tab" aria-selected={activeTab === "Problems"} className={activeTab === "Problems" ? "active" : ""} onClick={() => setActiveTab("Problems")}>Problems ({problems.length})</button>
       <button type="button" role="tab" aria-selected={activeTab === "Topics"} className={activeTab === "Topics" ? "active" : ""} onClick={() => setActiveTab("Topics")}>Topics ({computedTopics.length})</button>
     </div>
-    {notice && <Notice>{notice}</Notice>}
     {activeTab === "Problems" && <div className="admin-practice-filters">
       <Field label="SEARCH"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search title or topic..." /></Field>
       <Field label="DIFFICULTY"><select value={difficulty} onChange={(event) => setDifficulty(event.target.value)}><option>All levels</option><option>Easy</option><option>Medium</option><option>Hard</option></select></Field>
       <Field label="VISIBILITY"><select value={visibility} onChange={(event) => setVisibility(event.target.value)}><option>All</option><option>Visible</option><option>Hidden</option></select></Field>
     </div>}
-    <Split className="admin-practice-split" main={activeTab === "Problems" ? <div className="admin-table-wrap"><table className="admin-table admin-practice-table"><thead><tr><th>PROBLEM</th><th>TOPICS</th><th>DIFFICULTY</th><th>SOLVED BY</th><th>STATUS</th></tr></thead><tbody>
+    <Split className="admin-practice-split" main={activeTab === "Problems" ? <div className="admin-table-wrap sticky-list-table-wrap"><table className="admin-table sticky-list-table admin-practice-table"><thead><tr><th>PROBLEM</th><th>TOPICS</th><th>DIFFICULTY</th><th>SOLVED BY</th><th>STATUS</th></tr></thead><tbody>
       {list.map((problem) => <tr key={problem.id} className={problem.id === selected?.id ? "is-selected" : ""} onClick={() => setSelectedId(problem.id)}>
         <td data-label="PROBLEM"><button className="admin-row-link" type="button" onClick={() => setSelectedId(problem.id)}>{problem.title}</button></td><td data-label="TOPICS">{problem.topics}</td><td data-label="DIFFICULTY">{problem.difficulty}</td><td data-label="SOLVED BY">{problem.solvedBy}</td><td data-label="STATUS" className={problem.status === "Visible" ? "admin-success" : ""}>{problem.status}</td>
       </tr>)}
       {!list.length && <tr><td colSpan={5} className="admin-muted">No practice problems match these filters.</td></tr>}
-    </tbody></table></div> : <div className="admin-table-wrap"><table className="admin-table admin-practice-topic-table"><thead><tr><th>TOPIC</th><th>PROBLEMS</th></tr></thead><tbody>{computedTopics.map((topic) => <tr key={topic.name} onClick={() => { setQuery(topic.name); setActiveTab("Problems"); }}><td data-label="TOPIC"><button className="admin-row-link" type="button" onClick={() => { setQuery(topic.name); setActiveTab("Problems"); }}>{topic.name}</button></td><td data-label="PROBLEMS">{topic.problems}</td></tr>)}</tbody></table></div>} side={selected ? <>
+    </tbody></table></div> : <div className="admin-table-wrap sticky-list-table-wrap"><table className="admin-table sticky-list-table admin-practice-topic-table"><thead><tr><th>TOPIC</th><th>PROBLEMS</th></tr></thead><tbody>{computedTopics.map((topic) => <tr key={topic.name} onClick={() => { setQuery(topic.name); setActiveTab("Problems"); }}><td data-label="TOPIC"><button className="admin-row-link" type="button" onClick={() => { setQuery(topic.name); setActiveTab("Problems"); }}>{topic.name}</button></td><td data-label="PROBLEMS">{topic.problems}</td></tr>)}</tbody></table></div>} side={selected ? <>
       <h2>Practice details</h2><h3 className="admin-detail-title">{selected.title}</h3><p className="admin-muted">{selected.published === "—" ? "Publish date unavailable" : `Updated ${selected.published}`}</p><p className="admin-accent">{selected.difficulty} · {selected.topics} · {selected.database}</p>
       <div className="admin-detail-divider" /><dl className="teacher-list-detail-facts"><div><dt>Visibility</dt><dd>{selected.status}</dd></div><div><dt>Attempts</dt><dd>{selected.attempted}</dd></div><div><dt>Acceptance</dt><dd>{selected.attempted ? `${selected.acceptance}%` : "—"}</dd></div><div><dt>Submissions</dt><dd>{selected.submissions}</dd></div></dl>
       <p className="admin-muted">Catalog settings are currently read only. A server API is needed to change visibility or featured status.</p>
@@ -859,12 +859,12 @@ export function AdminOverviewPage() {
   }, []);
 
   if (loading) {
-    return <div className="admin-page"><Loading label="Loading overview…" /></div>;
+    return <div className="admin-page"><h1 className="sr-only">System overview</h1><Loading label="Loading overview…" /></div>;
   }
-  if (notice) return <div className="admin-page"><PageIntro title="System overview" sub="Activity & service health" /><p className="admin-notice" role="alert">{notice}</p></div>;
+  if (notice) return <div className="admin-page"><h1 className="sr-only">System overview</h1><p className="admin-notice" role="alert">{notice}</p></div>;
 
   return <div className="admin-page">
-    <PageIntro title="System overview" sub="Activity & service health" />
+    <h1 className="sr-only">System overview</h1>
     <div className="admin-metrics"><div><strong>{stats.users.toLocaleString()}</strong><small>Total users</small></div><div><strong>{stats.classes}</strong><small>Active classes</small></div><div><strong>{stats.submissionsToday.toLocaleString()}</strong><small>Submissions today</small></div><div><strong className={stats.gradingErrors > 0 ? "admin-warning" : ""}>{stats.gradingErrors}</strong><small>Grading errors</small></div></div>
     <Split className="admin-overview-split" main={<>
       <section className="admin-attention">

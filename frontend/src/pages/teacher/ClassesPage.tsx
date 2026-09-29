@@ -159,6 +159,7 @@ export function ClassesPage() {
   return (
     <section className="teacher-page teacher-classes-page">
       <TeacherPageIntro
+        compact
         title="Classes"
         context={classesError ? "Classes unavailable" : `${term} · ${visibleClasses.length} ${visibleClasses.length === 1 ? "class" : "classes"}`}
       >
@@ -169,7 +170,6 @@ export function ClassesPage() {
           </button>
         )}
       </TeacherPageIntro>
-      <div className="teacher-divider" />
 
       {classesLoading ? <Loading label="Loading classes…" /> : classesError ? <ErrorState title="Could not load classes" message={classesError} onRetry={() => window.location.reload()} /> : classes.length === 0 ? <div className="teacher-empty-state">
         <div><h2>No classes yet</h2><p>Create a class to enroll students and assign work.</p><div className="teacher-empty-actions"><button className="button primary" type="button" onClick={openCreateClass}>New class</button></div></div>
@@ -197,8 +197,8 @@ export function ClassesPage() {
 
       <div className="teacher-classes-layout">
         <div className="teacher-classes-main">
-          <div className="teacher-table-scroll">
-            <table className="teacher-table teacher-classes-table">
+          <div className="teacher-table-scroll sticky-list-table-wrap">
+            <table className="teacher-table teacher-classes-table sticky-list-table">
               <thead>
                 <tr>
                   <th>Class</th>

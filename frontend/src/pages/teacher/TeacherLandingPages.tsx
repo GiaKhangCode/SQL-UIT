@@ -89,11 +89,9 @@ export function ProblemLibraryPage() {
 
   return (
     <section className="teacher-page teacher-library-page">
-      <TeacherPageIntro title="Problem library" context={problems.length ? `${problems.length} problem${problems.length === 1 ? "" : "s"} · ${publicCount} public in Practice · ${privateCount} private` : "0 problems"}>
+      <TeacherPageIntro compact title="Problem library" context={problems.length ? `${problems.length} problem${problems.length === 1 ? "" : "s"} · ${publicCount} public in Practice · ${privateCount} private` : "0 problems"}>
         <button className="button primary" type="button" onClick={() => navigate("/teacher/problems/new")}>New problem</button>
       </TeacherPageIntro>
-      <div className="teacher-divider" />
-
       {loading ? (
         <Loading label="Loading problems…" />
       ) : loadError ? <ErrorState title="Could not load problems" message={loadError} onRetry={() => window.location.reload()} /> : problems.length === 0 ? (
@@ -121,8 +119,8 @@ export function ProblemLibraryPage() {
         {notice && <p className="teacher-form-message" role="status">{notice}</p>}
         <div className="teacher-list-detail-layout">
           <div className="teacher-list-detail-main">
-            <div className="teacher-table-scroll teacher-list-table-scroll">
-              <table className="teacher-table teacher-library-table">
+            <div className="teacher-table-scroll teacher-list-table-scroll sticky-list-table-wrap">
+              <table className="teacher-table teacher-library-table sticky-list-table">
                 <thead><tr><th>PROBLEM</th><th>DIFFICULTY</th><th>TOPICS</th><th>VISIBILITY</th></tr></thead>
                 <tbody>{filtered.map((problem) => <tr
                   className={`teacher-selectable-list-row${selectedProblem?.id === problem.id ? " is-selected" : ""}`}
@@ -232,10 +230,9 @@ export function AssignmentsListPage() {
 
   return (
     <section className="teacher-page teacher-list-page">
-      <TeacherPageIntro title="Assignments" context={`${assignments.length} assignment${assignments.length === 1 ? "" : "s"}`}>
+      <TeacherPageIntro compact title="Assignments" context={`${assignments.length} assignment${assignments.length === 1 ? "" : "s"}`}>
         <button className="button primary" type="button" onClick={() => navigate("/teacher/assignments/new")}>New assignment</button>
       </TeacherPageIntro>
-      <div className="teacher-divider" />
       {notice && <p className="teacher-form-message" role="status">{notice}</p>}
       {loading ? <Loading label="Loading assignments…" /> : loadError ? <div className="empty-state" role="alert">{loadError}</div> : assignments.length === 0 ? <TeacherEmptyState title="No assignments yet" description="Group problems from your library into an assignment, choose the classes, and set a due date." primaryLabel="New assignment" primaryTo="/teacher/assignments/new" secondaryLabel="Open problem library" secondaryTo="/teacher/problems" /> : <>
         <div className="teacher-list-filters teacher-activity-filters">
@@ -251,8 +248,8 @@ export function AssignmentsListPage() {
         <div className="teacher-divider teacher-list-divider" />
         <div className="teacher-list-detail-layout">
           <div className="teacher-list-detail-main">
-            <div className="teacher-table-scroll teacher-list-table-scroll">
-              <table className="teacher-table teacher-assignment-list-table">
+            <div className="teacher-table-scroll teacher-list-table-scroll sticky-list-table-wrap">
+              <table className="teacher-table teacher-assignment-list-table sticky-list-table">
                 <thead><tr><th>ASSIGNMENT</th><th>CLASSES</th><th>PROBLEMS</th><th>DUE DATE</th><th>SUBMITTED</th><th>STATUS</th></tr></thead>
                 <tbody>{filtered.map((item) => <tr
                   className={`teacher-selectable-list-row${selectedAssignment?.id === item.id ? " is-selected" : ""}`}

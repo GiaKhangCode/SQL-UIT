@@ -3,6 +3,7 @@ import ReactMarkdown from "react-markdown";
 import { Status } from "../../components/ui";
 import type { Contest } from "../../data/models";
 import { parseServerDateTime } from "../../utils/serverDateTime";
+import { contestBannerClass, contestBannerStyle } from "../../utils/contestBanner";
 
 export type ContestPhase = "Upcoming" | "Live" | "Closed";
 
@@ -27,8 +28,8 @@ export function ContestDetailView({ contest, phase, now, preview = false }: {
     (phase === "Closed" ? "&closed=1" : "") + (contest.aiAllowed ? "&aiAllowed=1" : "");
 
   return <>
-    <header className={`contest-detail-banner contest-phase-${phase.toLowerCase()}${contest.bannerUrl ? " has-image" : ""}`}
-      style={contest.bannerUrl ? { backgroundImage: `linear-gradient(90deg, rgba(14, 14, 51, .82), rgba(14, 14, 51, .48)), url("${contest.bannerUrl}")` } : undefined}>
+    <header className={`contest-detail-banner ${contestBannerClass(contest.id)} contest-phase-${phase.toLowerCase()}${contest.bannerUrl ? " has-image" : ""}`}
+      style={contestBannerStyle(contest.bannerUrl)}>
       <div>
         <small>{phase.toUpperCase()} CONTEST</small>
         <h1>{contest.title}</h1>
