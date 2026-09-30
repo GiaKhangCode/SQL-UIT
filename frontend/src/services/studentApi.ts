@@ -39,6 +39,7 @@ export interface DashboardStats {
   continuing: any[];
   deadlines: any[];
   currentStreak: number;
+  longestStreak: number;
   submissionsPerDay: DailySubmission[];
   deadlinesError?: string;
 }
@@ -179,8 +180,31 @@ export const studentApi = {
     return await apiFetch(`/api/ai/sessions/messages/${sessionId}`);
   },
 
-  getDraft: (id: string) => storage.get("sql-practice:draft:" + id),
-  saveDraft: (id: string, query: string) => storage.set("sql-practice:draft:" + id, query),
+  getDraft: (id: string) => {
+    let prefix = "";
+    try {
+      const sessionStr = storage.get("sql-practice:session:v1");
+      if (sessionStr) {
+        const user = JSON.parse(sessionStr);
+        if (user && user.id) prefix = user.id + ":";
+      }
+    } catch (e) {}
+    
+    return storage.get(`sql-practice:draft:${prefix}${id}`);
+  },
+
+  saveDraft: (id: string, query: string) => {
+    let prefix = "";
+    try {
+      const sessionStr = storage.get("sql-practice:session:v1");
+      if (sessionStr) {
+        const user = JSON.parse(sessionStr);
+        if (user && user.id) prefix = user.id + ":";
+      }
+    } catch (e) {}
+    
+    storage.set(`sql-practice:draft:${prefix}${id}`, query);
+  },
 
   getPreferences: async () => {
     return await apiFetch("/api/student/preferences");
@@ -213,5 +237,21 @@ export const studentApi = {
     const url = qs ? `/api/submissions?${qs}` : "/api/submissions";
     
     return await apiFetch(url);
+  },
+
+  getNotifications: async () => {
+    return await apiFetch("/api/notifications");
+  },
+  
+  getUnreadCount: async () => {
+    return await apiFetch("/api/notifications/unread-count");
+  },
+  
+  markAsRead: async (id: string) => {
+    return await apiFetch(`/api/notifications/${id}/read`, { method: "PUT" });
+  },
+  
+  markAllAsRead: async () => {
+    return await apiFetch("/api/notifications/read-all", { method: "PUT" });
   }
 };

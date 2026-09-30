@@ -1,7 +1,8 @@
 import os
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, declarative_base
 from dotenv import load_dotenv
+import pyodbc
 
 load_dotenv()
 
@@ -14,6 +15,7 @@ engine = create_engine(
     fast_executemany=True,
     # echo=True để debug câu lệnh SQL nếu cần
 )
+
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

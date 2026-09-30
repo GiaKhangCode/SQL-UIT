@@ -6,6 +6,8 @@ from app.models import User, Submission, Problem
 from app.schemas import SubmissionResponse, TeacherSubmissionResponse
 from app.routers.auth import get_current_user
 
+import uuid
+
 router = APIRouter()
 
 @router.get("", response_model=List[SubmissionResponse])
@@ -28,13 +30,14 @@ def get_submissions(
         
     submissions = query.order_by(Submission.submitted_at.desc()).all()
     
-    from app.models import Assignment
+    from app.models import Assignment, AssignmentProblem
     assignment_cache = {}
+    points_cache = {}
     
     res = []
     for sub in submissions:
         sub_schema = SubmissionResponse.model_validate(sub)
-        if sub.source in ["Assignments", "Contests"] and sub.context:
+        if sub.source in ["Assignment", "Contest", "Assignments", "Contests"] and sub.context:
             if sub.context not in assignment_cache:
                 assignment = db.query(Assignment).filter(Assignment.id == sub.context).first()
                 if assignment:
@@ -42,6 +45,16 @@ def get_submissions(
                 else:
                     assignment_cache[sub.context] = sub.context
             sub_schema.context_title = assignment_cache.get(sub.context, sub.context)
+            
+            cache_key = f"{sub.context}_{sub.problem_id}"
+            if cache_key not in points_cache:
+                ap = db.query(AssignmentProblem).filter(
+                    AssignmentProblem.assignment_id == sub.context,
+                    AssignmentProblem.problem_id == sub.problem_id
+                ).first()
+                points_cache[cache_key] = ap.points if ap else 100
+            sub_schema.max_score = points_cache[cache_key]
+            
         res.append(sub_schema)
         
     return res
@@ -62,7 +75,7 @@ def get_submission(submission_id: str, db: Session = Depends(get_db), current_us
         raise HTTPException(status_code=403, detail="Bạn không có quyền xem bài nộp này.")
         
     if current_user.role == "instructor":
-        if sub.source in ["Assignments", "Contests"] and sub.context:
+        if sub.source in ["Assignment", "Contest", "Assignments", "Contests"] and sub.context:
             from app.models import Assignment
             assignment = db.query(Assignment).filter(Assignment.id == sub.context).first()
             if assignment and assignment.instructor_id != current_user.id:
@@ -77,7 +90,7 @@ def get_submission(submission_id: str, db: Session = Depends(get_db), current_us
     ).count()
     
     max_score = 100
-    if sub.source in ["Assignments", "Contests"] and sub.context:
+    if sub.source in ["Assignment", "Contest", "Assignments", "Contests"] and sub.context:
         from app.models import Assignment, AssignmentProblem
         assignment = db.query(Assignment).filter(Assignment.id == sub.context).first()
         if assignment:
@@ -120,17 +133,14 @@ def review_submission(submission_id: str, review: ReviewRequest, db: Session = D
     if not sub:
         raise HTTPException(status_code=404, detail="Submission not found")
         
-    if sub.source in ["Assignments", "Contests"] and sub.context:
+    if sub.source in ["Assignment", "Contest", "Assignments", "Contests"] and sub.context:
         from app.models import Assignment
         assignment = db.query(Assignment).filter(Assignment.id == sub.context).first()
         if assignment and assignment.instructor_id != current_user.id and current_user.role != "admin":
             raise HTTPException(status_code=403, detail="Bạn không có quyền chấm bài của Assignment này.")
         
-    sub.evaluated_score = review.finalScore
-    sub.feedback = review.feedback
-    
     max_score = 100
-    if sub.source in ["Assignments", "Contests"] and sub.context:
+    if sub.source in ["Assignment", "Contest", "Assignments", "Contests"] and sub.context:
         from app.models import AssignmentProblem
         ap = db.query(AssignmentProblem).filter(
             AssignmentProblem.assignment_id == sub.context,
@@ -138,7 +148,13 @@ def review_submission(submission_id: str, review: ReviewRequest, db: Session = D
         ).first()
         if ap:
             max_score = ap.points
-            
+
+    if review.finalScore < 0 or review.finalScore > max_score:
+        raise HTTPException(status_code=400, detail=f"Điểm số không hợp lệ. Vui lòng nhập từ 0 đến {max_score}.")
+
+    sub.evaluated_score = review.finalScore
+    sub.feedback = review.feedback
+    
     if review.finalScore <= 0:
         sub.result = "Rejected"
     elif review.finalScore >= max_score:
@@ -148,4 +164,18 @@ def review_submission(submission_id: str, review: ReviewRequest, db: Session = D
     
     db.commit()
     db.refresh(sub)
+    
+    # Notify student
+    from app.models import Notification
+    notif = Notification(
+        id=str(uuid.uuid4()),
+        user_id=sub.user_id,
+        title="Bài nộp của bạn đã được chấm",
+        message=f"Điểm số: {review.finalScore} / {max_score}. Phản hồi: {review.feedback if review.feedback else 'Không có'}",
+        type="Grading",
+        link="/submissions"
+    )
+    db.add(notif)
+    db.commit()
+    
     return get_submission(submission_id, db, current_user)

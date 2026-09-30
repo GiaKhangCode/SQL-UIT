@@ -50,14 +50,14 @@ export function SubmissionDetails({
           <div className="submission-score-grid">
             <div>
               <small>Auto score</small>
-              <strong>{submission.score}/100</strong>
+              <strong>{submission.score}/{submission.maxScore ?? 100}</strong>
             </div>
             <div>
               <small>Final score</small>
               <strong>
                 {submission.evaluatedScore == null
                   ? "Pending"
-                  : `${submission.evaluatedScore}/100`}
+                  : `${submission.evaluatedScore}/${submission.maxScore ?? 100}`}
               </strong>
             </div>
           </div>

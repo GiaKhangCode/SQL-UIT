@@ -190,6 +190,24 @@ def create_assignment(assignment: AssignmentCreate, db: Session = Depends(get_db
     db.commit()
     db.refresh(new_assignment)
     
+    if assignment.published:
+        student_ids = eligible_student_ids(db, assignment.audience_type, assignment.class_ids)
+        if student_ids:
+            from app.models import Notification
+            new_notifs = [
+                Notification(
+                    id=str(uuid.uuid4()),
+                    user_id=s_id,
+                    title=f"{'Kỳ thi' if assignment.is_contest else 'Bài tập'} mới: {assignment.title}",
+                    message="Giảng viên đã giao một bài mới. Hãy kiểm tra ngay!",
+                    type="Assignment",
+                    link=f"/{'contests' if assignment.is_contest else 'assignments'}"
+                )
+                for s_id in student_ids
+            ]
+            db.bulk_save_objects(new_notifs)
+            db.commit()
+    
     from app.models import ActivityLog
     action_text = f"Created {'contest' if assignment.is_contest else 'assignment'} '{assignment.title}'"
     log = ActivityLog(
@@ -476,6 +494,7 @@ def update_assignment(assignment_id: str, assignment: AssignmentCreate, db: Sess
         raise HTTPException(status_code=403, detail="You do not have permission to modify this assignment.")
     validate_assignment_classes(assignment, db, current_user)
         
+    was_published = a.published
     a.title = assignment.title
     a.is_contest = assignment.is_contest
     a.audience_type = assignment.audience_type
@@ -517,6 +536,24 @@ def update_assignment(assignment_id: str, assignment: AssignmentCreate, db: Sess
         
     db.commit()
     db.refresh(a)
+    
+    if not was_published and assignment.published:
+        student_ids = eligible_student_ids(db, assignment.audience_type, assignment.class_ids)
+        if student_ids:
+            from app.models import Notification
+            new_notifs = [
+                Notification(
+                    id=str(uuid.uuid4()),
+                    user_id=s_id,
+                    title=f"{'Kỳ thi' if assignment.is_contest else 'Bài tập'} mới: {assignment.title}",
+                    message="Giảng viên đã giao một bài mới. Hãy kiểm tra ngay!",
+                    type="Assignment",
+                    link=f"/{'contests' if assignment.is_contest else 'assignments'}"
+                )
+                for s_id in student_ids
+            ]
+            db.bulk_save_objects(new_notifs)
+            db.commit()
     
     from app.models import ActivityLog
     action_text = f"Updated {'contest' if assignment.is_contest else 'assignment'} '{assignment.title}'"
@@ -596,7 +633,7 @@ def get_assignment_submissions(assignment_id: str, db: Session = Depends(get_db)
     ).filter(
         Submission.problem_id.in_(problem_ids),
         Submission.context == a.id,
-        Submission.source.in_(["Assignments", "Contests"])
+        Submission.source.in_(["Assignment", "Contest", "Assignments", "Contests"])
     ).group_by(Submission.user_id, Submission.problem_id).subquery()
     
     subs = db.query(Submission).join(

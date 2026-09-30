@@ -4,6 +4,8 @@ import { LogOut, Moon, Sun } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { APP_NAME } from "../data/models";
+import { studentApi } from "../services/studentApi";
+import { useLoad } from "./useLoad";
 
 type Role = "student" | "teacher" | "admin";
 const links: Record<Role, [string, string][]> = {
@@ -12,22 +14,6 @@ const links: Record<Role, [string, string][]> = {
   admin: [["Overview", "/admin/overview"], ["Users", "/admin/users"], ["Courses", "/admin/courses"], ["Practice", "/admin/practice"], ["Roles", "/admin/roles"]],
 };
 type NotificationTab = "updates" | "events";
-const demoNotifications: Record<NotificationTab, { title: string; detail: string; action: string; href: string; time: string }[]> = {
-  updates: [
-    { title: "New assignment is ready", detail: "JOIN & GROUP BY · Database Systems", action: "View assignment", href: "/assignments", time: "2h ago" },
-    { title: "Your submission was graded", detail: "8.5 / 10 · Read your teacher’s feedback", action: "View result", href: "/submissions", time: "5h ago" },
-    { title: "A new practice set is available", detail: "Subqueries · 4 problems to explore", action: "Start practicing", href: "/practice", time: "1d ago" },
-    { title: "Weekly SQL Contest registration is open", detail: "Weekly SQL Contest · Register before Sunday", action: "View contest", href: "/contests", time: "2d ago" },
-    { title: "New class announcement", detail: "Database Systems · Check your course updates", action: "View class", href: "/assignments", time: "3d ago" },
-  ],
-  events: [
-    { title: "Weekly SQL Contest starts soon", detail: "Sunday, Sep 28 · 09:00–18:30", action: "View contest", href: "/contests", time: "1d ago" },
-    { title: "Assignment deadline is approaching", detail: "JOIN & GROUP BY · Sep 20, 23:59", action: "Open assignment", href: "/assignments", time: "3h ago" },
-    { title: "Group challenge opens next week", detail: "Database Systems · Sep 21–27", action: "View class", href: "/assignments", time: "2d ago" },
-    { title: "Contest results are ready", detail: "Weekly SQL Contest · Final standings are published", action: "View results", href: "/contests", time: "3d ago" },
-    { title: "New office hours scheduled", detail: "Database Systems · Friday at 14:00", action: "View class", href: "/assignments", time: "4d ago" },
-  ],
-};
 
 export function RoleHeader({ role, workspace }: { role: Role; workspace?: { title: string; number: string; topic: string; source?: string; context?: string; backTo?: string } }) {
   const { session, logout } = useAuth();
@@ -47,6 +33,27 @@ export function RoleHeader({ role, workspace }: { role: Role; workspace?: { titl
   const streakButton = useRef<HTMLButtonElement>(null);
   const navRef = useRef<HTMLElement>(null);
   const [indicator, setIndicator] = useState<{ left: number; width: number } | null>(null);
+
+  // Fetch data
+  const { data: dashboardStats } = useLoad<any>(() => role === "student" ? studentApi.getDashboard() : Promise.resolve(null), [role]);
+  const { data: notifications, mutate: setNotifications } = useLoad<any[]>(() => role === "student" ? studentApi.getNotifications() : Promise.resolve([]), [role]);
+  const unreadCount = notifications?.filter((n: any) => !n.isRead).length || 0;
+
+  const handleMarkAllRead = async () => {
+    if (role === "student") {
+      await studentApi.markAllAsRead();
+      setNotifications(notifications?.map((n: any) => ({ ...n, isRead: true })));
+    }
+  };
+
+  const handleNotificationClick = async (id: string, isRead: boolean) => {
+    if (!isRead && role === "student") {
+      await studentApi.markAsRead(id);
+      setNotifications(notifications?.map((n: any) => n.id === id ? { ...n, isRead: true } : n));
+    }
+    setNotificationsOpen(false);
+  };
+
   useEffect(() => { setMenuOpen(false); setAccountOpen(false); setNotificationsOpen(false); setStreakOpen(false); }, [location.pathname]);
   useEffect(() => {
     if (!accountOpen) return;
@@ -126,39 +133,48 @@ export function RoleHeader({ role, workspace }: { role: Role; workspace?: { titl
       <div className="notification-anchor" ref={notificationRef}>
         <button ref={notificationButton} type="button" className="notification-trigger" aria-label="Notifications" aria-expanded={notificationsOpen} aria-controls="student-notification-popover" onClick={() => { setNotificationsOpen(value => !value); setStreakOpen(false); setAccountOpen(false); }}>
           <img src={dark ? "/assets/notifications-dark.svg" : "/assets/notifications.svg"} width="40" height="40" alt="" />
-          <span className="unread-dot" aria-hidden="true" />
+          {unreadCount > 0 && <span className="unread-dot" aria-hidden="true">{unreadCount}</span>}
         </button>
         {notificationsOpen && <div id="student-notification-popover" className="student-popover notification-popover" role="region" aria-label="Notifications">
           <div className="notification-heading">
             <h2>Notifications</h2>
-            <button type="button" className="popover-close" onClick={() => { setNotificationsOpen(false); notificationButton.current?.focus(); }}>Close</button>
+            <div className="notification-actions" style={{display: 'flex', gap: '12px'}}>
+              {unreadCount > 0 && <button type="button" className="text-button" onClick={handleMarkAllRead}>Mark all read</button>}
+              <button type="button" className="popover-close" onClick={() => { setNotificationsOpen(false); notificationButton.current?.focus(); }}>Close</button>
+            </div>
           </div>
-          <div className="notification-tabs" role="tablist" aria-label="Notification categories">
-            {(["updates", "events"] as const).map(tab => <button key={tab} id={`notification-tab-${tab}`} type="button" role="tab" aria-selected={notificationTab === tab} aria-controls="notification-tab-panel" onClick={() => setNotificationTab(tab)}>{tab === "updates" ? "Updates" : "Events"}</button>)}
-          </div>
-          <div id="notification-tab-panel" className="notification-list" role="tabpanel" aria-labelledby={`notification-tab-${notificationTab}`}>
-            {demoNotifications[notificationTab].map(item => <article key={item.title}>
-              <h3>{item.title}</h3>
-              <p>{item.detail}</p>
-              <div className="notification-item-footer"><Link to={item.href} onClick={() => setNotificationsOpen(false)}>{item.action} <span aria-hidden="true">→</span></Link><small>·</small><small>{item.time}</small></div>
-            </article>)}
+          <div className="notification-list" role="tabpanel">
+            {notifications && notifications.length > 0 ? notifications.map((item: any) => <article 
+              key={item.id} 
+              className={`notification-card ${item.isRead ? "notification-read" : ""}`}
+              onClick={() => {
+                handleNotificationClick(item.id, item.isRead);
+                if (item.link) navigate(item.link);
+              }}
+              style={{ cursor: 'pointer' }}
+            >
+              <h3 style={{fontWeight: item.isRead ? 'normal' : 'bold'}}>{item.title}</h3>
+              <p>{item.message}</p>
+              <div className="notification-item-footer">
+                <small className="muted">{new Date(item.createdAt).toLocaleDateString()}</small>
+              </div>
+            </article>) : <p className="muted" style={{padding: '1rem'}}>No notifications yet.</p>}
           </div>
           <p className="popover-footnote">Notifications from the last 30 days</p>
         </div>}
       </div>
       <div className="streak-anchor" ref={streakRef}>
-        <button ref={streakButton} type="button" className="streak-trigger" aria-label="7 day learning streak" aria-expanded={streakOpen} aria-controls="student-streak-popover" onClick={() => { setStreakOpen(value => !value); setNotificationsOpen(false); setAccountOpen(false); }}>
+        <button ref={streakButton} type="button" className="streak-trigger" aria-label={`${dashboardStats?.currentStreak || 0} day learning streak`} aria-expanded={streakOpen} aria-controls="student-streak-popover" onClick={() => { setStreakOpen(value => !value); setNotificationsOpen(false); setAccountOpen(false); }}>
           <img src={dark ? "/assets/flame-dark.svg" : "/assets/flame.svg"} width="22" height="22" alt="" />
-          <span>7</span>
+          <span>{dashboardStats?.currentStreak || 0}</span>
         </button>
-        {streakOpen && <div id="student-streak-popover" className="student-popover streak-popover" role="region" aria-label="7 day streak">
+        {streakOpen && <div id="student-streak-popover" className="student-popover streak-popover" role="region" aria-label="streak details">
           <div className="streak-heading">
-            <strong className="streak-title">7-day streak</strong>
+            <strong className="streak-title">{dashboardStats?.currentStreak || 0}-day streak</strong>
             <button type="button" className="popover-close" onClick={() => { setStreakOpen(false); streakButton.current?.focus(); }}>Close</button>
           </div>
-          <p className="streak-today">Today’s practice is complete.</p>
-          <p>Keep it going: solve at least one SQL problem each day.</p>
-          <small>Personal best · 12 days</small>
+          <p className="streak-today">{dashboardStats?.currentStreak ? "Keep it going: solve at least one SQL problem each day." : "Start your streak by solving a problem today!"}</p>
+          <small>Personal best · {dashboardStats?.longestStreak || 0} days</small>
         </div>}
       </div>
     </div>}

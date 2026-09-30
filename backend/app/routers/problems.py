@@ -499,6 +499,34 @@ def submit_query(problem_id: str, request: QueryRequest, db: Session = Depends(g
         database_type=request.database
     )
     db.add(sub)
+    
+    today = datetime.datetime.utcnow().date()
+    last_date = current_user.last_streak_date.date() if current_user.last_streak_date else None
+    
+    if last_date != today:
+        if last_date == today - datetime.timedelta(days=1):
+            current_user.current_streak = (current_user.current_streak or 0) + 1
+            
+            # Milestone Notification (e.g. 3, 5, 7, 10, 30, 50, 100...)
+            milestones = [3, 5, 7, 10, 30, 50, 100, 365]
+            if current_user.current_streak in milestones or (current_user.current_streak > 10 and current_user.current_streak % 10 == 0):
+                from app.models import Notification
+                notif = Notification(
+                    id=str(uuid.uuid4()),
+                    user_id=current_user.id,
+                    title="Cột mốc chuỗi học tập!",
+                    message=f"🔥 Chúc mừng! Bạn đã duy trì chuỗi học tập {current_user.current_streak} ngày liên tiếp. Hãy tiếp tục phát huy nhé!",
+                    type="Milestone",
+                    link="/practice"
+                )
+                db.add(notif)
+        else:
+            current_user.current_streak = 1
+            
+        current_user.last_streak_date = datetime.datetime.utcnow()
+        if current_user.current_streak > (current_user.longest_streak or 0):
+            current_user.longest_streak = current_user.current_streak
+            
     db.commit()
     
     return result

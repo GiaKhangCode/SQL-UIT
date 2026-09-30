@@ -63,28 +63,15 @@ def get_dashboard(tz_offset: int = 0, db: Session = Depends(get_db), current_use
             
     submissions_per_day = [{"date": k, "count": v} for k, v in daily_counts.items()]
     
-    # Tính streak
-    current_streak = 0
-    sorted_dates = sorted(list(distinct_dates), reverse=True)
-    
+    current_streak = current_user.current_streak or 0
     now_local = datetime.datetime.utcnow() - datetime.timedelta(minutes=tz_offset)
-    today_str = now_local.strftime("%Y-%m-%d")
-    yesterday_str = (now_local - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-    
-    if sorted_dates:
-        if sorted_dates[0] in (today_str, yesterday_str):
-            current_streak = 1
-            current_date = datetime.datetime.strptime(sorted_dates[0], "%Y-%m-%d")
-            
-            for i in range(1, len(sorted_dates)):
-                prev_date = datetime.datetime.strptime(sorted_dates[i], "%Y-%m-%d")
-                expected_prev = current_date - datetime.timedelta(days=1)
-                
-                if prev_date.date() == expected_prev.date():
-                    current_streak += 1
-                    current_date = prev_date
-                else:
-                    break
+    today = now_local.date()
+    if current_user.last_streak_date:
+        last_date = (current_user.last_streak_date - datetime.timedelta(minutes=tz_offset)).date()
+        if last_date < today - datetime.timedelta(days=1):
+            current_streak = 0
+    else:
+        current_streak = 0
 
     return DashboardStats(
         solved=solved,
@@ -94,5 +81,6 @@ def get_dashboard(tz_offset: int = 0, db: Session = Depends(get_db), current_use
         continuing=continuing_problems,
         deadlines=[],
         current_streak=current_streak,
+        longest_streak=current_user.longest_streak or 0,
         submissions_per_day=submissions_per_day
     )

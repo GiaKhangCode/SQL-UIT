@@ -22,7 +22,7 @@ app.add_middleware(
 def read_root():
     return {"message": "Welcome to SQL-UIT API Backend!"}
 
-from app.routers import auth, dashboard, problems, submissions, preferences, ai, admin_users, classes, admin_classes, assignments, student_assignments, admin_overview
+from app.routers import auth, dashboard, problems, submissions, preferences, ai, admin_users, classes, admin_classes, assignments, student_assignments, admin_overview, notifications
 
 # Import routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
@@ -36,5 +36,6 @@ app.include_router(problems.router, prefix="/api/problems", tags=["Problems"])
 app.include_router(assignments.router)
 app.include_router(submissions.router, prefix="/api/submissions", tags=["Submissions"])
 app.include_router(preferences.router, prefix="/api/student/preferences", tags=["Preferences"])
+app.include_router(notifications.router, prefix="/api/notifications", tags=["Notifications"])
 app.include_router(ai.router, prefix="/api/ai", tags=["AI"])
 

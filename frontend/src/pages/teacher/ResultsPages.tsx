@@ -234,8 +234,9 @@ export function ManualReviewPage() {
   async function saveReview() {
     if (!finalScore.trim() || !submission) return;
     const numericScore = Number(finalScore.split("/")[0].trim());
-    if (!Number.isFinite(numericScore) || numericScore < 0 || numericScore > 100) {
-      setSaveError("Enter a score from 0 to 100.");
+    const max = submission.maxScore ?? 100;
+    if (!Number.isFinite(numericScore) || numericScore < 0 || numericScore > max) {
+      setSaveError(`Enter a score from 0 to ${max}.`);
       return;
     }
     setSaveError("");
@@ -284,7 +285,7 @@ export function ManualReviewPage() {
                 className={`teacher-attempt-pill${activeAttempt.number === attempt.number ? " active" : ""}`}
                 aria-pressed={activeAttempt.number === attempt.number}
               >
-                Attempt {attempt.number} · {attempt.score} / 100
+                Attempt {attempt.number} · {attempt.score} / {submission.maxScore ?? 100}
               </button>
             ))}
           </div>
@@ -301,16 +302,16 @@ export function ManualReviewPage() {
         <aside className="teacher-grading-panel">
           <TeacherSectionTitle title="Grading" />
           <strong className="teacher-test-summary">Evaluated by platform</strong>
-          <p className="teacher-auto-score">Automatic score · {activeAttempt.score} / 100</p>
+          <p className="teacher-auto-score">Automatic score · {activeAttempt.score} / {submission.maxScore ?? 100}</p>
           <TeacherField label="FINAL SCORE">
             <input
               type="number"
               min="0"
-              max="100"
+              max={submission.maxScore ?? 100}
               value={finalScore}
               onChange={(event) => setFinalScore(event.target.value)}
               aria-label="Final score"
-              placeholder="0–100"
+              placeholder={`0–${submission.maxScore ?? 100}`}
               inputMode="numeric"
             />
           </TeacherField>

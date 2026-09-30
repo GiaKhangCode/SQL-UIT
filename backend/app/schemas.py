@@ -130,6 +130,7 @@ class SubmissionResponse(CamelModel):
     context_title: Optional[str] = None
     result: str
     score: int
+    max_score: int = Field(default=100, alias="maxScore")
     submitted_at: datetime
     query_text: Optional[str] = Field(default=None, alias="query")
     database_type: Optional[str] = Field(default=None, alias="database")
@@ -169,7 +170,8 @@ class DashboardStats(CamelModel):
     hard: int
     continuing: List[ProblemListResponse]
     deadlines: List[Any] = []
-    current_streak: int = 0
+    current_streak: int = Field(default=0, alias="currentStreak")
+    longest_streak: int = Field(default=0, alias="longestStreak")
     submissions_per_day: List[DailySubmission] = []
 
 class CustomListSchema(CamelModel):

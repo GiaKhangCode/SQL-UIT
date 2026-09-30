@@ -83,6 +83,7 @@ export type Submission = {
   database?: string;
   evaluatedScore?: number;
   feedback?: string;
+  maxScore?: number;
 };
 
 export type Deadline = {
