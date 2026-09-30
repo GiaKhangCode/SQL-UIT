@@ -18,8 +18,8 @@ export function DashboardPage() {
       )}
       <div className="dashboard-layout">
         <div>
-          <section>
-            <div className="section-heading">
+          <section className="dashboard-learning-panel">
+            <div className="dashboard-learning-heading">
               <h1>Continue learning</h1>
               <span className="dashboard-heading-actions"><span className="muted">{data.continuing.length} in progress</span><Link to="/practice">View all {data.continuing.length}</Link></span>
             </div>
@@ -28,16 +28,17 @@ export function DashboardPage() {
               tabIndex={0}
               aria-label="Continue learning problems"
             >
-              {data.continuing.map((p, i) => (
+              {data.continuing.map((p) => (
                 <div className="continue-row" key={p.id}>
-                  <div>
+                  <div className="continue-info">
                     <b>{p.title}</b>
-                    <small>{p.topic} · {p.difficulty}</small>
+                    <small className="continue-meta">
+                      <span>{p.topic || "SQL practice"}</span>
+                      <span aria-hidden="true">·</span>
+                      <span>{p.difficulty}</span>
+                    </small>
                   </div>
-                  <Link
-                    className={"dashboard-resume" + (i === 0 ? " primary" : "")}
-                    to={"/workspace/" + p.id}
-                  >
+                  <Link className="dashboard-resume" to={"/workspace/" + p.id}>
                     Continue
                   </Link>
                 </div>
@@ -47,9 +48,9 @@ export function DashboardPage() {
           </section>
         </div>
         <aside className="dashboard-deadlines deadline-panel">
-          <div className="dashboard-deadlines-heading"><h2>Deadlines</h2><span>{Math.min(3, data.deadlines.length)} upcoming</span></div>
+          <div className="dashboard-deadlines-heading"><h2>Deadlines</h2><span>{data.deadlines.length} upcoming</span></div>
           <div className="deadline-scroll" tabIndex={0} aria-label="Upcoming deadlines">
-            {data.deadlines.slice(0, 3).map((item) => <Link className="dashboard-deadline-row" key={item.id} to={item.to}><time><b>{new Date(item.date + "T00:00:00").toLocaleString("en-US", { month: "short" }).toUpperCase()}</b><strong>{item.date.slice(8)}</strong></time><span><b>{item.title}</b><small>{item.kind} · {item.context}</small></span><em>{item.time}</em></Link>)}
+            {data.deadlines.map((item) => <Link className="dashboard-deadline-row" key={item.id} to={item.to}><time><b>{new Date(item.date + "T00:00:00").toLocaleString("en-US", { month: "short" }).toUpperCase()}</b><strong>{item.date.slice(8)}</strong></time><span><b>{item.title}</b><small>{item.kind} · {item.context}</small></span><em>{item.time}</em></Link>)}
             {data.deadlinesError ? <p className="tiny muted" role="alert">{data.deadlinesError}</p> : !data.deadlines.length && <p className="tiny muted">No upcoming deadlines.</p>}
           </div>
           <div className="dashboard-week">

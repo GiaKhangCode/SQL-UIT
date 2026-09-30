@@ -38,27 +38,21 @@ export function PracticePage() {
     difficulty: "",
     progress: "",
   });
-  const [listsOpen, setListsOpen] = useState(true);
-  const [selectedList, setSelectedList] = useState("");
-  const [createList, setCreateList] = useState(false);
-  const [listName, setListName] = useState("");
-  const [listError, setListError] = useState("");
-  const [listBusy, setListBusy] = useState(false);
   const [page, setPage] = useState(1);
   const resultsStartRef = useRef<HTMLDivElement | null>(null);
 
-  const { data: prefData, loading: prefLoading, error: prefError, mutate: mutatePref } = useLoad(
+  const { data: prefData, loading: prefLoading, error: prefError } = useLoad(
     studentApi.getPreferences,
   );
   const { data: dashData, loading: dashLoading, error: dashError } = useLoad(studentApi.getDashboard);
-  const { data: catalogData } = useLoad(studentApi.getProblems);
+  const { data: catalogData, loading: catalogLoading, error: catalogError } = useLoad(studentApi.getProblems);
   const topics = [...new Set((catalogData || []).flatMap((problem) =>
     (Array.isArray(problem.topics) ? problem.topics : String(problem.topic || "").split(","))
       .map((value: string) => value.trim()).filter(Boolean),
   ))].sort();
 
   const favoriteIds = prefData?.favorites || [];
-  const lists = prefData?.customLists || [];
+  const favoriteProblems = (catalogData || []).filter((problem: any) => favoriteIds.includes(problem.id));
 
   const {
     data: rawProblems,
@@ -78,12 +72,7 @@ export function PracticePage() {
 
   const data =
     rawProblems?.filter(
-      (p) =>
-        (!favoritesOnly || favoriteIds.includes(p.id)) &&
-        (!selectedList ||
-          lists
-            .find((list: any) => list.id === selectedList)
-            ?.problemIds.includes(p.id)),
+      (p) => !favoritesOnly || favoriteIds.includes(p.id),
     ) || [];
   const pageCount = Math.max(1, Math.ceil(data.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
@@ -92,7 +81,7 @@ export function PracticePage() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, topic, difficulty, progress, favoritesOnly, selectedList]);
+  }, [search, topic, difficulty, progress, favoritesOnly]);
   function goToPage(nextPage: number) {
     if (nextPage < 1 || nextPage > pageCount || nextPage === currentPage) return;
     setPage(nextPage);
@@ -109,7 +98,6 @@ export function PracticePage() {
     setDifficulty("");
     setProgress("");
     setFavoritesOnly(false);
-    setSelectedList("");
   }
   return (
     <section className="page practice-page" aria-label="Practice problems">
@@ -174,27 +162,18 @@ export function PracticePage() {
             </button>
             <select
               className="practice-mobile-list-select"
-              aria-label="Choose problem list"
-              value={favoritesOnly ? "favorites" : selectedList ? `list:${selectedList}` : ""}
+              aria-label="Choose problem filter"
+              value={favoritesOnly ? "favorites" : ""}
               onChange={(event) => {
-                if (event.target.value === "create") {
-                  setListName("");
-                  setListError("");
-                  setCreateList(true);
-                  return;
-                }
                 setFavoritesOnly(event.target.value === "favorites");
-                setSelectedList(event.target.value.startsWith("list:") ? event.target.value.slice(5) : "");
               }}
             >
               <option value="">All problems</option>
               <option value="favorites" disabled={prefLoading || !!prefError}>Saved</option>
-              {lists.map((list: any) => <option key={list.id} value={`list:${list.id}`}>{list.name}</option>)}
-              <option value="create">+ New list</option>
             </select>
           </div>
           <div className="problem-list" ref={resultsStartRef} aria-busy={loading}>
-            {prefError && (favoritesOnly || selectedList) && <p role="alert">Could not load saved problems and lists.</p>}
+            {prefError && favoritesOnly && <p role="alert">Could not load saved problems.</p>}
             {loading && rawProblems && (
               <span className="sr-only" role="status">
                 Updating problem results…
@@ -264,64 +243,11 @@ export function PracticePage() {
         </div>
         <aside className="practice-sidebar">
           {dashLoading ? <Loading label="Loading activity…" /> : dashError ? <p role="alert">Could not load activity.</p> : <PracticeActivity submissions={dashData?.submissionsPerDay || []} />}
-          <section className="practice-lists">
-            <div className="practice-lists-heading">
-              <h3>My Lists</h3>
-              <button
-                aria-label="Create problem list"
-                onClick={() => {
-                  setListName("");
-                  setListError("");
-                  setCreateList(true);
-                }}
-              >
-                +
-              </button>
-              <button
-                aria-label={listsOpen ? "Collapse lists" : "Expand lists"}
-                aria-expanded={listsOpen}
-                aria-controls="practice-list-items"
-                onClick={() => setListsOpen((value) => !value)}
-              >
-                {listsOpen ? "⌄" : "›"}
-              </button>
-            </div>
-            {listsOpen && (
-              <div id="practice-list-items">
-                <button
-                  className="favorite-list-toggle"
-                  aria-pressed={favoritesOnly}
-                  disabled={prefLoading || !!prefError}
-                  onClick={() => {
-                    setFavoritesOnly((value) => !value);
-                    setSelectedList("");
-                  }}
-                >
-                  <span>★</span> Favorite{" "}
-                  <small aria-label="Private list">♙</small>
-                </button>
-                {lists.map((list: any) => (
-                  <button
-                    className="custom-list-toggle"
-                    key={list.id}
-                    aria-pressed={selectedList === list.id}
-                    onClick={() => {
-                      setSelectedList((value) =>
-                        value === list.id ? "" : list.id,
-                      );
-                      setFavoritesOnly(false);
-                    }}
-                  >
-                    {list.name}
-                    <small>{list.problemIds.length}</small>
-                  </button>
-                ))}
-                {prefLoading && <p className="tiny muted" role="status">Loading saved lists…</p>}
-                {prefError && <p className="tiny muted" role="alert">Could not load saved lists.</p>}
-              </div>
-            )}
-          </section>
-          <PracticeTrending />
+          <PracticeTrending
+            favoriteProblems={favoriteProblems}
+            favoriteLoading={prefLoading || catalogLoading}
+            favoriteError={!!prefError || !!catalogError}
+          />
         </aside>
       </div>
       {filterDialog && (
@@ -388,61 +314,6 @@ export function PracticePage() {
               Apply
             </button>
           </div>
-        </Dialog>
-      )}
-      {createList && (
-        <Dialog
-          title="Create problem list"
-          onClose={() => setCreateList(false)}
-        >
-          <form
-            onSubmit={async (e) => {
-              e.preventDefault();
-              if (!listName.trim()) return;
-              setListBusy(true);
-              setListError("");
-              try {
-                await studentApi.createList(listName, data?.map((p) => p.id) || []);
-                mutatePref();
-                setCreateList(false);
-              } catch (error) {
-                setListError(error instanceof Error ? error.message : "Could not create the list.");
-              } finally {
-                setListBusy(false);
-              }
-            }}
-          >
-            <label className="field">
-              List name
-              <input
-                value={listName}
-                maxLength={60}
-                required
-                onChange={(e) => setListName(e.target.value)}
-              />
-            </label>
-            <p className="tiny muted">
-              Save the current {data?.length || 0} problem results to a private
-              list in your account.
-            </p>
-            {listError && <p role="alert" className="field-error">{listError}</p>}
-            <div className="dialog-actions">
-              <button
-                className="button"
-                type="button"
-                onClick={() => setCreateList(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="button primary"
-                disabled={!listName.trim() || loading || listBusy}
-                type="submit"
-              >
-                Create list
-              </button>
-            </div>
-          </form>
         </Dialog>
       )}
     </section>

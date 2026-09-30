@@ -916,19 +916,18 @@ body:has(.assignments-page) {
 }
 .contest-toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 278px;
+  grid-template-columns: minmax(0, 1fr) var(--student-sidebar-width);
   align-items: start;
   gap: 24px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
 }
 .contest-toolbar .underline-tabs {
   position: sticky;
   top: var(--header-height);
   z-index: 10;
   align-self: start;
-  padding: 0 0 12px;
+  padding: 0;
   background: var(--surface);
+  border-bottom: 1px solid var(--border);
   gap: 12px;
 }
 .contest-toolbar input {
@@ -941,6 +940,18 @@ body:has(.assignments-page) {
   gap: 24px;
   align-items: start;
   padding-top: 24px;
+}
+.contest-feed-panel {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.contest-feed-panel > .section-heading {
+  margin-bottom: 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
 }
 .contest-columns h2 {
   font-size: 16px;
@@ -979,26 +990,42 @@ body:has(.assignments-page) {
   margin: 0;
   line-height: 24px;
 }
-.hall-of-fame > p {
+.hall-of-fame > .fame-description {
   margin: 0 0 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
   font-size: 12px;
   line-height: 20px;
+  flex: none;
 }
 .hall-of-fame {
   position: sticky;
   top: calc(var(--header-height) + 16px);
+  align-self: start;
+  display: flex;
+  min-height: 0;
+  max-height: min(690px, calc(100dvh - var(--header-height) - 32px));
+  flex-direction: column;
+  overflow: hidden;
 }
 .fame-list {
   margin: 0;
   padding: 0;
   list-style: none;
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 520px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 .fame-row {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
   border-bottom: 1px solid var(--border);
-  padding: 20px 0;
+  padding: 12px 0;
 }
 .fame-row > b {
   color: var(--accent);
@@ -1007,30 +1034,34 @@ body:has(.assignments-page) {
 }
 .fame-row > div {
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .fame-row strong {
   display: block;
   font-size: 14px;
   line-height: 20px;
+  overflow-wrap: break-word;
 }
 .fame-row small {
   display: block;
   color: var(--muted);
-  font-size: 12px;
-  line-height: 20px;
-  margin-top: 4px;
+  font-size: 10px;
+  line-height: 16px;
+  margin-top: 3px;
+}
+.fame-row .fame-contest {
+  overflow-wrap: break-word;
+}
+.fame-row .fame-date {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 16px;
+  white-space: nowrap;
 }
 .fame-empty {
   color: var(--muted);
-}
-.fame-results-link {
-  display: inline-block;
-  margin-top: 8px;
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 24px;
 }
 @media (max-width: 960px) {
   .contest-columns {
@@ -1646,7 +1677,7 @@ body:has(.assignments-page) {
     max-width: none;
   }
   .contest-toolbar .underline-tabs {
-    padding-bottom: 10px;
+    padding: 0;
     justify-content: space-between;
     gap: 0;
   }

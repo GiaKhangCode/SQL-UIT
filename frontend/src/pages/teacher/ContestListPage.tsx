@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useLoad } from "../../components/useLoad";
 import { Empty, ErrorState, Loading, Status } from "../../components/ui";
 import { teacherService } from "../../services/teacherService";
-import { TeacherField, TeacherPageIntro } from "./TeacherPageParts";
+import { TeacherField } from "./TeacherPageParts";
 import { parseServerDateTime } from "../../utils/serverDateTime";
 
 type Contest = {
@@ -12,10 +12,21 @@ type Contest = {
   shortDescription: string; eligibleStudents: number;
 };
 const contestStatus = (status: string) => status === "Scheduled" ? "Upcoming" : status === "Open" ? "Live" : status;
-const date = (value?: string) => {
+const dateParts = (value?: string) => {
   if (!value) return "—";
   const parsed = parseServerDateTime(value);
-  return Number.isFinite(parsed.getTime()) ? parsed.toLocaleString() : "—";
+  return Number.isFinite(parsed.getTime()) ? {
+    date: parsed.toLocaleDateString("en-US"),
+    time: parsed.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }),
+  } : "—";
+};
+const date = (value?: string) => {
+  const parts = dateParts(value);
+  return typeof parts === "string" ? parts : `${parts.date} · ${parts.time}`;
+};
+const tableDateTime = (value?: string) => {
+  const parts = dateParts(value);
+  return typeof parts === "string" ? parts : <span className="teacher-contest-datetime"><span>{parts.date}</span><small>{parts.time}</small></span>;
 };
 const duration = (start?: string, end?: string) => {
   if (!start || !end) return "—";
@@ -31,20 +42,23 @@ export function ContestsListPage() {
   const contests = useMemo(() => ((data || []) as Contest[]).filter(item => item.isContest), [data]);
   const filtered = contests.filter(item => `${item.title} ${item.classes} ${item.shortDescription || ""}`.toLowerCase().includes(search.toLowerCase()) && (status === "All statuses" || contestStatus(item.status) === status));
   const selected = filtered.find(item => item.id === selectedId) || filtered[0];
-  return <section className="teacher-page teacher-list-page">
-    <TeacherPageIntro compact title="Contests" context={error ? "Contests unavailable" : `${contests.length} contest${contests.length === 1 ? "" : "s"} · ${contests.filter(item => item.status === "Open").length} live`}>
-      <Link className="button primary" to="/teacher/contests/new">New contest</Link>
-    </TeacherPageIntro>
-    {loading ? <Loading label="Loading contests…" /> : error ? <ErrorState title="Could not load contests" message={error} onRetry={() => window.location.reload()} /> : <>
-      <div className="teacher-list-filters teacher-activity-filters">
-        <TeacherField label="SEARCH"><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search contests, audience, or summary…" /></TeacherField>
+  return <section className="teacher-page teacher-list-page teacher-contest-page">
+    <h1 className="sr-only">Contests</h1>
+    <div className="teacher-list-filters teacher-activity-filters teacher-contest-filters">
+      <TeacherField label="SEARCH"><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search contests, audience, or summary…" /></TeacherField>
+      <div className="teacher-contest-options">
         <TeacherField label="STATUS"><select value={status} onChange={event => setStatus(event.target.value)}><option>All statuses</option><option>Live</option><option>Upcoming</option><option>Closed</option><option>Draft</option></select></TeacherField>
+        <Link className="button primary teacher-contest-new" to="/teacher/contests/new">New contest</Link>
       </div>
-      {!contests.length ? <Empty title="No contests yet">Create a timed contest for selected classes or all students.</Empty> : <div className="teacher-list-detail-layout">
+    </div>
+    {loading ? <Loading label="Loading contests…" /> : error ? <ErrorState title="Could not load contests" message={error} onRetry={() => window.location.reload()} /> : !contests.length ? <Empty title="No contests yet">Create a timed contest for selected classes or all students.</Empty> : <div className="teacher-list-detail-layout">
         <div className="teacher-list-detail-main"><div className="teacher-table-scroll sticky-list-table-wrap"><table className="teacher-table teacher-contest-list-table sticky-list-table"><thead><tr><th>CONTEST</th><th>AUDIENCE</th><th>STARTS</th><th>ENDS</th><th>DURATION</th><th>STATUS</th></tr></thead><tbody>
           {filtered.map(item => <tr key={item.id} className={selected?.id === item.id ? "is-selected" : ""}>
             <td data-label="CONTEST"><button type="button" className="teacher-selectable-row-title" onClick={() => setSelectedId(item.id)}>{item.title}</button></td>
-            <td data-label="AUDIENCE">{item.classes}</td><td data-label="STARTS">{date(item.opens)}</td><td data-label="ENDS">{date(item.closes)}</td><td data-label="DURATION">{duration(item.opens, item.closes)}</td><td data-label="STATUS"><Status value={contestStatus(item.status)} /></td>
+            <td data-label="AUDIENCE">{item.classes}</td>
+            <td data-label="STARTS">{tableDateTime(item.opens)}</td>
+            <td data-label="ENDS">{tableDateTime(item.closes)}</td>
+            <td data-label="DURATION">{duration(item.opens, item.closes)}</td><td data-label="STATUS"><Status value={contestStatus(item.status)} /></td>
           </tr>)}
         </tbody></table></div><p className="teacher-list-footer">Showing {filtered.length} of {contests.length} contests</p></div>
         <aside className="teacher-list-detail-panel">{selected ? <><span className="teacher-detail-eyebrow">CONTEST DETAILS</span><h2>{selected.title}</h2><p className="muted">{selected.shortDescription}</p><p className="muted">{selected.classes}</p>
@@ -52,6 +66,5 @@ export function ContestsListPage() {
           <div className="teacher-list-detail-actions"><Link className="button primary" to={`/teacher/contests/${selected.id}/edit`}>Edit</Link><Link className="button" to={`/teacher/results?search=${encodeURIComponent(selected.title)}`}>Results</Link></div>
         </> : <p className="muted">Select a contest to view details.</p>}</aside>
       </div>}
-    </>}
   </section>;
 }

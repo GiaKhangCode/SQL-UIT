@@ -89,9 +89,7 @@ export function ProblemLibraryPage() {
 
   return (
     <section className="teacher-page teacher-library-page">
-      <TeacherPageIntro compact title="Problem library" context={problems.length ? `${problems.length} problem${problems.length === 1 ? "" : "s"} · ${publicCount} public in Practice · ${privateCount} private` : "0 problems"}>
-        <button className="button primary" type="button" onClick={() => navigate("/teacher/problems/new")}>New problem</button>
-      </TeacherPageIntro>
+      <h1 className="sr-only">Problem library</h1>
       {loading ? (
         <Loading label="Loading problems…" />
       ) : loadError ? <ErrorState title="Could not load problems" message={loadError} onRetry={() => window.location.reload()} /> : problems.length === 0 ? (
@@ -109,6 +107,7 @@ export function ProblemLibraryPage() {
           <TeacherField label="DIFFICULTY"><select value={difficulty} onChange={(event) => setDifficulty(event.target.value)}><option>All levels</option><option>Easy</option><option>Medium</option><option>Hard</option></select></TeacherField>
           <TeacherField label="TOPIC"><select value={topic} onChange={(event) => setTopic(event.target.value)}><option>All topics</option>{topicOptions.map((item) => <option key={item}>{item}</option>)}</select></TeacherField>
           <TeacherField label="VISIBILITY"><select value={visibility} onChange={(event) => setVisibility(event.target.value)}><option>All</option><option>Public</option><option>Private</option></select></TeacherField>
+          <button className="button primary teacher-problem-new" type="button" onClick={() => navigate("/teacher/problems/new")}>New problem</button>
         </div>
         <div className="teacher-list-summary">
           <div><strong>{problems.length}</strong><small>Problems in library</small></div>
@@ -121,18 +120,19 @@ export function ProblemLibraryPage() {
           <div className="teacher-list-detail-main">
             <div className="teacher-table-scroll teacher-list-table-scroll sticky-list-table-wrap">
               <table className="teacher-table teacher-library-table sticky-list-table">
-                <thead><tr><th>PROBLEM</th><th>DIFFICULTY</th><th>TOPICS</th><th>VISIBILITY</th></tr></thead>
+                <thead><tr><th>ID</th><th>PROBLEM</th><th>DIFFICULTY</th><th>TOPICS</th><th>VISIBILITY</th></tr></thead>
                 <tbody>{filtered.map((problem) => <tr
                   className={`teacher-selectable-list-row${selectedProblem?.id === problem.id ? " is-selected" : ""}`}
                   key={problem.id}
                   onClick={() => setSelectedProblemId(problem.id)}
                 >
-                  <td data-label="PROBLEM"><button className="teacher-selectable-row-title teacher-library-title" type="button" aria-label={`Show details for ${problem.title}`} onClick={(event) => { event.stopPropagation(); setSelectedProblemId(problem.id); }}><span>{problem.number}</span><span>{problem.title}</span></button></td>
+                  <td data-label="ID">{problem.number}</td>
+                  <td data-label="PROBLEM"><button className="teacher-selectable-row-title teacher-library-title" type="button" aria-label={`Show details for ${problem.title}`} onClick={(event) => { event.stopPropagation(); setSelectedProblemId(problem.id); }}>{problem.title}</button></td>
                   <td data-label="DIFFICULTY">{problem.difficulty}</td>
                   <td data-label="TOPICS">{problem.topics}</td>
                   <td data-label="VISIBILITY">{problem.visibility}</td>
                 </tr>)}
-                {!filtered.length && <tr><td className="teacher-empty-row" colSpan={4}>No problems match these filters.</td></tr>}
+                {!filtered.length && <tr><td className="teacher-empty-row" colSpan={5}>No problems match these filters.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -229,16 +229,15 @@ export function AssignmentsListPage() {
   }
 
   return (
-    <section className="teacher-page teacher-list-page">
-      <TeacherPageIntro compact title="Assignments" context={`${assignments.length} assignment${assignments.length === 1 ? "" : "s"}`}>
-        <button className="button primary" type="button" onClick={() => navigate("/teacher/assignments/new")}>New assignment</button>
-      </TeacherPageIntro>
+    <section className="teacher-page teacher-list-page teacher-assignment-page">
+      <h1 className="sr-only">Assignments</h1>
       {notice && <p className="teacher-form-message" role="status">{notice}</p>}
       {loading ? <Loading label="Loading assignments…" /> : loadError ? <div className="empty-state" role="alert">{loadError}</div> : assignments.length === 0 ? <TeacherEmptyState title="No assignments yet" description="Group problems from your library into an assignment, choose the classes, and set a due date." primaryLabel="New assignment" primaryTo="/teacher/assignments/new" secondaryLabel="Open problem library" secondaryTo="/teacher/problems" /> : <>
-        <div className="teacher-list-filters teacher-activity-filters">
+        <div className="teacher-list-filters teacher-activity-filters teacher-assignment-filters">
           <TeacherField label="SEARCH"><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search assignments…" /></TeacherField>
           <TeacherField label="CLASS"><select value={classFilter} onChange={(event) => setClassFilter(event.target.value)}><option>All classes</option>{Array.from(new Set(assignments.flatMap(item => item.classes.split(", ")))).filter(name => name && name !== "No classes").map(name => <option key={name}>{name}</option>)}</select></TeacherField>
           <TeacherField label="STATUS"><select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option>All statuses</option><option>Open</option><option>Scheduled</option><option>Closed</option><option>Draft</option></select></TeacherField>
+          <button className="button primary teacher-assignment-new" type="button" onClick={() => navigate("/teacher/assignments/new")}>New assignment</button>
         </div>
         <div className="teacher-list-summary">
           <div><strong>{assignments.filter(a => a.status === 'Open').length}</strong><small>Open now</small></div>

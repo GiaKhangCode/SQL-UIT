@@ -15,7 +15,7 @@ export function TeacherPageIntro({
     <div className={`teacher-page-intro${compact ? " page-list-intro" : ""}`}>
       <div>
         <h1 className={compact ? "sr-only" : undefined}>{title}</h1>
-        <p>{context}</p>
+        {context && <p>{context}</p>}
       </div>
       {children && <div className="teacher-page-actions">{children}</div>}
     </div>

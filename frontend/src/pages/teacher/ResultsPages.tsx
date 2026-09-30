@@ -58,7 +58,7 @@ export function ResultsDashboardPage() {
 
   return (
     <section className="teacher-page teacher-results-page">
-      <TeacherPageIntro compact title="Results" context={`${assignments?.length || 0} assignments and contests · ${assignments?.filter((a: any) => a.awaiting > 0).length || 0} awaiting review`} />
+      <h1 className="sr-only">Results</h1>
 
       <div className="teacher-list-filters teacher-results-filters">
         <TeacherField label="SEARCH">

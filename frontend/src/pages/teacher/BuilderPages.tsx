@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Dialog, Loading } from "../../components/ui";
 import { teacherService } from "../../services/teacherService";
-import { ClassPicker, TeacherField, TeacherPageIntro, TeacherSectionTitle } from "./TeacherPageParts";
+import { ClassPicker, TeacherField, TeacherSectionTitle } from "./TeacherPageParts";
 import { toDateTimeLocal } from "../../utils/serverDateTime";
 import { readContestMarkdown } from "../../utils/contestMarkdown";
 import { ContestDetailView } from "../student/ContestDetailView";
@@ -390,7 +390,6 @@ function BuilderPage({ contest }: { contest: boolean }) {
     if (!draft!.problems.some((item) => item.id === problemId)) {
       update("problems", [...draft!.problems, { id: problemId, points: 10 }]);
     }
-    setAddProblemOpen(false);
   }
 
   const availableProblems = allProblems.filter(
@@ -399,22 +398,6 @@ function BuilderPage({ contest }: { contest: boolean }) {
 
   return (
     <section className="teacher-page teacher-builder-page">
-      <TeacherPageIntro
-        title={contest ? "Contest builder" : "Assignment builder"}
-        context={`${contest ? "Contests" : "Assignments"} / ${draft.title || "New activity"}`}
-      >
-        <button className="button" type="button" onClick={() => setPreviewOpen(true)}>
-          Preview {contest ? "contest" : "assignment"}
-        </button>
-        <button className="button" type="button" onClick={saveDraft} disabled={saveBusy || !draft.title.trim() || !scheduleValid}>
-          {saveBusy ? "Saving…" : "Save draft"}
-        </button>
-        <button className="button primary" type="button" onClick={publishDraft} disabled={saveBusy || !readyToPublish}>
-          Publish
-        </button>
-      </TeacherPageIntro>
-      <div className="teacher-divider" />
-
       <div className="teacher-builder-layout">
         <section className="teacher-builder-main">
           <div className="teacher-builder-setup">
@@ -554,9 +537,7 @@ function BuilderPage({ contest }: { contest: boolean }) {
                 onChange={(event) => update("closes", event.target.value)}
               />
             </TeacherField>
-            <p className="teacher-timezone">
-              Timezone · Asia/Ho_Chi_Minh{contest && durationMinutes > 0 ? ` · Duration ${durationMinutes} min` : ""}
-            </p>
+            {contest && durationMinutes > 0 && <p className="teacher-timezone">Duration · {durationMinutes} min</p>}
           </div>
           <div className="teacher-student-options">
             <TeacherSectionTitle title={contest ? "Contest settings" : "Student options"} />
@@ -584,31 +565,15 @@ function BuilderPage({ contest }: { contest: boolean }) {
               </div>
             ))}
           </div>
-          <div className="teacher-publish-checklist">
-            <TeacherSectionTitle title="Before publishing" />
-            <p className="teacher-total-points">
-              {draft.problems.length} problem{draft.problems.length === 1 ? "" : "s"} · {totalPoints} points
-            </p>
-            <ul>
-              <li className={(contest && draft.audienceType === "all_students") || draft.classIds.length ? "is-valid" : ""}>
-                {contest ? "Audience selected" : "Classes selected"}
-              </li>
-              {contest && <li className={draft.shortDescription.trim() && draft.description.trim() && draft.rules.trim() ? "is-valid" : ""}>Description and rules complete</li>}
-              <li className={draft.problems.length && draft.problems.every((item) => item.points > 0) ? "is-valid" : ""}>
-                Every problem has a score
-              </li>
-              <li className={scheduleValid ? "is-valid" : ""}>
-                {contest ? "Start and end time are valid" : "Schedule is valid"}
-              </li>
-            </ul>
-            <p className="teacher-draft-visibility">
-              {draft.published
-                ? (contest ? "Published — visible to eligible students." : "Published — available to assigned students.")
-                : "Draft — students cannot see this yet."}
-            </p>
-          </div>
           {alertText && <p className="teacher-form-message" role="status">{alertText}</p>}
           <p className="teacher-builder-save-state tiny muted">{saveState}</p>
+          <div className="teacher-builder-actions">
+            <button className="button" type="button" onClick={() => setPreviewOpen(true)}>Preview {contest ? "contest" : "assignment"}</button>
+            <button className="button" type="button" onClick={saveDraft} disabled={saveBusy || !draft.title.trim() || !scheduleValid}>
+              {saveBusy ? "Saving…" : "Save draft"}
+            </button>
+            <button className="button primary" type="button" onClick={publishDraft} disabled={saveBusy || !readyToPublish}>Publish</button>
+          </div>
         </aside>
       </div>
 

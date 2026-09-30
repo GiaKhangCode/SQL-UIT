@@ -13,10 +13,18 @@ function formatLearners(num: number): string {
 
 const ranges = ["Week", "Month", "All time"] as const;
 type Range = (typeof ranges)[number];
+type FavoriteProblem = {
+  id: string;
+  number: string | number;
+  title: string;
+  topic?: string;
+  topics?: string[];
+  difficulty?: string;
+};
+
 export function PracticeActivity({ submissions = [] }: { submissions?: DailySubmission[] }) {
   const now = new Date();
   const currentMonth = now.toLocaleString('default', { month: 'long' });
-  const currentYear = now.getFullYear();
   
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const firstDayOfWeek = new Date(now.getFullYear(), now.getMonth(), 1).getDay();
@@ -46,13 +54,13 @@ export function PracticeActivity({ submissions = [] }: { submissions?: DailySubm
   return (
     <section className="practice-activity">
       <h3>
-        {currentMonth} activity <small>{currentYear}</small>
+        <span>{currentMonth} activity</span>
+        <small>{totalSubmissions} submissions · {activeDays} active days</small>
       </h3>
-      <p className="tiny muted">{totalSubmissions} submissions · {activeDays} active days</p>
       <div
         className="practice-calendar"
         role="img"
-        aria-label={`${currentMonth} ${currentYear} SQL activity calendar. ${activeDays} active days; deeper purple indicates higher activity.`}
+        aria-label={`${currentMonth} SQL activity calendar. ${activeDays} active days; deeper purple indicates higher activity.`}
       >
         {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((day) => (
           <span className="practice-calendar-weekday" key={day}>
@@ -90,35 +98,72 @@ export function PracticeActivity({ submissions = [] }: { submissions?: DailySubm
     </section>
   );
 }
-export function PracticeTrending() {
+export function PracticeTrending({
+  favoriteProblems = [],
+  favoriteLoading = false,
+  favoriteError = false,
+}: {
+  favoriteProblems?: FavoriteProblem[];
+  favoriteLoading?: boolean;
+  favoriteError?: boolean;
+}) {
   const [range, setRange] = useState<Range>("Week");
+  const [activeView, setActiveView] = useState<Range | "Favorite">("Week");
   
   const { data: trendingProblems, loading, error } = useLoad(
     async () => await studentApi.getTrending(range),
     [range]
   );
   
+  const showingFavorites = activeView === "Favorite";
+
   return (
     <section className="practice-trending">
-      <h3>Trending problems</h3>
-      <div className="trending-range" aria-label="Trending range">
+      <h3>{showingFavorites ? "Favorite problems" : "Trending problems"}</h3>
+      <div className="trending-range" aria-label="Problem list">
         {ranges.map((value) => (
           <button
             key={value}
-            aria-pressed={range === value}
-            onClick={() => setRange(value)}
+            aria-pressed={activeView === value}
+            onClick={() => {
+              setRange(value);
+              setActiveView(value);
+            }}
           >
             {value}
           </button>
         ))}
+        <button
+          aria-pressed={showingFavorites}
+          onClick={() => setActiveView("Favorite")}
+        >
+          Favorite
+        </button>
       </div>
       <div
         className="trending-scroll"
         tabIndex={0}
-        aria-label={range + " trending problems"}
-        key={range}
+        aria-label={showingFavorites ? "Favorite problems" : range + " trending problems"}
+        key={activeView}
       >
-        {loading ? (
+        {showingFavorites ? (
+          favoriteError ? (
+            <p className="muted" role="alert">Could not load saved problems.</p>
+          ) : favoriteLoading ? (
+            <p className="muted" role="status">Loading saved problems…</p>
+          ) : !favoriteProblems.length ? (
+            <p className="muted">No favorite problems saved.</p>
+          ) : favoriteProblems.map((problem) => (
+            <Link
+              className="trending-problem favorite-problem"
+              key={problem.id}
+              to={"/workspace/" + problem.id}
+            >
+              <span><b>{problem.number}</b> {problem.title}</span>
+              <small>{problem.topic || (problem.topics || []).join(" · ") || "SQL problem"} · {problem.difficulty}</small>
+            </Link>
+          ))
+        ) : loading ? (
           <p className="muted" role="status">Loading trending problems…</p>
         ) : error ? (
           <p className="muted" role="alert">Could not load trending problems.</p>

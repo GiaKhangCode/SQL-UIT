@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type TransitionEvent } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { studentApi } from "../../services/studentApi";
 import { type Contest } from "../../data/models";
 import { useLoad } from "../../components/useLoad";
@@ -262,7 +262,6 @@ export function ContestsPage() {
   };
   const featured = selectFeaturedContests(data);
   const hallOfFame = selectHallOfFame(data);
-  const publishedResults = hallOfFame[0]?.contest;
   function details(contest: Contest) {
     navigate(`/contests/${contest.id}`);
   }
@@ -280,7 +279,7 @@ export function ContestsPage() {
       <input id="contest-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="⌕ Search contests" />
     </div>
     <div className="contest-columns">
-      <div id="contest-feed">
+      <div id="contest-feed" className="contest-feed-panel">
         <div className="section-heading"><h2>{tab === "All" ? "All contests" : `${tab} contests`}</h2><span className="tiny muted">{filtered.length} available</span></div>
         {filtered.map((contest) => <article className="contest-item" key={contest.id} id={`student-contest-${contest.id}`}>
           <div>
@@ -295,11 +294,18 @@ export function ContestsPage() {
       </div>
       <aside className="hall-of-fame" aria-label="Hall of Fame">
         <h2>Hall of Fame</h2>
-        <p>Recent public achievements</p>
+        <p className="fame-description">Recent public achievements</p>
         {hallOfFame.length > 0 ? <ol className="fame-list">
-          {hallOfFame.map((entry, index) => <li className="fame-row" key={`${entry.contest.id}-${entry.rank}-${entry.student}`}><b>{String(index + 1).padStart(2, "0")}</b><div><strong>{entry.student}</strong><small>{ordinal(entry.rank)} place</small><small>{entry.contest.title} · {completionMonth(entry.contest)}</small></div></li>)}
+          {hallOfFame.map((entry, index) => <li className="fame-row" key={`${entry.contest.id}-${entry.rank}-${entry.student}`}>
+            <b>{String(index + 1).padStart(2, "0")}</b>
+            <div>
+              <strong>{entry.student}</strong>
+              <small className="fame-place">{ordinal(entry.rank)} place</small>
+              <small className="fame-contest">{entry.contest.title}</small>
+              <time className="fame-date">{completionMonth(entry.contest)}</time>
+            </div>
+          </li>)}
         </ol> : <p className="fame-empty">Published results will appear here after a leaderboard contest closes.</p>}
-        {publishedResults && <Link className="fame-results-link" to={`/contests/${publishedResults.id}`}>View published results →</Link>}
       </aside>
     </div>
   </section>;

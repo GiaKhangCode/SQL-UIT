@@ -212,9 +212,6 @@ export function LoginPage() {
           autoComplete="current-password"
           placeholder="Enter your password"
         />
-        <p className="auth-note teacher-demo-note">
-          Demo accounts: <code>teacher</code> / <code>123</code> · <code>admin</code> / <code>123</code>
-        </p>
         <button
           className="forgot-link"
           type="button"
