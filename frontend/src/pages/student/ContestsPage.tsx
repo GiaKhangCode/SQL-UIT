@@ -8,6 +8,33 @@ import { Empty, ErrorState, Loading, Status } from "../../components/ui";
 import { contestBannerClass, contestBannerStyle } from "../../utils/contestBanner";
 import { selectFeaturedContests } from "../../utils/featuredContests";
 
+const CONTEST_PAGE_SIZE = 10;
+
+function ContestCountdown({ contest }: { contest: Contest }) {
+  const [now, setNow] = useState(Date.now);
+  const active = contest.status === "Live" || contest.status === "Upcoming";
+  const value = contest.status === "Live" ? contest.closesAt : contest.opensAt;
+  // The API stores UTC timestamps without a timezone suffix.
+  const target = new Date(value && !/(Z|[+-]\d{2}:?\d{2})$/i.test(value) ? value + "Z" : value).getTime();
+  useEffect(() => {
+    if (!active || !Number.isFinite(target)) return;
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [active, target]);
+  if (!active || !Number.isFinite(target)) return null;
+  const remaining = Math.max(0, Math.ceil((target - now) / 1000));
+  const days = Math.floor(remaining / 86400);
+  const hours = Math.floor((remaining % 86400) / 3600);
+  const minutes = Math.floor((remaining % 3600) / 60);
+  const seconds = remaining % 60;
+  const duration = `${days ? days + "d " : ""}${hours}h ${minutes}m ${seconds}s`;
+  const label = remaining === 0
+    ? contest.status === "Live" ? "Ended" : "Starting now"
+    : `${contest.status === "Live" ? "Ends in" : "Starts in"} ${duration}`;
+  return <span className={`contest-countdown ${contest.status.toLowerCase()}`} role="timer" aria-live="off">{label}</span>;
+}
+
 function contestTimestamp(contest: Contest) {
   const timestamp = new Date(contest.opensAt).getTime();
   return Number.isFinite(timestamp) ? timestamp : 0;
@@ -83,7 +110,7 @@ function FeaturedContestCard({ contest, onOpen, sentinel = false }: {
     <span>{contest.status.toUpperCase()} · SQL</span>
     <h3>{contest.title}</h3>
     <p>{contest.shortDescription || `SQL challenges for ${contest.scope.toLowerCase()}.`}</p>
-    <small>{featureMeta(contest)}</small>
+    <small className="featured-contest-meta"><ContestCountdown contest={contest} /><span>{featureMeta(contest)}</span></small>
   </button>;
 }
 
@@ -245,6 +272,8 @@ export function ContestsPage() {
   const { data, loading, error } = useLoad(studentApi.getContests);
   const [tab, setTab] = useState("All");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const feedRef = useRef<HTMLDivElement>(null);
   const [params] = useSearchParams();
   if (loading) return <section className="page contests-page"><Loading label="Loading contests…" /></section>;
   if (error || !data) return <section className="page contests-page"><ErrorState title="Contests unavailable" message={error || "Could not load contests."} onRetry={() => window.location.reload()} /></section>;
@@ -254,6 +283,14 @@ export function ContestsPage() {
       (tab === "All" || contest.status === (tab === "Live" ? "Live" : tab === "Past" ? "Closed" : "Upcoming")) &&
       `${contest.title} ${contest.shortDescription} ${contest.scope}`.toLowerCase().includes(search.toLowerCase()),
   );
+  const pageCount = Math.max(1, Math.ceil(filtered.length / CONTEST_PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const firstIndex = (currentPage - 1) * CONTEST_PAGE_SIZE;
+  const pageContests = filtered.slice(firstIndex, firstIndex + CONTEST_PAGE_SIZE);
+  function changePage(nextPage: number) {
+    setPage(nextPage);
+    requestAnimationFrame(() => feedRef.current?.scrollTo({ top: 0 }));
+  }
   const contestCounts = {
     All: data.length,
     Upcoming: data.filter((contest) => contest.status === "Upcoming").length,
@@ -269,21 +306,30 @@ export function ContestsPage() {
   return <section className="page contests-page">
     <h1 className="sr-only">Contests</h1>
     <FeaturedContests contests={featured} onOpen={details} />
+    <div className="contest-list-region">
     <div className="contest-toolbar">
       <div className="underline-tabs contest-status-tabs" role="tablist" aria-label="Contest status">
-        {["All", "Upcoming", "Live", "Past"].map((currentTab) => <button role="tab" aria-selected={currentTab === tab} className={currentTab === tab ? "active" : ""} onClick={() => setTab(currentTab)} key={currentTab}>
+        {["All", "Upcoming", "Live", "Past"].map((currentTab) => <button role="tab" aria-selected={currentTab === tab} className={currentTab === tab ? "active" : ""} onClick={() => { setTab(currentTab); setPage(1); feedRef.current?.scrollTo({ top: 0 }); }} key={currentTab}>
           {currentTab} <span className="contest-tab-count">{contestCounts[currentTab as keyof typeof contestCounts]}</span>
         </button>)}
       </div>
       <label className="sr-only" htmlFor="contest-search">Search contests</label>
-      <input id="contest-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="⌕ Search contests" />
+      <input id="contest-search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); feedRef.current?.scrollTo({ top: 0 }); }} placeholder="⌕ Search contests" />
     </div>
     <div className="contest-columns">
       <div id="contest-feed" className="contest-feed-panel">
-        <div className="section-heading"><h2>{tab === "All" ? "All contests" : `${tab} contests`}</h2><span className="tiny muted">{filtered.length} available</span></div>
-        {filtered.map((contest) => <article className="contest-item" key={contest.id} id={`student-contest-${contest.id}`}>
+        <div className="section-heading"><h2>{tab === "All" ? "All contests" : `${tab} contests`}</h2><div className="contest-list-controls">
+          <span className="tiny muted" aria-live="polite">Showing {filtered.length ? firstIndex + 1 : 0}–{Math.min(firstIndex + CONTEST_PAGE_SIZE, filtered.length)} of {filtered.length}</span>
+          <nav className="contest-list-pagination" aria-label="Contest pages">
+            <button type="button" className="button" disabled={currentPage === 1} onClick={() => changePage(currentPage - 1)}>← Previous</button>
+            <span>Page {currentPage} of {pageCount}</span>
+            <button type="button" className="button" disabled={currentPage === pageCount} onClick={() => changePage(currentPage + 1)}>Next →</button>
+          </nav>
+        </div></div>
+        <div className="contest-feed-scroll" ref={feedRef} tabIndex={0} aria-label="Contest list">
+        {pageContests.map((contest) => <article className="contest-item" key={contest.id} id={`student-contest-${contest.id}`}>
           <div>
-            <div className="contest-title"><h3>{contest.title}</h3><Status value={contest.status} /></div>
+            <div className="contest-title"><h3>{contest.title}</h3><Status value={contest.status} /><ContestCountdown contest={contest} /></div>
             <small>{contest.scope}</small>
             <p>{contest.shortDescription}</p>
             <span className="tiny">{contest.date} {contest.time} → {contest.endDate || contest.date} {contest.endTime} · {contest.problemCount} problem{contest.problemCount === 1 ? "" : "s"} · {contest.submitters ?? 0} student{contest.submitters === 1 ? "" : "s"} participated</span>
@@ -291,6 +337,7 @@ export function ContestsPage() {
           <button className="text-button" onClick={() => details(contest)}>View details →</button>
         </article>)}
         {!filtered.length && <Empty title="No matching contests" />}
+        </div>
       </div>
       <aside className="hall-of-fame" aria-label="Hall of Fame">
         <h2>Hall of Fame</h2>
@@ -307,6 +354,7 @@ export function ContestsPage() {
           </li>)}
         </ol> : <p className="fame-empty">Published results will appear here after a leaderboard contest closes.</p>}
       </aside>
+    </div>
     </div>
   </section>;
 }

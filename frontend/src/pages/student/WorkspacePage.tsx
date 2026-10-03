@@ -14,11 +14,14 @@ import { X, Star, RotateCcw, Maximize2, Minimize2, Braces } from "lucide-react";
 import { indentRange } from "@codemirror/language";
 import { AppHeader } from "../../components/AppHeader";
 import { DataGrid, Dialog, Empty, Loading, Status } from "../../components/ui";
+import { ProblemMarkdown } from "../../components/ProblemMarkdown";
 import { useLoad } from "../../components/useLoad";
 import { useTheme } from "../../context/ThemeContext";
 import { studentApi, type QueryResult } from "../../services/studentApi";
 import { storage } from "../../services/storage";
 import type { Problem, Submission } from "../../data/models";
+import { parseDatabaseSchema } from "../../utils/parseDatabaseSchema";
+import { parseSeedData } from "../../utils/parseSeedData";
 import { AiChatPanel } from "../../components/AiChatPanel";
 
 const WORKSPACE_LAYOUT_KEY = "sql-practice:workspace-layout";
@@ -205,7 +208,7 @@ function Workspace({ problem }: { problem: Problem }) {
     return () => {
       active = false;
     };
-  }, [help, problem.id]);
+  }, [help, problem.id, source, context]);
   function closeHelp() {
     setHelp(null);
     helpTrigger.current?.focus();
@@ -342,6 +345,10 @@ function Workspace({ problem }: { problem: Problem }) {
     }
   }
   const display = resultTab === "Submissions" ? lastSubmit : result;
+  const schemaText = (problem as Problem & { schema?: string }).schema || "";
+  const schemaTables = parseDatabaseSchema(schemaText);
+  const seedDataText = (problem as Problem & { seedData?: string }).seedData || "";
+  const seedTables = parseSeedData(seedDataText);
   return (
     <div className={"workspace" + (expanded ? " editor-expanded" : "") + (resizing ? ` is-resizing resizing-${resizing}` : "")}>
       <AppHeader
@@ -421,9 +428,9 @@ function Workspace({ problem }: { problem: Problem }) {
                       }
                     />
                   </div>
-                  <p className="muted">{problem.description}</p>
+                  <ProblemMarkdown>{problem.description || ""}</ProblemMarkdown>
                   <h3>Requirements</h3>
-                  <p>{problem.requirements}</p>
+                  <ProblemMarkdown>{problem.requirements || ""}</ProblemMarkdown>
                   {problem.expected && <><h3>Expected output</h3><DataGrid table={problem.expected} /><p className="tiny muted">Output shown for the sample dataset.</p></>}
                   <hr />
                 </>
@@ -431,8 +438,67 @@ function Workspace({ problem }: { problem: Problem }) {
                 <>
                   <h2>Database setup</h2>
                   <p className="muted">SQL Server · read-only schema and seed data used for evaluation</p>
-                  <section className="schema-section"><h3>Schema</h3><pre className="workspace-schema-code"><code>{(problem as Problem & { schema?: string }).schema || "No schema provided."}</code></pre></section>
-                  <section className="schema-section"><h3>Seed data</h3><pre className="workspace-schema-code"><code>{(problem as Problem & { seedData?: string }).seedData || "No seed data provided."}</code></pre></section>
+                  <section className="schema-section">
+                    <h3>Schema</h3>
+                    {schemaTables.length ? (
+                      <div className="workspace-schema-tables">
+                        {schemaTables.map((table, tableIndex) => (
+                          <section className="workspace-schema-table-card" key={`${table.name}-${tableIndex}`}>
+                            <h4>{table.name}</h4>
+                            <div className="workspace-schema-table-scroll">
+                              <table className="workspace-schema-table">
+                                <thead><tr><th>Column</th><th>Type</th><th>Constraints</th></tr></thead>
+                                <tbody>{table.columns.map((column) => (
+                                  <tr key={column.name}>
+                                    <th scope="row">{column.name}</th>
+                                    <td>{column.type}</td>
+                                    <td>{column.constraints || "—"}</td>
+                                  </tr>
+                                ))}</tbody>
+                              </table>
+                            </div>
+                            {(table.foreignKeys.length > 0 || table.constraints.length > 0) && <div className="workspace-schema-relations">
+                              {table.foreignKeys.map((foreignKey, index) => (
+                                <div className="workspace-schema-relation" key={`fk-${index}`}>
+                                  <span className="workspace-schema-relation-label">FOREIGN KEY</span>
+                                  <code>{foreignKey.columns.join(", ")}</code>
+                                  <span aria-hidden="true">→</span>
+                                  <code>{foreignKey.referencedTable}.{foreignKey.referencedColumns.join(", ")}</code>
+                                </div>
+                              ))}
+                              {table.constraints.map((constraint, index) => (
+                                <span className="workspace-schema-extra-constraint" key={`constraint-${index}`}>{constraint}</span>
+                              ))}
+                            </div>}
+                          </section>
+                        ))}
+                      </div>
+                    ) : (
+                      <pre className="workspace-schema-code"><code>{schemaText || "No schema provided."}</code></pre>
+                    )}
+                  </section>
+                  <section className="schema-section">
+                    <h3>Seed data</h3>
+                    {seedTables.length ? (
+                      <div className="workspace-seed-tables">
+                        {seedTables.map((table, tableIndex) => (
+                          <section className="workspace-schema-table-card" key={`${table.name}-${tableIndex}`}>
+                            <h4>{table.name}</h4>
+                            <div className="workspace-schema-table-scroll">
+                              <table className="workspace-seed-table">
+                                <thead><tr>{table.columns.map((column) => <th key={column}>{column}</th>)}</tr></thead>
+                                <tbody>{table.rows.map((row, rowIndex) => (
+                                  <tr key={rowIndex}>{row.map((value, columnIndex) => <td key={`${table.columns[columnIndex]}-${columnIndex}`}>{value}</td>)}</tr>
+                                ))}</tbody>
+                              </table>
+                            </div>
+                          </section>
+                        ))}
+                      </div>
+                    ) : (
+                      <pre className="workspace-schema-code"><code>{seedDataText || "No seed data provided."}</code></pre>
+                    )}
+                  </section>
                 </>
               )}
             </div>
@@ -464,7 +530,9 @@ function Workspace({ problem }: { problem: Problem }) {
                       <X size={18} />
                     </button>
                   </div>
-                  <p aria-live="polite">{helpText}</p>
+                  <ProblemMarkdown className="workspace-hint-content" aria-live="polite">
+                    {helpText}
+                  </ProblemMarkdown>
                   <small className="muted">
                     Guidance only · no complete solution.
                   </small>

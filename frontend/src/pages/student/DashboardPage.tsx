@@ -1,16 +1,51 @@
+import { useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { studentApi } from "../../services/studentApi";
 import { useLoad } from "../../components/useLoad";
-import { ErrorState, Loading } from "../../components/ui";
+import { ErrorState, Loading, Status } from "../../components/ui";
 import { Activity } from "../../components/Activity";
 import { formatLocalDate } from "../../utils/serverDateTime";
+function ContinueProblemDetails({ problemId }: { problemId: string }) {
+  const { data: problem, loading, error } = useLoad(() => studentApi.getProblem(problemId), [problemId]);
+  if (loading) return <Loading label="Loading problem details…" />;
+  if (error || !problem) return <ErrorState title="Could not load problem details" message={error || "Please try again."} onRetry={() => window.location.reload()} />;
+  const topics = Array.isArray(problem.topics) && problem.topics.length ? problem.topics.join(" · ") : problem.topic || "—";
+  return <>
+    <div className="continue-detail-header">
+    <h2>{problem.number}. {problem.title}</h2>
+    <div className="continue-detail-meta"><Status value={problem.progress || "In progress"} /><span>{problem.difficulty}</span></div>
+    <Link className="button primary" to={"/workspace/" + problemId}>Continue solving →</Link>
+    </div>
+    <dl className="continue-detail-facts">
+      <div><dt>Topics</dt><dd>{topics}</dd></div>
+      <div><dt>Database</dt><dd>{problem.databaseType || "SQL Server"}</dd></div>
+    </dl>
+    {problem.description && <section><h3>Problem</h3><p>{problem.description}</p></section>}
+    {problem.requirements && <section><h3>Requirements</h3><p>{problem.requirements}</p></section>}
+  </>;
+}
+
+const CONTINUE_PAGE_SIZE = 10;
+
 export function DashboardPage() {
   const { data, loading, error } = useLoad(studentApi.getDashboard);
   const location = useLocation();
-  if (loading) return <section className="page dashboard-page"><Loading label="Loading dashboard…" /></section>;
-  if (error || !data) return <section className="page dashboard-page"><ErrorState title="Dashboard unavailable" message={error || "Could not load dashboard."} onRetry={() => window.location.reload()} /></section>;
+  const [selectedProblemId, setSelectedProblemId] = useState("");
+  const [continuePage, setContinuePage] = useState(1);
+  const learningRef = useRef<HTMLDivElement>(null);
+  if (loading) return <section className="page dashboard-page dashboard-reordered"><Loading label="Loading dashboard…" /></section>;
+  if (error || !data) return <section className="page dashboard-page dashboard-reordered"><ErrorState title="Dashboard unavailable" message={error || "Could not load dashboard."} onRetry={() => window.location.reload()} /></section>;
+  const pageCount = Math.max(1, Math.ceil(data.continuing.length / CONTINUE_PAGE_SIZE));
+  const currentPage = Math.min(continuePage, pageCount);
+  const firstIndex = (currentPage - 1) * CONTINUE_PAGE_SIZE;
+  const pageProblems = data.continuing.slice(firstIndex, firstIndex + CONTINUE_PAGE_SIZE);
+  const selectedProblem = pageProblems.find((problem) => problem.id === selectedProblemId) || pageProblems[0];
+  function changeContinuePage(nextPage: number) {
+    setContinuePage(nextPage);
+    learningRef.current?.scrollTo({ top: 0 });
+  }
   return (
-    <section className="page dashboard-page">
+    <section className="page dashboard-page dashboard-reordered">
       {(location.state as { welcome?: boolean } | null)?.welcome && (
         <p className="welcome-message" role="status">
           Account created. Welcome to your Student workspace.
@@ -18,34 +53,43 @@ export function DashboardPage() {
       )}
       <div className="dashboard-layout">
         <div>
-          <section className="dashboard-learning-panel">
-            <div className="dashboard-learning-heading">
-              <h1>Continue learning</h1>
-              <span className="dashboard-heading-actions"><span className="muted">{data.continuing.length} in progress</span><Link to="/practice">View all {data.continuing.length}</Link></span>
+      <section className="activity-section dashboard-activity-card">
+        <div className="section-heading dashboard-activity-heading">
+          <div>
+            <h2>SQL activity</h2>
+            <small className="muted">
+              {(() => {
+                const today = new Date();
+                const sixMonthsAgo = new Date();
+                sixMonthsAgo.setDate(today.getDate() - 26 * 7);
+                return `${sixMonthsAgo.toLocaleString("default", { month: "short" })} ${sixMonthsAgo.getDate()} – ${today.toLocaleString("default", { month: "short" })} ${today.getDate()}, ${today.getFullYear()}`;
+              })()}
+            </small>
+          </div>
+        </div>
+        <div className="dashboard-activity-body">
+          <div className="dashboard-activity-stats">
+            <div className="dashboard-solved">
+              <b>{data.solved}</b>
+              <span>problems solved</span>
             </div>
-            <div
-              className="learning-scroll"
-              tabIndex={0}
-              aria-label="Continue learning problems"
-            >
-              {data.continuing.map((p) => (
-                <div className="continue-row" key={p.id}>
-                  <div className="continue-info">
-                    <b>{p.title}</b>
-                    <small className="continue-meta">
-                      <span>{p.topic || "SQL practice"}</span>
-                      <span aria-hidden="true">·</span>
-                      <span>{p.difficulty}</span>
-                    </small>
-                  </div>
-                  <Link className="dashboard-resume" to={"/workspace/" + p.id}>
-                    Continue
-                  </Link>
-                </div>
-              ))}
-              {!data.continuing.length && <div className="empty-state"><h3>No work in progress</h3><p>Browse Practice to start a SQL problem.</p></div>}
-            </div>
-          </section>
+            <p>
+              <span>● Easy</span>
+              <strong>{data.easy}</strong>
+            </p>
+            <p>
+              <span>● Medium</span>
+              <strong>{data.medium}</strong>
+            </p>
+            <p>
+              <span>● Hard</span>
+              <strong>{data.hard}</strong>
+            </p>
+            <small>Current streak: {data.currentStreak} days</small>
+          </div>
+          <Activity submissions={data.submissionsPerDay} />
+        </div>
+      </section>
         </div>
         <aside className="dashboard-deadlines deadline-panel">
           <div className="dashboard-deadlines-heading"><h2>Deadlines</h2><span>{data.deadlines.length} upcoming</span></div>
@@ -87,44 +131,36 @@ export function DashboardPage() {
           </div>
         </aside>
       </div>
-      <section className="activity-section dashboard-activity-card">
-        <div className="section-heading">
-          <div>
-            <h2>SQL activity</h2>
-            <small className="muted">
-              {(() => {
-                const today = new Date();
-                const sixMonthsAgo = new Date();
-                sixMonthsAgo.setDate(today.getDate() - 26 * 7);
-                return `${sixMonthsAgo.toLocaleString("default", { month: "short" })} ${sixMonthsAgo.getDate()} – ${today.toLocaleString("default", { month: "short" })} ${today.getDate()}, ${today.getFullYear()}`;
-              })()}
-            </small>
-          </div>
-        </div>
-        <div className="dashboard-activity-body">
-          <div className="dashboard-activity-stats">
-            <div className="dashboard-solved">
-              <b>{data.solved}</b>
-              <span>problems solved</span>
+          <div className="dashboard-continue-region">
+        <section className="dashboard-learning-panel">
+          <div className="dashboard-learning-heading">
+            <h1>Continue learning</h1>
+            <div className="dashboard-continue-controls">
+              <span aria-live="polite" className="muted">Showing {data.continuing.length ? firstIndex + 1 : 0}–{Math.min(firstIndex + CONTINUE_PAGE_SIZE, data.continuing.length)} of {data.continuing.length}</span>
+              <nav className="dashboard-continue-pagination" aria-label="Continue learning pages">
+                <button type="button" className="button" disabled={currentPage === 1} onClick={() => changeContinuePage(currentPage - 1)}>← Previous</button>
+                <span>Page {currentPage} of {pageCount}</span>
+                <button type="button" className="button" disabled={currentPage === pageCount} onClick={() => changeContinuePage(currentPage + 1)}>Next →</button>
+              </nav>
             </div>
-            <p>
-              <span>● Easy</span>
-              <strong>{data.easy}</strong>
-            </p>
-            <p>
-              <span>● Medium</span>
-              <strong>{data.medium}</strong>
-            </p>
-            <p>
-              <span>● Hard</span>
-              <strong>{data.hard}</strong>
-            </p>
-            <small>Current streak: {data.currentStreak} days</small>
           </div>
-          <Activity submissions={data.submissionsPerDay} />
-        </div>
-      </section>
-      <div className="quick-actions"><Link to="/practice">Browse practice →</Link><Link to="/assignments">View assignments →</Link><Link to="/contests">Explore contests →</Link></div>
+          <div className="learning-scroll" ref={learningRef} tabIndex={0} aria-label="Continue learning problems">
+            {pageProblems.map((problem) => (
+              <button type="button" className={"continue-row continue-select-row" + (selectedProblem?.id === problem.id ? " selected" : "")} key={problem.id} aria-pressed={selectedProblem?.id === problem.id} onClick={() => setSelectedProblemId(problem.id)}>
+                <span className="continue-info">
+                  <b><span className="continue-problem-number">{problem.number}.</span> {problem.title}</b>
+                  <small className="continue-meta"><span>{problem.topic || "SQL practice"}</span><span aria-hidden="true">·</span><span>{problem.difficulty}</span></small>
+                </span>
+                <Status value="In progress" />
+              </button>
+            ))}
+            {!data.continuing.length && <div className="empty-state"><h3>No work in progress</h3><p>Browse Practice to start a SQL problem.</p></div>}
+          </div>
+        </section>
+        <aside className="dashboard-continue-details" aria-label="Selected problem details">
+          {selectedProblem ? <ContinueProblemDetails key={selectedProblem.id} problemId={selectedProblem.id} /> : <p className="muted">Select a problem to view details.</p>}
+        </aside>
+      </div>
     </section>
   );
 }

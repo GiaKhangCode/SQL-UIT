@@ -94,18 +94,30 @@ export function Dialog({
   children,
   onClose,
   className = "",
+  closeOnBackdrop = true,
+  closeOnCancel = true,
+  headerActions,
+  hideClose = false,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
   className?: string;
+  closeOnBackdrop?: boolean;
+  closeOnCancel?: boolean;
+  headerActions?: ReactNode;
+  hideClose?: boolean;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
+    const previousScroll = { x: window.scrollX, y: window.scrollY };
     dialog.current?.showModal();
-    return () => previous?.focus();
+    return () => {
+      previous?.focus({ preventScroll: true });
+      window.scrollTo(previousScroll.x, previousScroll.y);
+    };
   }, []);
   return (
     <dialog
@@ -114,10 +126,10 @@ export function Dialog({
       aria-labelledby={titleId}
       onCancel={(e) => {
         e.preventDefault();
-        onClose();
+        if (closeOnCancel) onClose();
       }}
       onClick={(e) => {
-        if (e.target === e.currentTarget) {
+        if (closeOnBackdrop && e.target === e.currentTarget) {
           const bounds = e.currentTarget.getBoundingClientRect();
           if (
             e.clientX < bounds.left ||
@@ -131,13 +143,14 @@ export function Dialog({
     >
       <div className="section-heading">
         <h2 id={titleId}>{title}</h2>
-        <button
+        {headerActions}
+        {!hideClose && <button
           className="icon-button"
           onClick={onClose}
           aria-label="Close dialog"
         >
           <X size={18} />
-        </button>
+        </button>}
       </div>
       {children}
     </dialog>

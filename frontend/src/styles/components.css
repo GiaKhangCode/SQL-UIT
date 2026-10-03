@@ -1977,13 +1977,22 @@ body:has(.assignments-page) {
   border-top: 1px solid var(--border);
   display: flex;
   gap: 8px;
-  align-items: center;
+  align-items: flex-end;
+  flex-shrink: 0;
 }
 
-.ai-chat-input input {
+.ai-chat-input textarea {
   flex: 1;
-  height: 36px;
-  padding: 0 12px;
+  min-width: 0;
+  box-sizing: border-box;
+  min-height: 36px;
+  max-height: 180px;
+  padding: 7px 12px;
+  resize: none;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+  line-height: 20px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--canvas);
@@ -1992,7 +2001,7 @@ body:has(.assignments-page) {
   outline: none;
 }
 
-.ai-chat-input input:focus {
+.ai-chat-input textarea:focus {
   border-color: var(--accent);
 }
 

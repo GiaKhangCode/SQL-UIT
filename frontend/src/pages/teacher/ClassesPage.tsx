@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { Dialog, ErrorState, Loading } from "../../components/ui";
 import {
   type TeacherClass,
@@ -14,6 +14,8 @@ export function ClassesPage() {
   const [term, setTerm] = useState("All terms");
   const [search, setSearch] = useState("");
   const [selectedClassId, setSelectedClassId] = useState("");
+  const [page, setPage] = useState(1);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
   const [studentSearch, setStudentSearch] = useState("");
   const [classDetailsOpen, setClassDetailsOpen] = useState(false);
   const [detailTab, setDetailTab] = useState<"assignments" | "members">("assignments");
@@ -60,7 +62,13 @@ export function ClassesPage() {
       .includes(search.toLowerCase());
     return matchesTerm && matchesSearch;
   }), [classes, search, term]);
-  const selectedClass = visibleClasses.find((classInfo) => classInfo.id === selectedClassId) || visibleClasses[0] || null;
+  const pageCount = Math.max(1, Math.ceil(visibleClasses.length / 15));
+  const currentPage = Math.min(page, pageCount);
+  const firstIndex = (currentPage - 1) * 15;
+  const pageClasses = visibleClasses.slice(firstIndex, firstIndex + 15);
+  const selectedClass = pageClasses.find((classInfo) => classInfo.id === selectedClassId) || pageClasses[0] || null;
+  useEffect(() => { setPage(1); setSelectedClassId(""); }, [search, term]);
+  useEffect(() => { tableScrollRef.current?.scrollTo({ top: 0 }); }, [currentPage, search, term]);
   const assignments = classActivities.filter(item => !item.isContest);
   const contests = classActivities.filter(item => item.isContest);
   const filteredStudents = useMemo(() => detailMembers.filter((student) =>
@@ -82,7 +90,7 @@ export function ClassesPage() {
   }
 
   return (
-    <section className="teacher-page teacher-classes-page">
+    <section className="teacher-page teacher-classes-page compact-teacher-classes">
       <h1 className="sr-only">Classes</h1>
 
       {classesLoading ? <Loading label="Loading classes…" /> : classesError ? <ErrorState title="Could not load classes" message={classesError} onRetry={() => window.location.reload()} /> : classes.length === 0 ? <div className="teacher-empty-state">
@@ -104,9 +112,9 @@ export function ClassesPage() {
         </TeacherField>
       </div>
 
-      <div className="teacher-classes-layout">
+      <div className="teacher-classes-layout teacher-list-detail-layout">
         <div className="teacher-classes-main teacher-list-detail-main">
-          <div className="teacher-table-scroll sticky-list-table-wrap">
+          <div ref={tableScrollRef} className="teacher-table-scroll teacher-list-table-scroll sticky-list-table-wrap">
             <table className="teacher-table teacher-classes-table sticky-list-table">
               <thead>
                 <tr>
@@ -117,7 +125,7 @@ export function ClassesPage() {
                 </tr>
               </thead>
               <tbody>
-                {visibleClasses.map((classInfo) => (
+                {pageClasses.map((classInfo) => (
                   <tr
                     className={`teacher-class-row${selectedClass?.id === classInfo.id ? " is-selected" : ""}`}
                     key={classInfo.id}
@@ -149,10 +157,17 @@ export function ClassesPage() {
               </tbody>
             </table>
           </div>
-
+          <div className="teacher-list-footer teacher-library-pagination">
+            <span>Showing {visibleClasses.length ? firstIndex + 1 : 0}–{firstIndex + pageClasses.length} of {visibleClasses.length} classes</span>
+            <nav aria-label="Classes pagination">
+              <button className="button" type="button" disabled={currentPage === 1} onClick={() => { setPage(currentPage - 1); setSelectedClassId(""); }}>← Previous</button>
+              <span>Page {currentPage} of {pageCount}</span>
+              <button className="button" type="button" disabled={currentPage === pageCount} onClick={() => { setPage(currentPage + 1); setSelectedClassId(""); }}>Next →</button>
+            </nav>
+          </div>
         </div>
 
-        <aside className="teacher-class-details">
+        <aside className="teacher-class-details teacher-list-detail-panel">
           {selectedClass ? <>
             <div className="teacher-class-detail-heading">
               <div>

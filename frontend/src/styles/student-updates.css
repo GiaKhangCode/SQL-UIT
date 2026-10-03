@@ -55,10 +55,6 @@
   width: 40px;
   height: 40px;
 }
-.notification-trigger[aria-expanded="true"],
-.streak-trigger[aria-expanded="true"] {
-  border: 2px solid var(--accent);
-}
 .unread-dot {
   position: absolute;
   top: 2px;
@@ -964,6 +960,19 @@ body:has(.practice-page) {
 .contest-markdown p { margin:0 0 10px; }
 .contest-markdown ul,.contest-markdown ol { padding-left:20px; }
 .contest-markdown pre { overflow-x:auto; padding:10px; border:1px solid var(--border); background:var(--surface); }
+.problem-markdown { min-width:0; overflow-wrap:anywhere; line-height:1.6; color:var(--text); }
+.problem-markdown > :first-child { margin-top:0; }
+.problem-markdown > :last-child { margin-bottom:0; }
+.problem-markdown p { margin:0 0 12px; }
+.problem-markdown ul,.problem-markdown ol { margin:0 0 12px; padding-left:22px; }
+.problem-markdown li + li { margin-top:4px; }
+.problem-markdown code { border-radius:3px; padding:1px 4px; background:var(--subtle); }
+.problem-markdown pre { overflow:auto; margin:0 0 12px; padding:10px; background:var(--subtle); }
+.problem-markdown .problem-expression { width:fit-content; max-width:100%; margin:0 0 12px; padding:8px 10px; border:1px solid var(--border-subtle); border-radius:4px; background:var(--subtle); color:var(--text); white-space:pre-wrap; overflow-wrap:anywhere; }
+.problem-markdown .problem-expression code { padding:0; background:transparent; }
+.workspace-hint-content { margin-bottom:12px; }
+.workspace-hint-content p { white-space:pre-line; }
+.teacher-preview-dialog > h4 { margin:14px 0 6px; font-size:12px; }
 .contest-rules { white-space:pre-line; line-height:1.6; }
 .contest-leaderboard { margin-top:20px; }
 .contest-leaderboard h3 { font-size:13px; }
@@ -1392,6 +1401,13 @@ body:has(.assignment-work-page), body:has(.scope-detail-page) { background: var(
 /* Authentication layout. */
 .auth-page { grid-template-columns: 600px minmax(0, 1fr); place-items: stretch; padding: 0; }
 .auth-page--centered { grid-template-columns: minmax(0, 1fr); }
+.auth-brand-panel { background-color:var(--subtle); background-image:linear-gradient(90deg,rgba(20,22,72,.28),rgba(20,22,72,.08)),url('/assets/auth-data-background.png'); background-position:center; background-size:cover; }
+.auth-page--compact .editor-preview { max-height:min(46dvh,400px); }
+.auth-page--compact .editor-preview pre { max-height:150px; padding:10px 14px; overflow:hidden; line-height:18px; }
+.auth-page--compact .preview-result { padding:8px 12px; }
+.auth-page--compact .preview-result table { line-height:18px; }
+.auth-page--compact .preview-result b { margin-top:4px; }
+.auth-brand-panel > small { margin-top:16px; }
 .auth-page--centered .auth-form-panel { min-height:100dvh; }
 .auth-brand-panel { display:flex; }
 .auth-form-panel { display:flex; }
@@ -1412,6 +1428,8 @@ body:has(.assignment-work-page), body:has(.scope-detail-page) { background: var(
 .auth-form-wrap .otp-cells input { min-width:0; min-height:56px; padding:0; text-align:center; font-family:var(--font-mono); font-size:20px; }
 @media (max-width: 980px) {
   .auth-page { display:block; min-height:100dvh; overflow:auto; }
+  .auth-page--split { position:static; width:auto; height:auto; min-height:100dvh; overflow:visible; }
+  .auth-page--split .auth-form-panel { height:auto; overflow:visible; }
   .auth-page--centered .auth-form-panel { min-height:100dvh; padding:32px 0; }
   .auth-brand-panel { min-height:0; padding:24px; gap:18px; border-right:0; border-bottom:1px solid var(--border); }
   .auth-pitch { gap:0; }
@@ -1420,6 +1438,26 @@ body:has(.assignment-work-page), body:has(.scope-detail-page) { background: var(
   .auth-brand-panel > small { display:none; }
   .auth-form-panel { min-height:0; padding:40px 0 48px; align-items:flex-start; }
   .auth-theme { right:16px; top:16px; }
+}
+@media (min-width: 981px) {
+  .auth-page--split { position:fixed; inset:0; width:100%; height:100dvh; min-height:0; overflow:hidden; }
+  .auth-page--split .auth-brand-panel { min-height:0; padding:20px 40px; overflow:hidden; }
+  .auth-page--split .auth-pitch { min-height:0; justify-content:center; gap:14px; }
+  .auth-page--split .auth-pitch h2 { font-size:34px; line-height:1.08; }
+  .auth-page--split .auth-pitch p { margin-top:8px; font-size:12px; line-height:1.45; }
+  .auth-page--split .auth-eyebrow { margin-bottom:10px; }
+  .auth-page--split .editor-preview { max-height:min(46dvh,400px); flex:none; }
+  .auth-page--split .editor-preview pre { max-height:140px; padding:8px 12px; overflow:hidden; line-height:18px; }
+  .auth-page--split .preview-result { padding:8px 10px; }
+  .auth-page--split .preview-result table { line-height:17px; }
+  .auth-page--split .preview-result b { margin-top:3px; }
+  .auth-page--split .auth-form-panel { height:100dvh; min-height:0; overflow-y:auto; align-items:center; background:var(--canvas); }
+  .auth-page--split .auth-form-wrap { margin:auto; padding:20px 0; }
+  .auth-page--register .auth-form-wrap .auth-heading { margin-bottom:16px; }
+  .auth-page--register .auth-form-wrap form { gap:9px; }
+  .auth-page--register .auth-form-wrap .field { gap:3px; }
+  .auth-page--register .auth-form-wrap input { min-height:34px; }
+  .auth-page--register .auth-form-wrap .button.primary { min-height:36px; }
 }
 /* Returning-student overview. */
 .dashboard-page { max-width: 1314px; padding-top: 32px; }
@@ -1463,7 +1501,7 @@ body:has(.assignment-work-page), body:has(.scope-detail-page) { background: var(
 .dashboard-week-days b { display:grid; place-items:center; width:28px; height:28px; border-radius:50%; font-size:11px; font-weight:400; }
 .dashboard-week-days b.today { background:var(--accent); color:var(--on-accent); }
 .dashboard-week-days i { width:4px; height:4px; border-radius:50%; background:var(--accent); }
-.dashboard-activity-card { border:1px solid var(--border); border-radius:8px; padding:20px 24px 12px; margin-top:32px; }
+.dashboard-activity-card { border:1px solid var(--border); border-radius:8px; padding:20px 24px 12px; margin-top:32px; background:var(--surface); }
 .dashboard-activity-card .section-heading { margin-bottom:0; }
 .dashboard-activity-card .section-heading h2 { font-size:16px; }
 .dashboard-activity-card .section-heading small { display:block; margin-top:0; line-height:14px; }
@@ -1568,3 +1606,11 @@ body:has(.assignment-work-page), body:has(.scope-detail-page) { background: var(
   .submission-detail-footer small { text-align:center; }
   .submission-detail-footer .button { justify-content:center; }
 }
+
+/* Pagination affects only the student contest feed. */
+.contest-feed-panel { scroll-margin-top: calc(var(--header-height) + 12px); }
+.contest-feed-panel > .section-heading { flex-wrap: wrap; gap: 12px; }
+.contest-list-controls { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px 14px; margin-left: auto; }
+.contest-list-pagination { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.contest-list-pagination > span { color: var(--muted); font-size: 11px; }
+.contest-list-pagination .button { min-height: 30px; padding: 5px 9px; font-size: 11px; }

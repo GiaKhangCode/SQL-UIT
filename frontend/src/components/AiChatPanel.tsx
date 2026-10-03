@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import { studentApi } from "../services/studentApi";
 import { X, Send, History, Plus, MessageSquare } from "lucide-react";
@@ -14,6 +14,12 @@ export interface AiChatPanelProps {
 interface ChatMessage {
   role: "ai" | "user";
   content: string;
+}
+
+function resizeChatInput(textarea: HTMLTextAreaElement) {
+  textarea.style.height = "auto";
+  const borderHeight = textarea.offsetHeight - textarea.clientHeight;
+  textarea.style.height = `${textarea.scrollHeight + borderHeight}px`;
 }
 
 export function AiChatPanel({ problem, code, onClose }: AiChatPanelProps) {
@@ -32,6 +38,24 @@ export function AiChatPanel({ problem, code, onClose }: AiChatPanelProps) {
   const [historyError, setHistoryError] = useState("");
   const [chatError, setChatError] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  useLayoutEffect(() => {
+    if (inputRef.current) resizeChatInput(inputRef.current);
+  }, [input]);
+
+  useEffect(() => {
+    const textarea = inputRef.current;
+    if (!textarea) return;
+    let previousWidth = textarea.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (textarea.clientWidth === previousWidth) return;
+      previousWidth = textarea.clientWidth;
+      resizeChatInput(textarea);
+    });
+    observer.observe(textarea);
+    return () => observer.disconnect();
+  }, []);
 
   const fetchSessions = async () => {
     setHistoryLoading(true);
@@ -172,12 +196,22 @@ export function AiChatPanel({ problem, code, onClose }: AiChatPanelProps) {
 
       <div className="ai-chat-input">
         {chatError && <p role="alert" className="field-error">{chatError}</p>}
-        <input
-          type="text"
+        <textarea
+          ref={inputRef}
+          rows={1}
+          aria-label="Ask AI a question"
+          title="Enter to send; Ctrl + Enter or Shift + Enter for a new line"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") {
+            if (e.key !== "Enter" || e.nativeEvent.isComposing || e.keyCode === 229) return;
+            if (e.ctrlKey || e.metaKey) {
+              e.preventDefault();
+              const textarea = e.currentTarget;
+              textarea.setRangeText("\n", textarea.selectionStart, textarea.selectionEnd, "end");
+              setInput(textarea.value);
+            } else if (!e.shiftKey && !e.altKey) {
+              e.preventDefault();
               handleSend();
             }
           }}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { useLoad } from "../../components/useLoad";
 import { Empty, ErrorState, Loading, Status } from "../../components/ui";
@@ -39,10 +39,23 @@ export function ContestsListPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("All statuses");
   const [selectedId, setSelectedId] = useState("");
+  const [page, setPage] = useState(1);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
   const contests = useMemo(() => ((data || []) as Contest[]).filter(item => item.isContest), [data]);
   const filtered = contests.filter(item => `${item.title} ${item.classes} ${item.shortDescription || ""}`.toLowerCase().includes(search.toLowerCase()) && (status === "All statuses" || contestStatus(item.status) === status));
-  const selected = filtered.find(item => item.id === selectedId) || filtered[0];
-  return <section className="teacher-page teacher-list-page teacher-contest-page">
+  const pageCount = Math.max(1, Math.ceil(filtered.length / 15));
+  const currentPage = Math.min(page, pageCount);
+  const firstIndex = (currentPage - 1) * 15;
+  const pageContests = filtered.slice(firstIndex, firstIndex + 15);
+  const selected = pageContests.find(item => item.id === selectedId) || pageContests[0];
+  useEffect(() => {
+    setPage(1);
+    setSelectedId("");
+  }, [search, status]);
+  useEffect(() => {
+    tableScrollRef.current?.scrollTo({ top: 0 });
+  }, [currentPage, search, status]);
+  return <section className="teacher-page teacher-list-page teacher-contest-page compact-teacher-contests">
     <h1 className="sr-only">Contests</h1>
     <div className="teacher-list-filters teacher-activity-filters teacher-contest-filters">
       <TeacherField label="SEARCH"><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search contests, audience, or summary…" /></TeacherField>
@@ -52,15 +65,25 @@ export function ContestsListPage() {
       </div>
     </div>
     {loading ? <Loading label="Loading contests…" /> : error ? <ErrorState title="Could not load contests" message={error} onRetry={() => window.location.reload()} /> : !contests.length ? <Empty title="No contests yet">Create a timed contest for selected classes or all students.</Empty> : <div className="teacher-list-detail-layout">
-        <div className="teacher-list-detail-main"><div className="teacher-table-scroll sticky-list-table-wrap"><table className="teacher-table teacher-contest-list-table sticky-list-table"><thead><tr><th>CONTEST</th><th>AUDIENCE</th><th>STARTS</th><th>ENDS</th><th>DURATION</th><th>STATUS</th></tr></thead><tbody>
-          {filtered.map(item => <tr key={item.id} className={selected?.id === item.id ? "is-selected" : ""}>
+        <div className="teacher-list-detail-main"><div ref={tableScrollRef} className="teacher-table-scroll teacher-list-table-scroll sticky-list-table-wrap"><table className="teacher-table teacher-contest-list-table sticky-list-table"><thead><tr><th>CONTEST</th><th>AUDIENCE</th><th>STARTS</th><th>ENDS</th><th>DURATION</th><th>STATUS</th></tr></thead><tbody>
+          {pageContests.map(item => <tr key={item.id} className={selected?.id === item.id ? "is-selected" : ""}>
             <td data-label="CONTEST"><button type="button" className="teacher-selectable-row-title" onClick={() => setSelectedId(item.id)}>{item.title}</button></td>
             <td data-label="AUDIENCE">{item.classes}</td>
             <td data-label="STARTS">{tableDateTime(item.opens)}</td>
             <td data-label="ENDS">{tableDateTime(item.closes)}</td>
             <td data-label="DURATION">{duration(item.opens, item.closes)}</td><td data-label="STATUS"><Status value={contestStatus(item.status)} /></td>
           </tr>)}
-        </tbody></table></div><p className="teacher-list-footer">Showing {filtered.length} of {contests.length} contests</p></div>
+          {!filtered.length && <tr><td className="teacher-empty-row" colSpan={6}>No contests match these filters.</td></tr>}
+        </tbody></table></div>
+          <div className="teacher-list-footer teacher-library-pagination">
+            <span>Showing {filtered.length ? firstIndex + 1 : 0}–{firstIndex + pageContests.length} of {filtered.length} contests</span>
+            <nav aria-label="Contests pagination">
+              <button className="button" type="button" disabled={currentPage === 1} onClick={() => { setPage(currentPage - 1); setSelectedId(""); }}>← Previous</button>
+              <span>Page {currentPage} of {pageCount}</span>
+              <button className="button" type="button" disabled={currentPage === pageCount} onClick={() => { setPage(currentPage + 1); setSelectedId(""); }}>Next →</button>
+            </nav>
+          </div>
+        </div>
         <aside className="teacher-list-detail-panel">{selected ? <><span className="teacher-detail-eyebrow">CONTEST DETAILS</span><h2>{selected.title}</h2><p className="muted">{selected.shortDescription}</p><p className="muted">{selected.classes}</p>
           <dl className="teacher-list-detail-facts"><div><dt>Starts</dt><dd>{date(selected.opens)}</dd></div><div><dt>Ends</dt><dd>{date(selected.closes)}</dd></div><div><dt>Duration</dt><dd>{duration(selected.opens, selected.closes)}</dd></div><div><dt>Problems</dt><dd>{selected.problems}</dd></div><div><dt>Eligible students</dt><dd>{selected.eligibleStudents}</dd></div><div><dt>Problem submitters / eligible</dt><dd>{selected.submitted}</dd></div></dl>
           <div className="teacher-list-detail-actions"><Link className="button primary" to={`/teacher/contests/${selected.id}/edit`}>Edit</Link><Link className="button" to={`/teacher/results?search=${encodeURIComponent(selected.title)}`}>Results</Link></div>

@@ -27,16 +27,15 @@ export function ContestDetailPage() {
     }
   }, [data, contestId, now, mutate]);
 
-  if (loading) return <section className="page contest-detail-page"><Loading label="Loading contest…" /></section>;
-  if (!data || error) return <section className="page contest-detail-page"><ErrorState title="Contest unavailable" message={error || "Could not load contest."} onRetry={() => window.location.reload()} /></section>;
+  if (loading) return <section className="page contest-detail-page compact-contest-detail"><Loading label="Loading contest…" /></section>;
+  if (!data || error) return <section className="page contest-detail-page compact-contest-detail"><ErrorState title="Contest unavailable" message={error || "Could not load contest."} onRetry={() => window.location.reload()} /></section>;
   const contest = data.find((item) => item.id === contestId);
   if (!contest) return <Empty title="Contest unavailable"><Link to="/contests">Back to contests</Link></Empty>;
 
   const starts = parseServerDateTime(contest.opensAt).getTime();
   const ends = parseServerDateTime(contest.closesAt).getTime();
   const phase = now < starts ? "Upcoming" : now >= ends ? "Closed" : "Live";
-  return <section className="page contest-detail-page">
-    <Link className="detail-back" to="/contests">← Back to contests</Link>
+  return <section className="page contest-detail-page compact-contest-detail">
     <ContestDetailView contest={contest} phase={phase} now={now} />
   </section>;
 }

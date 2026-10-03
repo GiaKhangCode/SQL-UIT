@@ -8,7 +8,7 @@ import {
   PracticeTrending,
 } from "../../components/PracticeSidebar";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 15;
 
 function paginationItems(current: number, total: number): (number | "ellipsis")[] {
   if (total <= 7) return Array.from({ length: total }, (_, index) => index + 1);
@@ -81,14 +81,15 @@ export function PracticePage() {
 
   useEffect(() => {
     setPage(1);
+    resultsStartRef.current?.scrollTo({ top: 0 });
   }, [search, topic, difficulty, progress, favoritesOnly]);
   function goToPage(nextPage: number) {
     if (nextPage < 1 || nextPage > pageCount || nextPage === currentPage) return;
     setPage(nextPage);
     requestAnimationFrame(() => {
-      resultsStartRef.current?.scrollIntoView({
+      resultsStartRef.current?.scrollTo({
         behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
-        block: "start",
+        top: 0,
       });
     });
   }
@@ -100,7 +101,7 @@ export function PracticePage() {
     setFavoritesOnly(false);
   }
   return (
-    <section className="page practice-page" aria-label="Practice problems">
+    <section className="page practice-page compact-tables-page compact-student-practice" aria-label="Practice problems">
       <h1 className="sr-only">Practice</h1>
       <div className="practice-layout">
         <div className="practice-main">
@@ -172,7 +173,8 @@ export function PracticePage() {
               <option value="favorites" disabled={prefLoading || !!prefError}>Saved</option>
             </select>
           </div>
-          <div className="problem-list" ref={resultsStartRef} aria-busy={loading}>
+          <div className="problem-list" aria-busy={loading}>
+            <div className="practice-problem-scroll" ref={resultsStartRef}>
             {prefError && favoritesOnly && <p role="alert">Could not load saved problems.</p>}
             {loading && rawProblems && (
               <span className="sr-only" role="status">
@@ -224,9 +226,14 @@ export function PracticePage() {
                     <Status value={p.progress} />
                   </Link>
                 ))}
+
+              </>
+            )}
+            </div>
+            {!error && data.length > 0 && (
                 <div className="practice-results-footer">
                   <p aria-live="polite">Showing {firstIndex + 1}–{Math.min(firstIndex + PAGE_SIZE, data.length)} of {data.length} problems</p>
-                  {pageCount > 1 && <nav className="practice-pagination" aria-label="Problem pages">
+                  <nav className="practice-pagination" aria-label="Problem pages">
                     <button type="button" disabled={currentPage === 1} onClick={() => goToPage(currentPage - 1)}>← Previous</button>
                     <span className="practice-pagination-pages">
                       {paginationItems(currentPage, pageCount).map((item, index) => item === "ellipsis"
@@ -235,9 +242,8 @@ export function PracticePage() {
                     </span>
                     <span className="practice-pagination-mobile">Page {currentPage} of {pageCount}</span>
                     <button type="button" disabled={currentPage === pageCount} onClick={() => goToPage(currentPage + 1)}>Next →</button>
-                  </nav>}
+                  </nav>
                 </div>
-              </>
             )}
           </div>
         </div>

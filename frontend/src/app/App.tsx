@@ -54,7 +54,7 @@ function Shell() {
   return (
     <>
       <AppHeader />
-      <main id="main-content">
+      <main id="main-content" className="student-main">
         <RouteContent />
       </main>
     </>

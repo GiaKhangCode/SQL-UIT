@@ -63,6 +63,7 @@ function AuthLayout({
   subtitle,
   showTeacherNote = true,
   centered = false,
+  compact = false,
   children,
 }: {
   register?: boolean;
@@ -70,12 +71,13 @@ function AuthLayout({
   subtitle?: string;
   showTeacherNote?: boolean;
   centered?: boolean;
+  compact?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <main
       id="main-content"
-      className={`auth-page${centered ? " auth-page--centered" : ""}`}
+      className={`auth-page${centered ? " auth-page--centered" : " auth-page--split"}${compact ? " auth-page--compact" : ""}${register ? " auth-page--register" : ""}`}
     >
       {!centered && (
       <section className="auth-brand-panel" aria-label={`${APP_NAME} introduction`}>
@@ -183,7 +185,7 @@ export function LoginPage() {
     void signIn();
   }
   return (
-    <AuthLayout showTeacherNote={false}>
+    <AuthLayout showTeacherNote={false} compact>
       <form onSubmit={submit} noValidate>
         <label className="field" htmlFor="login-email">
           Email or account
@@ -268,9 +270,9 @@ export function ForgotPasswordPage() {
   return (
     <AuthLayout
       title="Forgot your password?"
+      compact
       subtitle="Enter your email and we’ll send you a verification code."
       showTeacherNote={false}
-      centered
     >
       <form onSubmit={submit} noValidate>
         <label className="field" htmlFor="recovery-email">
@@ -452,7 +454,7 @@ export function RegisterPage() {
     }
   }
   return (
-    <AuthLayout register>
+    <AuthLayout register showTeacherNote={false}>
       <form onSubmit={(e) => void submit(e)} noValidate>
         <label className="field" htmlFor="register-name">
           Full name
@@ -513,9 +515,6 @@ export function RegisterPage() {
         </button>
         <p className="auth-switch" style={{ marginBottom: "0.5rem" }}>
           Already have an account? <Link to="/login">Sign in</Link>
-        </p>
-        <p className="auth-switch">
-          Want to teach? <Link to="/register-lecturer">Register as Lecturer</Link>
         </p>
       </form>
     </AuthLayout>
@@ -599,7 +598,6 @@ export function RegisterLecturerPage() {
         
         <button className="button primary full" disabled={busy}>{busy ? "Submitting…" : "Submit Request"}</button>
         <p className="auth-switch" style={{ marginBottom: "0.5rem" }}>Already have an account? <Link to="/login">Sign in</Link></p>
-        <p className="auth-switch">Are you a student? <Link to="/register">Register as Student</Link></p>
       </form>
     </AuthLayout>
   );

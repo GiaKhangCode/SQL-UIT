@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Dialog, ErrorState, Loading } from "../../components/ui";
 import { TeacherField, TeacherPageIntro, TeacherSectionTitle } from "./TeacherPageParts";
@@ -26,6 +26,8 @@ export function ResultsDashboardPage() {
   const [typeFilter, setTypeFilter] = useState("All types");
   const [statusFilter, setStatusFilter] = useState("All");
   const [selectedResultId, setSelectedResultId] = useState("");
+  const [page, setPage] = useState(1);
+  const tableScrollRef = useRef<HTMLDivElement>(null);
   const [selectedActivity, setSelectedActivity] = useState<ActivityResult | null>(null);
 
   const { data: assignments, loading, error } = useLoad(teacherService.getAssignments);
@@ -41,13 +43,13 @@ export function ResultsDashboardPage() {
     });
   }, [search, classFilter, typeFilter, statusFilter, assignments]);
 
-  const selectedResult = filtered.find((item: any) => item.id === selectedResultId) || filtered[0] || null;
-  const scored = (assignments || []).map((item: any) => ({
-    count: Number.parseInt(String(item.submitted || "0/0").split("/")[0], 10) || 0,
-    average: Number.parseFloat(String(item.average || "")),
-  })).filter((item) => item.count > 0 && Number.isFinite(item.average));
-  const scoredCount = scored.reduce((sum, item) => sum + item.count, 0);
-  const averageScore = scoredCount ? `${Math.round(scored.reduce((sum, item) => sum + item.average * item.count, 0) / scoredCount)}%` : "—";
+  const pageCount = Math.max(1, Math.ceil(filtered.length / 15));
+  const currentPage = Math.min(page, pageCount);
+  const firstIndex = (currentPage - 1) * 15;
+  const pageResults = filtered.slice(firstIndex, firstIndex + 15);
+  const selectedResult = pageResults.find((item: any) => item.id === selectedResultId) || pageResults[0] || null;
+  useEffect(() => { setPage(1); setSelectedResultId(""); }, [search, classFilter, typeFilter, statusFilter]);
+  useEffect(() => { tableScrollRef.current?.scrollTo({ top: 0 }); }, [currentPage, search, classFilter, typeFilter, statusFilter]);
 
   function openResultDetails(activity: any) {
     setSelectedActivity(activity);
@@ -57,7 +59,7 @@ export function ResultsDashboardPage() {
   if (error) return <div className="teacher-page"><TeacherPageIntro compact title="Results" context="Results unavailable" /><ErrorState title="Could not load results" message={error} onRetry={() => window.location.reload()} /></div>;
 
   return (
-    <section className="teacher-page teacher-results-page">
+    <section className="teacher-page teacher-results-page compact-teacher-results">
       <h1 className="sr-only">Results</h1>
 
       <div className="teacher-list-filters teacher-results-filters">
@@ -81,26 +83,10 @@ export function ResultsDashboardPage() {
         </TeacherField>
       </div>
 
-      <div className="teacher-result-metrics">
-        <div><strong>{assignments?.reduce((sum: number, a: any) => sum + (a.awaiting || 0), 0) || 0}</strong><small>Awaiting review</small></div>
-        <div>
-          <strong>{averageScore}</strong>
-          <small>Average score</small>
-        </div>
-        <div>
-          <strong>
-            {assignments?.reduce((sum: number, a: any) => {
-              const parts = (a.submitted || "0/0").split("/");
-              return sum + parseInt(parts[0] || "0");
-            }, 0) || 0}
-          </strong>
-          <small>Submissions received</small>
-        </div>
-      </div>
 
       <div className="teacher-list-detail-layout teacher-results-detail-layout">
         <div className="teacher-list-detail-main teacher-results-table-wrap">
-          <div className="teacher-table-scroll sticky-list-table-wrap">
+          <div ref={tableScrollRef} className="teacher-table-scroll teacher-list-table-scroll sticky-list-table-wrap">
             <table className="teacher-table teacher-results-table teacher-activity-results-table sticky-list-table">
               <thead>
                 <tr>
@@ -108,7 +94,7 @@ export function ResultsDashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((item) => (
+                {pageResults.map((item) => (
                   <tr
                     className={`teacher-selectable-list-row${selectedResult?.id === item.id ? " is-selected" : ""}`}
                     key={item.id}
@@ -129,6 +115,14 @@ export function ResultsDashboardPage() {
               </tbody>
             </table>
           </div>
+          <div className="teacher-list-footer teacher-library-pagination">
+            <span>Showing {filtered.length ? firstIndex + 1 : 0}–{firstIndex + pageResults.length} of {filtered.length} items</span>
+            <nav aria-label="Results pagination">
+              <button className="button" type="button" disabled={currentPage === 1} onClick={() => { setPage(currentPage - 1); setSelectedResultId(""); }}>← Previous</button>
+              <span>Page {currentPage} of {pageCount}</span>
+              <button className="button" type="button" disabled={currentPage === pageCount} onClick={() => { setPage(currentPage + 1); setSelectedResultId(""); }}>Next →</button>
+            </nav>
+          </div>
         </div>
         <aside className="teacher-list-detail-panel">
           {selectedResult ? <>
@@ -143,9 +137,6 @@ export function ResultsDashboardPage() {
             <button className="button primary teacher-list-detail-edit" type="button" onClick={() => openResultDetails(selectedResult)}>View submissions</button>
           </> : <p className="muted">Select a result to view its details.</p>}
         </aside>
-      </div>
-      <div className="teacher-results-footer">
-        <small className="muted">Showing {filtered.length} of {assignments?.length || 0} items</small>
       </div>
       {selectedActivity && <AssignmentSubmissionsDialog activity={selectedActivity} onClose={() => setSelectedActivity(null)} />}
     </section>

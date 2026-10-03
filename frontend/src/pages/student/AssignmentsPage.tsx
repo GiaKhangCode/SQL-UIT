@@ -5,6 +5,8 @@ import { type Deadline } from "../../data/models";
 import { useLoad } from "../../components/useLoad";
 import { Dialog, Empty, ErrorState, Loading, Status } from "../../components/ui";
 import { Calendar } from "../../components/Calendar";
+const CLASS_PAGE_SIZE = 6;
+
 function dateLabel(date: string) {
   return new Date(date + "T00:00:00Z").toLocaleDateString("en-US", {
     month: "short",
@@ -44,10 +46,11 @@ function AssignmentCalendar({
 export function AssignmentsPage() {
   const { data, loading, error } = useLoad(studentApi.getAssignments);
   const [search, setSearch] = useState("");
+  const [classPage, setClassPage] = useState(1);
   const [params, setParams] = useSearchParams();
   const [calendarOpen, setCalendarOpen] = useState(false);
-  if (loading) return <section className="page assignments-page"><Loading label="Loading assignments…" /></section>;
-  if (error || !data) return <section className="page assignments-page"><ErrorState title="Assignments unavailable" message={error || "Could not load assignments."} onRetry={() => window.location.reload()} /></section>;
+  if (loading) return <section className="page assignments-page compact-tables-page compact-student-assignments"><Loading label="Loading assignments…" /></section>;
+  if (error || !data) return <section className="page assignments-page compact-tables-page compact-student-assignments"><ErrorState title="Assignments unavailable" message={error || "Could not load assignments."} onRetry={() => window.location.reload()} /></section>;
   const assignmentDeadlines = data.deadlines.filter(
     (item) => item.kind === "Assignment",
   );
@@ -57,6 +60,7 @@ export function AssignmentsPage() {
   const cards = data.classes.map((c) => ({
     ...c,
     context: c.code,
+    term: c.code.includes(" · ") ? c.code.slice(c.code.lastIndexOf(" · ") + 3) : c.code,
     description: c.lecturer + " · Lecturer",
     work: data.assignments.filter((a) => a.classIds.includes(c.id)),
   }));
@@ -65,8 +69,11 @@ export function AssignmentsPage() {
       .toLowerCase()
       .includes(search.toLowerCase()),
   );
+  const classPageCount = Math.max(1, Math.ceil(filtered.length / CLASS_PAGE_SIZE));
+  const currentClassPage = Math.min(classPage, classPageCount);
+  const pageClasses = filtered.slice((currentClassPage - 1) * CLASS_PAGE_SIZE, currentClassPage * CLASS_PAGE_SIZE);
   return (
-    <section className="page assignments-page">
+    <section className="page assignments-page compact-tables-page compact-student-assignments">
       <h1 className="sr-only">Assignments</h1>
       <div className="assignment-mobile-deadlines">
         <b>
@@ -89,9 +96,14 @@ export function AssignmentsPage() {
             <input
               id="scope-search"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => { setSearch(e.target.value); setClassPage(1); }}
               placeholder="⌕ Search classes…"
             />
+            <nav className="class-list-pagination" aria-label="Class pages">
+              <button type="button" className="button" disabled={currentClassPage === 1} onClick={() => setClassPage(currentClassPage - 1)}>← Previous</button>
+              <span aria-live="polite">Page {currentClassPage} of {classPageCount}</span>
+              <button type="button" className="button" disabled={currentClassPage === classPageCount} onClick={() => setClassPage(currentClassPage + 1)}>Next →</button>
+            </nav>
           </div>
           <div
             className="class-grid-scroll"
@@ -99,7 +111,7 @@ export function AssignmentsPage() {
             aria-label="Class list"
           >
             <div className="class-grid">
-              {filtered.map((c) => {
+              {pageClasses.map((c) => {
                 const pending = c.work
                   .filter((a) => a.status !== "Solved")
                   .sort((a, b) => a.date.localeCompare(b.date));
@@ -113,8 +125,8 @@ export function AssignmentsPage() {
                       <span className="class-glyph">{c.name[0]}</span>
                     </div>
                     <div className="class-card-identity">
-                      <small>{c.context}</small>
-                      <h2>{c.name}</h2>
+                      <small className="class-card-term">{c.term}</small>
+                      <h2 title={c.name}>{c.name}</h2>
                       <p>{c.description}</p>
                       <span className="class-mobile-summary">
                         {pending.length} pending
