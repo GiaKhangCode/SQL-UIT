@@ -1,6 +1,7 @@
 from sqlalchemy import Column, String, Unicode, Integer, Float, ForeignKey, Text, UnicodeText, DateTime, JSON, Boolean
 from sqlalchemy.orm import relationship
 import datetime
+import json
 import uuid
 from app.database import Base
 
@@ -53,18 +54,61 @@ class Problem(Base):
     title = Column(Unicode(255), nullable=False)
     topic = Column(Unicode(100), nullable=True)
     topics = Column(JSON, nullable=True)
+    workspace_parts = Column(JSON, nullable=False, default=lambda: ["SQL"])
     difficulty = Column(Unicode(50), nullable=False)
     description = Column(UnicodeText, nullable=False)
     requirements = Column(UnicodeText, nullable=False)
     hint = Column(UnicodeText, nullable=True)
     practice_listed = Column(Boolean, default=True)
     database_type = Column(Unicode(50), default="SQL Server")
+    schema_file_name = Column(Unicode(255), nullable=True)
     creator_id = Column(Unicode(50), ForeignKey("users.id"), nullable=True)
     
     # Store JSON strings for schema definitions and expected results (Legacy)
     tables = Column(JSON, nullable=True)   # Array of DataTable definitions
     expected = Column(JSON, nullable=True) # Expected DataTable
     test_cases = Column(JSON, nullable=True) # Array of TestCaseSchema
+
+class ProblemSqlSolution(Base):
+    __tablename__ = "problem_sql_solutions"
+
+    id = Column(Unicode(50), primary_key=True, default=generate_uuid)
+    problem_id = Column(Unicode(50), ForeignKey("problems.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(Unicode(120), nullable=False)
+    query = Column(UnicodeText, nullable=False, default="")
+    enabled = Column(Boolean, nullable=False, default=True)
+    time_limit_ms = Column(Integer, nullable=False, default=5000)
+    order_index = Column(Integer, nullable=False, default=0)
+
+
+class DatabaseLibraryEntry(Base):
+    __tablename__ = "database_library_entries"
+
+    id = Column(Unicode(50), primary_key=True, default=generate_uuid)
+    instructor_id = Column(Unicode(50), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(Unicode(255), nullable=False)
+    database_file_name = Column(Unicode(255), nullable=True)
+    create_table_file_name = Column(Unicode(255), nullable=True)
+    insert_into_file_name = Column(Unicode(255), nullable=True)
+    create_table_sql = Column(UnicodeText, nullable=False, default="")
+    insert_into_sql = Column(UnicodeText, nullable=False, default="")
+    datasets_json = Column(UnicodeText, nullable=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow, nullable=False)
+
+    @property
+    def datasets(self):
+        if self.datasets_json:
+            try:
+                datasets = json.loads(self.datasets_json)
+                if isinstance(datasets, list) and datasets:
+                    return datasets
+            except (TypeError, json.JSONDecodeError):
+                pass
+        return [{
+            "fileName": self.insert_into_file_name or "seed_1.sql",
+            "sql": self.insert_into_sql or "",
+        }]
 
 class Topic(Base):
     __tablename__ = "topics"
@@ -204,9 +248,23 @@ class Assignment(Base):
     comments_enabled = Column(Boolean, default=True)
     leaderboard_enabled = Column(Boolean, default=False)
     ai_allowed = Column(Boolean, default=True)
+    exam_mode = Column(Boolean, nullable=False, default=False)
     
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+
+class ActivityAttempt(Base):
+    __tablename__ = "activity_attempts"
+
+    assignment_id = Column(Unicode(50), ForeignKey("assignments.id"), primary_key=True)
+    user_id = Column(Unicode(50), ForeignKey("users.id"), primary_key=True)
+    status = Column(Unicode(30), nullable=False, default="active")
+    drafts = Column(JSON, nullable=False, default=dict)
+    violations = Column(JSON, nullable=False, default=list)
+    started_at = Column(DateTime, nullable=False, default=datetime.datetime.utcnow)
+    submitted_at = Column(DateTime, nullable=True)
+    finish_reason = Column(Unicode(50), nullable=True)
+
 
 class AssignmentClass(Base):
     __tablename__ = "assignment_classes"
@@ -223,3 +281,4 @@ class AssignmentProblem(Base):
     problem_id = Column(Unicode(50), ForeignKey("problems.id", ondelete="CASCADE"), nullable=False)
     points = Column(Integer, default=10)
     order_index = Column(Integer, default=0)
+    workspace_parts = Column(JSON, nullable=True)

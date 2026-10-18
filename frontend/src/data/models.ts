@@ -1,4 +1,4 @@
-export const APP_NAME = "UIT-SQL";
+export const APP_NAME = "iSQL";
 
 export type Progress = "Solved" | "In progress" | "Not started";
 export type Verdict =
@@ -13,7 +13,11 @@ export type DataTable = {
   rows: (string | number)[][];
 };
 
+export type WorkspacePart = "DDL" | "DML" | "SQL";
+
 export type Problem = {
+  sqlChecks?: { id: string; name: string; timeLimitMs: number }[];
+  workspaceParts?: WorkspacePart[];
   practiceListed?: boolean;
   id: string;
   number: string;
@@ -25,11 +29,12 @@ export type Problem = {
   requirements: string;
   draft: string;
   tables: DataTable[];
-  expected: DataTable;
+  expected?: DataTable;
   hint: string;
 };
 
 export type Assignment = {
+  examMode?: boolean;
   id: string;
   title: string;
   instructions: string;
@@ -42,6 +47,7 @@ export type Assignment = {
 };
 
 export type Contest = {
+  examMode?: boolean;
   id: string;
   title: string;
   status: "Live" | "Upcoming" | "Closed";
@@ -58,7 +64,7 @@ export type Contest = {
   opensAt: string;
   closesAt: string;
   problemCount: number;
-  problemDetails: { id: string; title: string; difficulty: string; topic: string; points?: number }[];
+  problemDetails: { id: string; title: string; difficulty: string; topic: string; points?: number; description?: string; requirements?: string }[];
   totalPoints: number;
   score: number;
   rank: number | null;
@@ -68,6 +74,12 @@ export type Contest = {
   participants?: number;
   submitters?: number;
   problemIds: string[];
+  examType?: "classic" | "comprehensive";
+  ddlReferenceScript?: string;
+  dmlSeedScript?: string;
+  ddlPoints?: number;
+  dmlPoints?: number;
+  sqlPoints?: number;
 };
 
 export type Submission = {

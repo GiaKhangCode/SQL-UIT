@@ -1,33 +1,60 @@
 import sqlglot
 from sqlglot import exp
+from sqlglot.optimizer.scope import Scope, traverse_scope
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.models import Problem, Submission
+from app.services.expected_outputs import read_expected_outputs
 from typing import Dict, Any, Tuple
 import datetime
 import uuid
+import math
+import time
 
 class SandboxError(Exception):
     pass
+
+
+def _rewrite_table_as_temp(table: exp.Table) -> None:
+    if not table.name or table.name.startswith("#"):
+        return
+    # A local temp table lives in tempdb and cannot keep the user's dbo/schema
+    # qualifier. Strip catalog/schema so CREATE, INSERT, and SELECT all resolve
+    # to the same session-scoped table.
+    table.set("catalog", None)
+    table.set("db", None)
+    table.set("this", exp.to_identifier(f"#{table.name}", quoted=True))
+
+def split_query_script(query: str) -> list[str]:
+    try:
+        statements = [statement for statement in sqlglot.parse(query, read="tsql") if statement is not None]
+    except Exception as error:
+        raise SandboxError(f"SQL syntax error: {error}") from error
+    if not statements or any(not isinstance(statement, exp.Query) for statement in statements):
+        raise SandboxError("Each SQL solution must be a SELECT query.")
+    return [statement.sql(dialect="tsql") for statement in statements]
+
 
 def rewrite_query(query: str) -> str:
     """ Phân tích và đổi tên các bảng thành bảng tạm (ví dụ: Customers -> #Customers) """
     try:
         parsed = sqlglot.parse_one(query, read="tsql")
     except Exception as e:
-        raise SandboxError(f"Lỗi cú pháp SQL: {str(e)}")
+        raise SandboxError(f"SQL syntax error: {str(e)}")
 
     # Chặn các lệnh nguy hiểm (Chỉ cho phép SELECT, CTE)
-    forbidden = (exp.Drop, exp.Alter, exp.Delete, exp.Update, exp.Insert, exp.Command, exp.Commit, exp.Rollback)
+    forbidden = (exp.Drop, exp.Alter, exp.Delete, exp.Update, exp.Insert, exp.Command, exp.Commit, exp.Rollback, exp.Into)
     for node in parsed.walk():
         if isinstance(node, forbidden):
-            raise SandboxError(f"Không được phép sử dụng lệnh: {type(node).__name__.upper()}")
+            raise SandboxError(f"Statement not allowed: {type(node).__name__.upper()}")
             
-    # Tìm tất cả các bảng và thêm tiền tố #
+    # Tìm tất cả các tables and thêm tiền tố #
+    cte_refs = {id(table) for scope in traverse_scope(parsed) for table in scope.tables
+                if isinstance(scope.sources.get(table.alias_or_name), Scope)}
     for table in parsed.find_all(exp.Table):
         # Tránh thêm # vào các hàm hệ thống hoặc các bảng đã có #
-        if table.name and not table.name.startswith("#"):
-            table.set("this", f"#{table.name}")
+        if id(table) not in cte_refs:
+            _rewrite_table_as_temp(table)
             
     return parsed.sql(dialect="tsql")
 
@@ -78,30 +105,37 @@ def seed_sandbox_data(db: Session, tables: list):
                 insert_sql = f"INSERT INTO #{name} VALUES ({', '.join(formatted_vals)})"
                 db.execute(text(insert_sql))
 
-import concurrent.futures
-
-def execute_query(db: Session, rewritten_query: str) -> Dict[str, Any]:
-    """ Thực thi query và trả về kết quả dạng Tabular """
-    def _run():
-        result = db.execute(text(rewritten_query))
-        columns = list(result.keys())
-        rows = [list(row) for row in result.fetchall()]
-        return columns, rows
-
+def execute_query(db: Session, rewritten_query: str, time_limit_ms: int = 5000) -> Dict[str, Any]:
+    """Time execution/fetch only; enforce the driver timeout on this connection."""
+    connection = db.connection().connection.driver_connection
+    previous_timeout = getattr(connection, "timeout", None)
+    cursor = None
     try:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-            future = executor.submit(_run)
-            columns, rows = future.result(timeout=5.0)
-
-        return {
-            "name": "Result",
-            "columns": columns,
-            "rows": rows
-        }
-    except concurrent.futures.TimeoutError:
-        raise SandboxError("TIME_LIMIT_EXCEEDED")
-    except Exception as e:
-        raise SandboxError(f"Lỗi thực thi SQL: {str(e)}")
+        if previous_timeout is not None:
+            connection.timeout = max(1, math.ceil(time_limit_ms / 1000))
+        cursor = connection.cursor()
+        started = time.perf_counter()
+        cursor.execute(rewritten_query)
+        columns = [column[0] for column in cursor.description] if cursor.description else []
+        rows = [list(row) for row in cursor.fetchall()] if cursor.description else []
+        elapsed_ms = (time.perf_counter() - started) * 1000
+        if elapsed_ms > time_limit_ms:
+            raise SandboxError("TIME_LIMIT_EXCEEDED")
+        return {"name": "Result", "columns": columns, "rows": rows,
+                "executionTimeMs": round(elapsed_ms, 3)}
+    except SandboxError:
+        raise
+    except Exception as error:
+        if any(marker in str(error).upper() for marker in ("HYT00", "HYT01", "TIMEOUT EXPIRED")):
+            raise SandboxError("TIME_LIMIT_EXCEEDED") from error
+        raise SandboxError(f"SQL execution error: {error}") from error
+    finally:
+        try:
+            if cursor is not None:
+                cursor.close()
+        finally:
+            if previous_timeout is not None:
+                connection.timeout = previous_timeout
 
 def compare_results(actual: Dict[str, Any], expected: Dict[str, Any]) -> Tuple[bool, str]:
     """ So sánh kết quả thực thi với đáp án """
@@ -109,16 +143,16 @@ def compare_results(actual: Dict[str, Any], expected: Dict[str, Any]) -> Tuple[b
     exp_cols = [str(c).lower() for c in expected.get("columns", [])]
     
     if len(act_cols) != len(exp_cols):
-        return False, f"Số lượng cột không khớp. Trả về {len(act_cols)} cột, mong đợi {len(exp_cols)} cột."
+        return False, f"Column count mismatch: returned {len(act_cols)}, expected {len(exp_cols)}."
         
     if act_cols != exp_cols:
-        return False, "Tên cột hoặc thứ tự cột không khớp với đáp án."
+        return False, "Column names or their order do not match the expected result."
         
     act_rows = actual.get("rows", [])
     exp_rows = expected.get("rows", [])
     
     if len(act_rows) != len(exp_rows):
-        return False, f"Số lượng dòng không khớp. Trả về {len(act_rows)} dòng, mong đợi {len(exp_rows)} dòng."
+        return False, f"Row count mismatch: returned {len(act_rows)}, expected {len(exp_rows)}."
         
     def normalize_row(row):
         return tuple(str(x) if x is not None else "" for x in row)
@@ -128,16 +162,16 @@ def compare_results(actual: Dict[str, Any], expected: Dict[str, Any]) -> Tuple[b
     
     for i in range(len(act_normalized)):
         if act_normalized[i] != exp_normalized[i]:
-            return False, "Dữ liệu không khớp sau khi đối chiếu (Sai khác ở dữ liệu hoặc tập hợp dòng)."
+            return False, "The result values or rows do not match the expected result."
             
-    return True, "Chính xác hoàn toàn!"
+    return True, "Correct!"
 
 def rewrite_setup_script(script: str) -> str:
     if not script or not script.strip(): return ""
     try:
         statements = sqlglot.parse(script, read="tsql")
     except Exception as e:
-        raise SandboxError(f"Lỗi cú pháp SQL trong setup: {str(e)}")
+        raise SandboxError(f"Setup SQL syntax error: {str(e)}")
 
     forbidden = (exp.Drop, exp.Alter, exp.Delete, exp.Update, exp.Command, exp.Commit, exp.Rollback)
     
@@ -146,15 +180,53 @@ def rewrite_setup_script(script: str) -> str:
         if not parsed: continue
         for node in parsed.walk():
             if isinstance(node, forbidden):
-                raise SandboxError(f"Không được phép: {type(node).__name__.upper()} trong setup")
+                raise SandboxError(f"Statement not allowed in setup: {type(node).__name__.upper()}")
                 
         for table in parsed.find_all(exp.Table):
-            if table.name and not table.name.startswith("#"):
-                table.set("this", f"#{table.name}")
+            _rewrite_table_as_temp(table)
                 
         rewritten_statements.append(parsed.sql(dialect="tsql"))
         
     return ";\n".join(rewritten_statements)
+
+
+def validate_seed_tables_exist(schema_sql: str, seed_data: str) -> None:
+    """Fail early when a dataset inserts into tables its schema never creates."""
+    try:
+        schema_statements = sqlglot.parse(schema_sql or "", read="tsql")
+        seed_statements = sqlglot.parse(seed_data or "", read="tsql")
+    except Exception:
+        # Keep syntax errors on the normal setup-script validation path.
+        return
+
+    def target_name(statement):
+        target = statement.this
+        if isinstance(target, exp.Schema):
+            target = target.this
+        if not isinstance(target, exp.Table) or not target.name:
+            return None
+        return target.name.lstrip("#")
+
+    created = {
+        name for statement in schema_statements
+        if isinstance(statement, exp.Create) and statement.args.get("kind") == "TABLE"
+        if (name := target_name(statement))
+    }
+    created = {name.casefold() for name in created}
+    inserted = {}
+    for statement in seed_statements:
+        if isinstance(statement, exp.Insert) and (name := target_name(statement)):
+            inserted.setdefault(name.casefold(), name)
+    missing = sorted(
+        (name for key, name in inserted.items() if key not in created),
+        key=str.casefold,
+    )
+    if missing:
+        names = ", ".join(name for name in missing)
+        raise SandboxError(
+            f"Dataset references table(s) missing from the database structure: {names}. "
+            "Add matching CREATE TABLE statements or import the matching database library."
+        )
 
 def seed_sandbox_data_scripts(db: Session, schema_sql: str, seed_data: str):
     # Drop existing temp tables first if needed, but we don't know the names ahead of time here unless we parse it.
@@ -181,13 +253,18 @@ def seed_sandbox_data_scripts(db: Session, schema_sql: str, seed_data: str):
 
 def run_validate_sandbox(db: Session, schema_sql: str, seed_data: str, query: str) -> Dict[str, Any]:
     try:
+        statements = split_query_script(query)
+        if len(statements) != 1:
+            raise SandboxError("Run one SELECT query per SQL solution.")
+        validate_seed_tables_exist(schema_sql, seed_data)
         seed_sandbox_data_scripts(db, schema_sql, seed_data)
-        rewritten_query = rewrite_query(query)
-        result = execute_query(db, rewritten_query)
+        rewritten_query = rewrite_query(statements[0])
+        result = execute_query(db, rewritten_query, time_limit_ms=60000)
         return {
             "status": "Success",
             "message": "Validated successfully.",
-            "table": result
+            "table": result,
+            "executionTimeMs": result["executionTimeMs"]
         }
     except SandboxError as e:
         return {"status": "Error", "message": str(e)}
@@ -196,100 +273,72 @@ def run_validate_sandbox(db: Session, schema_sql: str, seed_data: str, query: st
 
 def run_sandbox(db: Session, problem: Problem, query: str, is_submit: bool) -> Dict[str, Any]:
     try:
-        rewritten_query = rewrite_query(query)
-        
         from app.models import TestCase, TestCaseScript
-        db_tcs = db.query(TestCase).filter(TestCase.problem_id == problem.id).order_by(TestCase.order_index).all()
-        
+        from app.services.sql_solutions import stored_solutions
+        configured = stored_solutions(db, problem.id)
+        solution = next((item for item in configured if item.enabled and item.query.strip()), None)
+        if configured and solution is None:
+            raise SandboxError("No enabled SQL solution has been configured for this problem.")
+        statements = split_query_script(query)
+        if len(statements) != 1:
+            raise SandboxError("Enter one SELECT query for this problem.")
+        student_query = rewrite_query(statements[0])
+        expected_outputs, _ = read_expected_outputs(problem.expected)
+        time_limit_ms = solution.time_limit_ms if solution else 5000
         test_cases = []
-        if db_tcs:
-            for tc in db_tcs:
-                script = db.query(TestCaseScript).filter(TestCaseScript.test_case_id == tc.id).first()
-                if script:
-                    tc.scripts = [script]
-                    test_cases.append(tc)
-                    
+        for tc in db.query(TestCase).filter(TestCase.problem_id == problem.id).order_by(TestCase.order_index).all():
+            script = db.query(TestCaseScript).filter(TestCaseScript.test_case_id == tc.id).first()
+            if script:
+                tc.scripts = [script]
+                test_cases.append(tc)
         if not test_cases:
-            if problem.test_cases and len(problem.test_cases) > 0:
+            if problem.test_cases:
                 test_cases = problem.test_cases
             elif problem.tables and problem.expected:
                 test_cases = [{"tables": problem.tables, "expected": problem.expected, "is_hidden": False}]
             else:
-                raise SandboxError("Bài tập chưa có dữ liệu test case.")
-
-        if not is_submit:
-            visible_cases = [tc for tc in test_cases if (tc.get('is_hidden', False) if isinstance(tc, dict) else getattr(tc, 'is_hidden', False)) == False]
-            if not visible_cases:
-                visible_cases = [test_cases[0]]
-            test_cases_to_run = visible_cases[:1]
+                raise SandboxError("No test case data has been configured for this problem.")
+        indexed_test_cases = list(enumerate(test_cases))
+        if is_submit:
+            cases_to_run = indexed_test_cases
         else:
-            test_cases_to_run = test_cases
-            
+            visible = [(index, tc) for index, tc in indexed_test_cases if not (tc.get("is_hidden", False) if isinstance(tc, dict) else tc.is_hidden)]
+            if not visible:
+                raise SandboxError("No visible dataset is available for preview.")
+            cases_to_run = visible[:1]
+        passed = 0
+        total = len(cases_to_run)
         last_table = None
-        passed_count = 0
-        total_cases = len(test_cases_to_run)
-        first_error_msg = None
-        
-        for idx, tc in enumerate(test_cases_to_run):
+        first_error = None
+        elapsed_ms = 0
+        for dataset_index, tc in cases_to_run:
+            expected = expected_outputs[dataset_index] if dataset_index < len(expected_outputs) else None
             if isinstance(tc, dict):
                 seed_sandbox_data(db, tc.get("tables", []))
-                expected = tc.get("expected", {})
+                if expected is None:
+                    expected = execute_query(db, rewrite_query(solution.query), time_limit_ms=60000) if solution else tc.get("expected", {})
             else:
-                script_obj = getattr(tc, 'scripts', None)[0] if getattr(tc, 'scripts', None) else None
-                if not script_obj:
-                    raise SandboxError(f"Test case {tc.id} thiếu script.")
-                seed_sandbox_data_scripts(db, script_obj.create_script, script_obj.insert_script)
-                
-                # We need to run expected_query to get expected results
-                rewritten_expected = rewrite_query(tc.expected_query)
-                expected = execute_query(db, rewritten_expected)
-            
-            actual_result = execute_query(db, rewritten_query)
-            last_table = actual_result
-            
-            is_correct, msg = compare_results(actual_result, expected)
-            if is_correct:
-                passed_count += 1
-            else:
-                if not first_error_msg:
-                    status_str = "Wrong Answer" if is_submit else "Tabular result"
-                    msg_prefix = f"Test case {idx + 1} sai: " if len(test_cases) > 1 and is_submit else ""
-                    first_error_msg = msg_prefix + msg if is_submit else "Chạy thử thành công nhưng kết quả khác đáp án."
-                
-                if not is_submit:
-                    return {
-                        "status": status_str,
-                        "message": first_error_msg,
-                        "table": actual_result
-                    }
-
-        if is_submit:
-            if passed_count == total_cases:
-                return {
-                    "status": "Accepted",
-                    "message": "Chúc mừng! Đáp án chính xác tất cả test cases.",
-                    "table": last_table,
-                    "passed": passed_count,
-                    "total": total_cases
-                }
-            else:
-                return {
-                    "status": "Partial" if passed_count > 0 else "Wrong Answer",
-                    "message": first_error_msg or "Kết quả không khớp với đáp án.",
-                    "table": last_table,
-                    "passed": passed_count,
-                    "total": total_cases
-                }
-        else:
-            return {
-                "status": "Tabular result",
-                "message": "Chạy thử thành công.",
-                "table": last_table
-            }
-            
-    except SandboxError as e:
-        if "TIME_LIMIT_EXCEEDED" in str(e):
-            return {"status": "Time Limit Exceeded", "message": "Truy vấn chạy quá thời gian cho phép (5s)."}
-        return {"status": "Runtime Error", "message": str(e)}
-    except Exception as e:
-        return {"status": "Runtime Error", "message": f"Lỗi hệ thống không xác định: {str(e)}"}
+                script = tc.scripts[0]
+                seed_sandbox_data_scripts(db, script.create_script, script.insert_script)
+                if expected is None:
+                    expected = execute_query(db, rewrite_query(solution.query if solution else tc.expected_query), time_limit_ms=60000)
+            actual = execute_query(db, student_query, time_limit_ms=time_limit_ms)
+            elapsed_ms += actual["executionTimeMs"]
+            last_table = actual
+            correct, message = compare_results(actual, expected)
+            if correct:
+                passed += 1
+            elif first_error is None:
+                first_error = f"Dataset {dataset_index + 1}: {message}" if is_submit else "The query ran successfully, but its output differs from the expected result."
+        if not is_submit:
+            return {"status": "Tabular result", "message": first_error or "The query ran successfully.",
+                    "table": last_table, "passed": passed, "total": total, "executionTimeMs": round(elapsed_ms, 3)}
+        return {"status": "Accepted" if passed == total else "Partial" if passed else "Wrong Answer",
+                "message": "Congratulations! Your solution passed all test cases." if passed == total else first_error,
+                "table": last_table, "passed": passed, "total": total, "executionTimeMs": round(elapsed_ms, 3)}
+    except SandboxError as error:
+        if "TIME_LIMIT_EXCEEDED" in str(error):
+            return {"status": "Time Limit Exceeded", "message": "The query exceeded the student time limit."}
+        return {"status": "Runtime Error", "message": str(error)}
+    except Exception as error:
+        return {"status": "Runtime Error", "message": f"Unexpected system error: {error}"}

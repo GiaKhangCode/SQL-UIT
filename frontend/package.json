@@ -7,13 +7,22 @@
     "dev": "vite",
     "start": "vite",
     "build": "tsc -b && vite build",
-    "test": "tsc --noEmit -p tsconfig.app.json && node tests/services.test.mjs"
+    "test:workspace-flow": "node tests/workspace-flow.test.mjs",
+    "test:exam-mode": "node tests/exam-mode.test.mjs",
+    "test:workspace": "node tests/workspace.test.mjs && node tests/workspace-parts.test.mjs",
+    "test:sql-solution": "node tests/sql-solution.test.mjs",
+    "test:i18n": "node tests/i18n.test.mjs",
+    "test:language-client": "node tests/language-client.test.mjs",
+    "test:theme-reveal": "node tests/theme-reveal.test.mjs",
+    "test:language-motion": "node tests/language-motion.test.mjs",
+    "test": "tsc --noEmit -p tsconfig.app.json && node tests/services.test.mjs && node tests/i18n.test.mjs && node tests/language-motion.test.mjs && node tests/theme-reveal.test.mjs && node tests/language-client.test.mjs"
   },
   "dependencies": {
     "@codemirror/lang-sql": "^6.8.0",
     "@codemirror/language": "^6.12.2",
     "@codemirror/theme-one-dark": "^6.1.2",
     "@codemirror/view": "^6.43.12",
+    "@lezer/highlight": "^1.2.5",
     "@uiw/react-codemirror": "^4.23.8",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",
@@ -26,6 +35,7 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
+    "jsdom": "^26.1.0",
     "typescript": "^5.7.2",
     "vite": "^6.0.5"
   }

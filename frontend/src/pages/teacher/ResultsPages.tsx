@@ -1,3 +1,5 @@
+import { TranslatedText } from "../../components/TranslatedText";
+import { useLanguage } from "../../context/LanguageContext";
 import { useEffect, useMemo, useState, useRef } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Dialog, ErrorState, Loading } from "../../components/ui";
@@ -19,6 +21,7 @@ type ActivityResult = {
 
 
 export function ResultsDashboardPage() {
+  const { t: tr } = useLanguage("teacher");
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [search, setSearch] = useState(() => searchParams.get("search") || "");
@@ -55,30 +58,30 @@ export function ResultsDashboardPage() {
     setSelectedActivity(activity);
   }
 
-  if (loading) return <div className="teacher-page"><Loading label="Loading results…" /></div>;
-  if (error) return <div className="teacher-page"><TeacherPageIntro compact title="Results" context="Results unavailable" /><ErrorState title="Could not load results" message={error} onRetry={() => window.location.reload()} /></div>;
+  if (loading) return <div className="teacher-page"><Loading label={tr("Loading results…")} /></div>;
+  if (error) return <div className="teacher-page"><TeacherPageIntro compact title={tr("Results")} context={tr("Results unavailable")} /><ErrorState title={tr("Could not load results")} message={tr(error)} onRetry={() => window.location.reload()} /></div>;
 
   return (
     <section className="teacher-page teacher-results-page compact-teacher-results">
-      <h1 className="sr-only">Results</h1>
+      <h1 className="sr-only"><TranslatedText>{tr("Results")}</TranslatedText></h1>
 
       <div className="teacher-list-filters teacher-results-filters">
-        <TeacherField label="SEARCH">
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search assignments or contests…" />
+        <TeacherField label={tr("SEARCH")}>
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={tr("Search assignments or contests…")} />
         </TeacherField>
-        <TeacherField label="CLASS">
+        <TeacherField label={tr("CLASS")}>
           <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)}>
-            <option>All classes</option>{Array.from(new Set((assignments || []).flatMap((item: any) => String(item.classes).split(", ")))).filter(name => name && name !== "No classes").map(name => <option key={name}>{name}</option>)}
+            <option value="All classes">{tr("All classes")}</option>{Array.from(new Set((assignments || []).flatMap((item: any) => String(item.classes).split(", ")))).filter(name => name && name !== "No classes").map(name => <option key={name} value={name}>{name}</option>)}
           </select>
         </TeacherField>
-        <TeacherField label="TYPE">
+        <TeacherField label={tr("TYPE")}>
           <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
-            <option>All types</option><option>Assignment</option><option>Contest</option>
+            <option value="All types">{tr("All types")}</option><option value="Assignment">{tr("Assignment")}</option><option value="Contest">{tr("Contest")}</option>
           </select>
         </TeacherField>
-        <TeacherField label="REVIEW STATUS">
+        <TeacherField label={tr("REVIEW STATUS")}>
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-            <option>All</option><option>Awaiting review</option><option>Reviewed</option>
+            <option value="All">{tr("All")}</option><option value="Awaiting review">{tr("Awaiting review")}</option><option value="Reviewed">{tr("Reviewed")}</option>
           </select>
         </TeacherField>
       </div>
@@ -90,7 +93,7 @@ export function ResultsDashboardPage() {
             <table className="teacher-table teacher-results-table teacher-activity-results-table sticky-list-table">
               <thead>
                 <tr>
-                  <th>ASSIGNMENT / CONTEST</th><th>TYPE</th><th>CLASSES</th><th>SUBMITTED</th><th>AVG SCORE</th><th>AWAITING REVIEW</th><th>ACTIONS</th>
+                  <th><TranslatedText>{tr("ASSIGNMENT / CONTEST")}</TranslatedText></th><th><TranslatedText>{tr("TYPE")}</TranslatedText></th><th><TranslatedText>{tr("CLASSES")}</TranslatedText></th><th><TranslatedText>{tr("SUBMITTED")}</TranslatedText></th><th><TranslatedText>{tr("AVG SCORE")}</TranslatedText></th><th><TranslatedText>{tr("AWAITING REVIEW")}</TranslatedText></th><th><TranslatedText>{tr("ACTIONS")}</TranslatedText></th>
                 </tr>
               </thead>
               <tbody>
@@ -100,42 +103,42 @@ export function ResultsDashboardPage() {
                     key={item.id}
                     onClick={() => setSelectedResultId(item.id)}
                   >
-                    <td data-label="ASSIGNMENT / CONTEST"><button className="teacher-selectable-row-title teacher-list-row-title" type="button" aria-label={`Show details for ${item.title}`} onClick={(event) => { event.stopPropagation(); setSelectedResultId(item.id); }}>{item.title}</button></td>
-                    <td data-label="TYPE">{item.isContest ? "Contest" : "Assignment"}</td>
-                    <td data-label="CLASSES">{item.classes}</td>
-                    <td data-label="SUBMITTED">{item.submitted}</td>
-                    <td data-label="AVG SCORE">{item.average}</td>
-                    <td data-label="AWAITING REVIEW" className={item.awaiting ? "teacher-state-warning" : ""}>{item.awaiting}</td>
-                    <td data-label="ACTIONS" className="teacher-list-actions">
-                      <button type="button" onClick={() => openResultDetails(item)}>Open results</button>
+                    <td data-label={tr("ASSIGNMENT / CONTEST")}><button className="teacher-selectable-row-title teacher-list-row-title" type="button" aria-label={tr("Show details for {value0}", { value0: item.title })} onClick={(event) => { event.stopPropagation(); setSelectedResultId(item.id); }}>{item.title}</button></td>
+                    <td data-label={tr("TYPE")}><TranslatedText>{item.isContest ? tr("Contest") : tr("Assignment")}</TranslatedText></td>
+                    <td data-label={tr("CLASSES")}>{item.classes}</td>
+                    <td data-label={tr("SUBMITTED")}>{item.submitted}</td>
+                    <td data-label={tr("AVG SCORE")}>{item.average}</td>
+                    <td data-label={tr("AWAITING REVIEW")} className={item.awaiting ? "teacher-state-warning" : ""}>{item.awaiting}</td>
+                    <td data-label={tr("ACTIONS")} className="teacher-list-actions">
+                      <button type="button" onClick={() => openResultDetails(item)}><TranslatedText>{tr("Open results")}</TranslatedText></button>
                     </td>
                   </tr>
                 ))}
-                {!filtered.length && <tr><td className="teacher-empty-row" colSpan={7}>No results match these filters.</td></tr>}
+                {!filtered.length && <tr><td className="teacher-empty-row" colSpan={7}><TranslatedText>{tr("No results match these filters.")}</TranslatedText></td></tr>}
               </tbody>
             </table>
           </div>
           <div className="teacher-list-footer teacher-library-pagination">
-            <span>Showing {filtered.length ? firstIndex + 1 : 0}–{firstIndex + pageResults.length} of {filtered.length} items</span>
-            <nav aria-label="Results pagination">
-              <button className="button" type="button" disabled={currentPage === 1} onClick={() => { setPage(currentPage - 1); setSelectedResultId(""); }}>← Previous</button>
-              <span>Page {currentPage} of {pageCount}</span>
-              <button className="button" type="button" disabled={currentPage === pageCount} onClick={() => { setPage(currentPage + 1); setSelectedResultId(""); }}>Next →</button>
+            <span><TranslatedText>{tr("Showing")}</TranslatedText> {filtered.length ? firstIndex + 1 : 0}–{firstIndex + pageResults.length} <TranslatedText>{tr("of")}</TranslatedText> {filtered.length} <TranslatedText>{tr("items")}</TranslatedText></span>
+            <nav aria-label={tr("Results pagination")}>
+              <button className="button" type="button" disabled={currentPage === 1} onClick={() => { setPage(currentPage - 1); setSelectedResultId(""); }}><TranslatedText>{tr("← Previous")}</TranslatedText></button>
+              <span><TranslatedText>{tr("Page")}</TranslatedText> {currentPage} <TranslatedText>{tr("of")}</TranslatedText> {pageCount}</span>
+              <button className="button" type="button" disabled={currentPage === pageCount} onClick={() => { setPage(currentPage + 1); setSelectedResultId(""); }}><TranslatedText>{tr("Next →")}</TranslatedText></button>
             </nav>
           </div>
         </div>
         <aside className="teacher-list-detail-panel">
           {selectedResult ? <>
-            <span className="teacher-detail-eyebrow">RESULT DETAILS</span>
+            <span className="teacher-detail-eyebrow"><TranslatedText>{tr("RESULT DETAILS")}</TranslatedText></span>
             <h2>{selectedResult.title}</h2>
-            <p className="muted">{selectedResult.isContest ? "Contest" : "Assignment"} · {selectedResult.classes}</p>
+            <p className="muted"><TranslatedText>{selectedResult.isContest ? tr("Contest") : tr("Assignment")}</TranslatedText> · {selectedResult.classes}</p>
             <dl className="teacher-list-detail-facts">
-              <div><dt>Submitted</dt><dd>{selectedResult.submitted}</dd></div>
-              <div><dt>Average score</dt><dd>{selectedResult.average}</dd></div>
-              <div><dt>Awaiting review</dt><dd>{selectedResult.awaiting}</dd></div>
+              <div><dt><TranslatedText>{tr("Submitted")}</TranslatedText></dt><dd>{selectedResult.submitted}</dd></div>
+              <div><dt><TranslatedText>{tr("Average score")}</TranslatedText></dt><dd>{selectedResult.average}</dd></div>
+              <div><dt><TranslatedText>{tr("Awaiting review")}</TranslatedText></dt><dd>{selectedResult.awaiting}</dd></div>
             </dl>
-            <button className="button primary teacher-list-detail-edit" type="button" onClick={() => openResultDetails(selectedResult)}>View submissions</button>
-          </> : <p className="muted">Select a result to view its details.</p>}
+            <button className="button primary teacher-list-detail-edit" type="button" onClick={() => openResultDetails(selectedResult)}><TranslatedText>{tr("View submissions")}</TranslatedText></button>
+          </> : <p className="muted"><TranslatedText>{tr("Select a result to view its details.")}</TranslatedText></p>}
         </aside>
       </div>
       {selectedActivity && <AssignmentSubmissionsDialog activity={selectedActivity} onClose={() => setSelectedActivity(null)} />}
@@ -144,57 +147,114 @@ export function ResultsDashboardPage() {
 }
 
 function AssignmentSubmissionsDialog({ activity, onClose }: { activity: any, onClose: () => void }) {
+  const { t: tr } = useLanguage("teacher");
   const navigate = useNavigate();
   const { data: submissions, loading, error } = useLoad(() => teacherService.getAssignmentSubmissions(activity.id));
 
+  const [studentSearch, setStudentSearch] = useState("");
+  const [problemSearch, setProblemSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All statuses");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  const filteredSubmissions = useMemo(() => {
+    if (!submissions) return [];
+    return submissions.filter((sub: any) => {
+      const matchStudent = sub.student.toLowerCase().includes(studentSearch.toLowerCase());
+      const matchProblem = sub.problem.toLowerCase().includes(problemSearch.toLowerCase());
+      const matchStatus = statusFilter === "All statuses" || sub.status === statusFilter;
+      return matchStudent && matchProblem && matchStatus;
+    });
+  }, [submissions, studentSearch, problemSearch, statusFilter]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [studentSearch, problemSearch, statusFilter]);
+
+  const totalPages = Math.ceil(filteredSubmissions.length / itemsPerPage) || 1;
+  const paginatedSubmissions = filteredSubmissions.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
   return (
     <Dialog title={activity.title} onClose={onClose}>
-      <div className="teacher-preview-dialog" style={{ width: 600, maxWidth: "100%" }}>
-        <p>{activity.isContest ? "Contest" : "Assignment"} · {activity.classes}</p>
-        <p>{activity.submitted} submitted · {activity.average} average · {activity.awaiting} awaiting review</p>
-        
-        {loading && <Loading label="Loading submissions…" />}
-        {error && <p className="teacher-state-error">Could not load submissions: {error}</p>}
+      <div className="teacher-preview-dialog" style={{ width: 800, maxWidth: "100%" }}>
+        <p><TranslatedText>{activity.isContest ? tr("Contest") : tr("Assignment")}</TranslatedText> · {activity.classes}</p>
+        <p>{activity.submitted} <TranslatedText>{tr("submitted ·")}</TranslatedText> {activity.average} <TranslatedText>{tr("average ·")}</TranslatedText> {activity.awaiting} <TranslatedText>{tr("awaiting review")}</TranslatedText></p>
+
+        {loading && <Loading label={tr("Loading submissions…")} />}
+        {error && <p className="teacher-state-error"><TranslatedText>{tr("Could not load submissions:")}</TranslatedText> <TranslatedText>{tr(error)}</TranslatedText></p>}
         {submissions && (
-          <div className="teacher-table-scroll" style={{ maxHeight: 300, margin: "1rem 0" }}>
-            <table className="teacher-table">
-              <thead>
-                <tr>
-                  <th>STUDENT</th>
-                  <th>PROBLEM</th>
-                  <th>SCORE</th>
-                  <th>STATUS</th>
-                  <th>ACTIONS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {submissions.map((sub: any) => (
-                  <tr key={sub.id}>
-                    <td>{sub.student}</td>
-                    <td>{sub.problem}</td>
-                    <td>{sub.score}</td>
-                    <td className={
-                      sub.status === "Needs review" || sub.status === "Partial" ? "teacher-state-warning" : 
-                      sub.status === "Accepted" ? "teacher-state-success" : 
-                      "teacher-state-failed"
-                    }>{sub.status}</td>
-                    <td>
-                      <button className="button teacher-small-button" type="button" onClick={() => navigate(`/teacher/results/review/${sub.id}`)}>Review</button>
-                    </td>
-                  </tr>
-                ))}
-                {submissions.length === 0 && (
+          <>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1rem", marginTop: "1.5rem", marginBottom: "0.5rem" }}>
+              <div>
+                <label className="teacher-label" style={{ fontSize: "0.75rem", display: "block", marginBottom: "0.25rem" }}><TranslatedText>{tr("STUDENT")}</TranslatedText></label>
+                <input type="text" className="teacher-input" style={{ width: "100%", boxSizing: "border-box" }} placeholder={tr("Search student...")} value={studentSearch} onChange={e => setStudentSearch(e.target.value)} />
+              </div>
+              <div>
+                <label className="teacher-label" style={{ fontSize: "0.75rem", display: "block", marginBottom: "0.25rem" }}><TranslatedText>{tr("PROBLEM")}</TranslatedText></label>
+                <input type="text" className="teacher-input" style={{ width: "100%", boxSizing: "border-box" }} placeholder={tr("Search problem...")} value={problemSearch} onChange={e => setProblemSearch(e.target.value)} />
+              </div>
+              <div>
+                <label className="teacher-label" style={{ fontSize: "0.75rem", display: "block", marginBottom: "0.25rem" }}><TranslatedText>{tr("STATUS")}</TranslatedText></label>
+                <select className="teacher-input" style={{ width: "100%", boxSizing: "border-box", padding: "0.375rem" }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+                  <option value="All statuses">{tr("All statuses")}</option>
+                  <option value="Needs review">{tr("Needs review")}</option>
+                  <option value="Accepted">{tr("Accepted")}</option>
+                  <option value="Partial">{tr("Partial")}</option>
+                  <option value="Failed">{tr("Failed")}</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="teacher-table-scroll" style={{ maxHeight: 350, margin: "1rem 0" }}>
+              <table className="teacher-table">
+                <thead>
                   <tr>
-                    <td colSpan={5} className="teacher-empty-row">No submissions yet.</td>
+                    <th><TranslatedText>{tr("STUDENT")}</TranslatedText></th>
+                    <th><TranslatedText>{tr("PROBLEM")}</TranslatedText></th>
+                    <th><TranslatedText>{tr("SCORE")}</TranslatedText></th>
+                    <th><TranslatedText>{tr("STATUS")}</TranslatedText></th>
+                    <th><TranslatedText>{tr("ACTIONS")}</TranslatedText></th>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {paginatedSubmissions.map((sub: any) => (
+                    <tr key={sub.id}>
+                      <td>{sub.student}</td>
+                      <td>{sub.problem}</td>
+                      <td>{sub.score}</td>
+                      <td className={
+                        sub.status === "Needs review" || sub.status === "Partial" ? "teacher-state-warning" :
+                        sub.status === "Accepted" ? "teacher-state-success" :
+                        "teacher-state-failed"
+                      }><TranslatedText>{tr(sub.status)}</TranslatedText></td>
+                      <td>
+                        <button className="button teacher-small-button" type="button" onClick={() => navigate(`/teacher/results/review/${sub.id}`)}><TranslatedText>{tr("Review")}</TranslatedText></button>
+                      </td>
+                    </tr>
+                  ))}
+                  {paginatedSubmissions.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="teacher-empty-row"><TranslatedText>{tr("No submissions match these filters.")}</TranslatedText></td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "1rem" }}>
+              <small className="muted">
+                <TranslatedText>{tr("Showing")}</TranslatedText> {filteredSubmissions.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}-{Math.min(currentPage * itemsPerPage, filteredSubmissions.length)} <TranslatedText>{tr("of")}</TranslatedText> {filteredSubmissions.length} <TranslatedText>{tr("results")}</TranslatedText>
+              </small>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <button className="button teacher-small-button" type="button" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}><TranslatedText>{tr("Previous")}</TranslatedText></button>
+                <button className="button teacher-small-button" type="button" disabled={currentPage === totalPages || totalPages === 0} onClick={() => setCurrentPage(p => p + 1)}><TranslatedText>{tr("Next")}</TranslatedText></button>
+              </div>
+            </div>
+          </>
         )}
-        
-        <div className="teacher-dialog-actions">
-          <button className="button" type="button" onClick={onClose}>Close</button>
+
+        <div className="teacher-dialog-actions" style={{ marginTop: "1.5rem" }}>
+          <button className="button" type="button" onClick={onClose}><TranslatedText>{tr("Close")}</TranslatedText></button>
         </div>
       </div>
     </Dialog>
@@ -202,9 +262,10 @@ function AssignmentSubmissionsDialog({ activity, onClose }: { activity: any, onC
 }
 
 export function ManualReviewPage() {
+  const { t: tr } = useLanguage("teacher");
   const navigate = useNavigate();
   const { submissionId } = useParams();
-  
+
   const { data: submission, loading, error, mutate: setSubmission } = useLoad(
     () => teacherService.getSubmission(submissionId!)
   );
@@ -243,8 +304,8 @@ export function ManualReviewPage() {
     }
   }
 
-  if (loading) return <div className="teacher-page"><Loading label="Loading submission…" /></div>;
-  if (error || !submission) return <div className="teacher-page"><p className="teacher-state-error">Error loading submission.</p></div>;
+  if (loading) return <div className="teacher-page"><Loading label={tr("Loading submission…")} /></div>;
+  if (error || !submission) return <div className="teacher-page"><p className="teacher-state-error"><TranslatedText>{tr("Error loading submission.")}</TranslatedText></p></div>;
 
   const attemptHistory = [
     { number: 1, score: submission.autoScore, submittedAt: submission.submittedAt, query: submission.query }
@@ -255,12 +316,12 @@ export function ManualReviewPage() {
   return (
     <section className="teacher-page teacher-review-page">
       <TeacherPageIntro
-        title="Manual review"
-        context={`${submission.student} / ${submission.problem} / ${submission.attempts} / Submission #${submission.id.substring(0, 8)}`}
+        title={tr("Manual review")}
+        context={tr("{value0} / {value1} / {value2} / Submission #{value3}", { value0: submission.student, value1: submission.problem, value2: submission.attempts, value3: submission.id.substring(0, 8) })}
       >
-        <Link className="button" to="/teacher/results">Back to results</Link>
+        <Link className="button" to="/teacher/results"><TranslatedText>{tr("Back to results")}</TranslatedText></Link>
         <button className="button primary" type="button" onClick={saveReview} disabled={isSaving}>
-          {isSaving ? "Saving..." : "Save review"}
+          <TranslatedText>{isSaving ? tr("Saving...") : tr("Save review")}</TranslatedText>
         </button>
       </TeacherPageIntro>
       <div className="teacher-divider" />
@@ -268,7 +329,7 @@ export function ManualReviewPage() {
       <div className="teacher-review-layout">
         <div className="teacher-review-main">
           <div className="teacher-attempt-switcher">
-            <span className="teacher-attempt-label">ATTEMPT</span>
+            <span className="teacher-attempt-label"><TranslatedText>{tr("ATTEMPT")}</TranslatedText></span>
             {attemptHistory.map((attempt) => (
               <button
                 type="button"
@@ -276,59 +337,59 @@ export function ManualReviewPage() {
                 className={`teacher-attempt-pill${activeAttempt.number === attempt.number ? " active" : ""}`}
                 aria-pressed={activeAttempt.number === attempt.number}
               >
-                Attempt {attempt.number} · {attempt.score} / {submission.maxScore ?? 100}
+                <TranslatedText>{tr("Attempt")}</TranslatedText> {attempt.number} · {attempt.score} / {submission.maxScore ?? 100}
               </button>
             ))}
           </div>
           <section className="teacher-review-code-section">
-            <h2>Student SQL · submitted {activeAttempt.submittedAt}</h2>
+            <h2><TranslatedText>{tr("Student SQL · submitted")}</TranslatedText> {activeAttempt.submittedAt}</h2>
             <pre className="teacher-readonly-code"><code>{activeAttempt.query}</code></pre>
           </section>
           <section className="teacher-review-code-section">
-            <h2>Reference SQL</h2>
-            <pre className="teacher-readonly-code"><code>{submission.referenceSolution || "No reference solution provided"}</code></pre>
+            <h2><TranslatedText>{tr("Reference SQL")}</TranslatedText></h2>
+            <pre className="teacher-readonly-code"><code>{submission.referenceSolution || tr("No reference solution provided")}</code></pre>
           </section>
-          <p className="tiny muted">Per-test-case results are unavailable for this submission.</p>
+          <p className="tiny muted"><TranslatedText>{tr("Per-test-case results are unavailable for this submission.")}</TranslatedText></p>
         </div>
         <aside className="teacher-grading-panel">
-          <TeacherSectionTitle title="Grading" />
-          <strong className="teacher-test-summary">Evaluated by platform</strong>
-          <p className="teacher-auto-score">Automatic score · {activeAttempt.score} / {submission.maxScore ?? 100}</p>
-          <TeacherField label="FINAL SCORE">
+          <TeacherSectionTitle title={tr("Grading")} />
+          <strong className="teacher-test-summary"><TranslatedText>{tr("Evaluated by platform")}</TranslatedText></strong>
+          <p className="teacher-auto-score"><TranslatedText>{tr("Automatic score ·")}</TranslatedText> {activeAttempt.score} / {submission.maxScore ?? 100}</p>
+          <TeacherField label={tr("FINAL SCORE")}>
             <input
               type="number"
               min="0"
               max={submission.maxScore ?? 100}
               value={finalScore}
               onChange={(event) => setFinalScore(event.target.value)}
-              aria-label="Final score"
+              aria-label={tr("Final score")}
               placeholder={`0–${submission.maxScore ?? 100}`}
               inputMode="numeric"
             />
           </TeacherField>
-          <TeacherField label="FEEDBACK">
+          <TeacherField label={tr("FEEDBACK")}>
             <textarea rows={3} value={feedback} onChange={(event) => setFeedback(event.target.value)} />
           </TeacherField>
-          {saveError && <p className="teacher-state-failed" role="alert">{saveError}</p>}
+          {saveError && <p className="teacher-state-failed" role="alert"><TranslatedText>{tr(saveError)}</TranslatedText></p>}
           <div className="teacher-review-history">
-            <TeacherSectionTitle title="Saved review" />
+            <TeacherSectionTitle title={tr("Saved review")} />
             {submission.finalScore !== null ? (
               <p className="tiny muted">
-                Saved in database<br />
-                Final Score: {submission.finalScore}<br />
-                {submission.feedback && <>Feedback: {submission.feedback}</>}
+                <TranslatedText>{tr("Saved in database")}</TranslatedText><br />
+                <TranslatedText>{tr("Final Score:")}</TranslatedText> {submission.finalScore}<br />
+                {submission.feedback && <><TranslatedText>{tr("Feedback:")}</TranslatedText> {submission.feedback}</>}
               </p>
             ) : (
-              <p className="tiny muted">No manual changes yet.<br />Your saved review will update the student's score.</p>
+              <p className="tiny muted"><TranslatedText>{tr("No manual changes yet.")}</TranslatedText><br /><TranslatedText>{tr("Your saved review will update the student's score.")}</TranslatedText></p>
             )}
           </div>
         </aside>
       </div>
       {dialogOpen && (
-        <Dialog title="Review saved" onClose={() => setDialogOpen(false)}>
-          <p className="tiny">The score has been updated in the database.</p>
+        <Dialog title={tr("Review saved")} onClose={() => setDialogOpen(false)}>
+          <p className="tiny"><TranslatedText>{tr("The score has been updated in the database.")}</TranslatedText></p>
           <div className="teacher-dialog-actions">
-            <button className="button primary" type="button" onClick={() => { setDialogOpen(false); navigate("/teacher/results"); }}>Continue</button>
+            <button className="button primary" type="button" onClick={() => { setDialogOpen(false); navigate("/teacher/results"); }}><TranslatedText>{tr("Continue")}</TranslatedText></button>
           </div>
         </Dialog>
       )}

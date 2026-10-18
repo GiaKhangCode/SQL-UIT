@@ -1,3 +1,5 @@
+import { TranslatedText } from "../../components/TranslatedText";
+import { useLanguage } from "../../context/LanguageContext";
 import { useEffect, useMemo, useState, useRef } from "react";
 import { Dialog, ErrorState, Loading } from "../../components/ui";
 import {
@@ -8,6 +10,7 @@ import { TeacherField } from "./TeacherPageParts";
 import { teacherService } from "../../services/teacherService";
 
 export function ClassesPage() {
+  const { t: tr } = useLanguage("teacher");
   const [classes, setClasses] = useState<TeacherClass[]>([]);
   const [classesLoading, setClassesLoading] = useState(true);
   const [classesError, setClassesError] = useState("");
@@ -91,23 +94,23 @@ export function ClassesPage() {
 
   return (
     <section className="teacher-page teacher-classes-page compact-teacher-classes">
-      <h1 className="sr-only">Classes</h1>
+      <h1 className="sr-only"><TranslatedText>{tr("Classes")}</TranslatedText></h1>
 
-      {classesLoading ? <Loading label="Loading classes…" /> : classesError ? <ErrorState title="Could not load classes" message={classesError} onRetry={() => window.location.reload()} /> : classes.length === 0 ? <div className="teacher-empty-state">
-        <div><h2>No classes yet</h2><p>No classes have been assigned to you yet.</p></div>
+      {classesLoading ? <Loading label={tr("Loading classes…")} /> : classesError ? <ErrorState title={tr("Could not load classes")} message={tr(classesError)} onRetry={() => window.location.reload()} /> : classes.length === 0 ? <div className="teacher-empty-state">
+        <div><h2><TranslatedText>{tr("No classes yet")}</TranslatedText></h2><p><TranslatedText>{tr("No classes have been assigned to you yet.")}</TranslatedText></p></div>
       </div> : <>
       <div className="teacher-class-filters">
-        <TeacherField label="SEARCH">
+        <TeacherField label={tr("SEARCH")}>
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search classes..."
+            placeholder={tr("Search classes...")}
           />
         </TeacherField>
-        <TeacherField label="ACADEMIC TERM">
+        <TeacherField label={tr("ACADEMIC TERM")}>
           <select value={term} onChange={(event) => setTerm(event.target.value)}>
-            <option>All terms</option>
-            {termOptions.map((termOption) => <option key={termOption}>{termOption}</option>)}
+            <option value="All terms">{tr("All terms")}</option>
+            {termOptions.map((termOption) => <option key={termOption} value={termOption}>{tr(termOption)}</option>)}
           </select>
         </TeacherField>
       </div>
@@ -118,10 +121,10 @@ export function ClassesPage() {
             <table className="teacher-table teacher-classes-table sticky-list-table">
               <thead>
                 <tr>
-                  <th>Class</th>
-                  <th>Term</th>
-                  <th>Members</th>
-                  <th>Status</th>
+                  <th><TranslatedText>{tr("Class")}</TranslatedText></th>
+                  <th><TranslatedText>{tr("Term")}</TranslatedText></th>
+                  <th><TranslatedText>{tr("Members")}</TranslatedText></th>
+                  <th><TranslatedText>{tr("Status")}</TranslatedText></th>
                 </tr>
               </thead>
               <tbody>
@@ -131,11 +134,11 @@ export function ClassesPage() {
                     key={classInfo.id}
                     onClick={() => selectClass(classInfo)}
                   >
-                    <td data-label="Class">
+                    <td data-label={tr("Class")}>
                       <button
                         className="teacher-table-link teacher-class-identity"
                         type="button"
-                        aria-label={`Show summary for ${classInfo.id}`}
+                        aria-label={tr("Show summary for {value0}", { value0: classInfo.id })}
                         aria-current={selectedClass?.id === classInfo.id ? "true" : undefined}
                         onClick={(event) => {
                           event.stopPropagation();
@@ -146,23 +149,23 @@ export function ClassesPage() {
                         <small>{classInfo.course}</small>
                       </button>
                     </td>
-                    <td data-label="Term">{classInfo.term}</td>
-                    <td data-label="Members">{classInfo.students}</td>
-                    <td data-label="Status" className={classInfo.status === "Active" ? "teacher-state-success" : "muted"}>{classInfo.status}</td>
+                    <td data-label={tr("Term")}>{classInfo.term}</td>
+                    <td data-label={tr("Members")}>{classInfo.students}</td>
+                    <td data-label={tr("Status")} className={classInfo.status === "Active" ? "teacher-state-success" : "muted"}><TranslatedText>{tr(classInfo.status)}</TranslatedText></td>
                   </tr>
                 ))}
                 {!visibleClasses.length && (
-                  <tr><td colSpan={4} className="muted">No classes match this term and search.</td></tr>
+                  <tr><td colSpan={4} className="muted"><TranslatedText>{tr("No classes match this term and search.")}</TranslatedText></td></tr>
                 )}
               </tbody>
             </table>
           </div>
           <div className="teacher-list-footer teacher-library-pagination">
-            <span>Showing {visibleClasses.length ? firstIndex + 1 : 0}–{firstIndex + pageClasses.length} of {visibleClasses.length} classes</span>
-            <nav aria-label="Classes pagination">
-              <button className="button" type="button" disabled={currentPage === 1} onClick={() => { setPage(currentPage - 1); setSelectedClassId(""); }}>← Previous</button>
-              <span>Page {currentPage} of {pageCount}</span>
-              <button className="button" type="button" disabled={currentPage === pageCount} onClick={() => { setPage(currentPage + 1); setSelectedClassId(""); }}>Next →</button>
+            <span><TranslatedText>{tr("Showing")}</TranslatedText> {visibleClasses.length ? firstIndex + 1 : 0}–{firstIndex + pageClasses.length} <TranslatedText>{tr("of")}</TranslatedText> {visibleClasses.length} <TranslatedText>{tr("classes")}</TranslatedText></span>
+            <nav aria-label={tr("Classes pagination")}>
+              <button className="button" type="button" disabled={currentPage === 1} onClick={() => { setPage(currentPage - 1); setSelectedClassId(""); }}><TranslatedText>{tr("← Previous")}</TranslatedText></button>
+              <span><TranslatedText>{tr("Page")}</TranslatedText> {currentPage} <TranslatedText>{tr("of")}</TranslatedText> {pageCount}</span>
+              <button className="button" type="button" disabled={currentPage === pageCount} onClick={() => { setPage(currentPage + 1); setSelectedClassId(""); }}><TranslatedText>{tr("Next →")}</TranslatedText></button>
             </nav>
           </div>
         </div>
@@ -171,18 +174,18 @@ export function ClassesPage() {
           {selectedClass ? <>
             <div className="teacher-class-detail-heading">
               <div>
-                <span className="teacher-detail-eyebrow">CLASS SUMMARY</span>
+                <span className="teacher-detail-eyebrow"><TranslatedText>{tr("CLASS SUMMARY")}</TranslatedText></span>
                 <h2>{selectedClass.id}</h2>
                 <p className="muted">{selectedClass.course} · {selectedClass.term}</p>
               </div>
-              <span className={selectedClass.status === "Active" ? "teacher-state-success" : "muted"}>{selectedClass.status}</span>
+              <span className={selectedClass.status === "Active" ? "teacher-state-success" : "muted"}><TranslatedText>{tr(selectedClass.status)}</TranslatedText></span>
             </div>
 
-            <p className="teacher-class-summary-students">{selectedClass.students} students</p>
+            <p className="teacher-class-summary-students">{selectedClass.students} <TranslatedText>{tr("students")}</TranslatedText></p>
             <button className="button primary teacher-class-detail-button" type="button" onClick={openClassDetails}>
-              View class details
+              <TranslatedText>{tr("View class details")}</TranslatedText>
             </button>
-          </> : <p className="muted">Select a class to view its assignments and student progress.</p>}
+          </> : <p className="muted"><TranslatedText>{tr("Select a class to view its assignments and student progress.")}</TranslatedText></p>}
         </aside>
       </div>
       </>}
@@ -190,25 +193,25 @@ export function ClassesPage() {
       {classDetailsOpen && selectedClass && (
         <Dialog
           className="teacher-class-detail-dialog-modal"
-          title={`${selectedClass.id} · Class details`}
+          title={tr("{value0} · Class details", { value0: selectedClass.id })}
           onClose={() => setClassDetailsOpen(false)}
         >
           <div className="teacher-class-detail-dialog-content">
             <p className="muted">{selectedClass.course} · {selectedClass.term}</p>
             {(selectedClass.startDate && selectedClass.endDate) && (
               <p className="muted" style={{ fontSize: "0.85rem", marginTop: "-0.5rem" }}>
-                {selectedClass.startDate} to {selectedClass.endDate}
+                {selectedClass.startDate} <TranslatedText>{tr("to")}</TranslatedText> {selectedClass.endDate}
               </p>
             )}
-            <p className="teacher-class-detail-counts">{selectedClass.students} students · {assignments.length} assignments · {contests.length} contests</p>
-            {detailError && <p role="alert" className="teacher-state-failed">{detailError}</p>}
+            <p className="teacher-class-detail-counts">{selectedClass.students} <TranslatedText>{tr("students ·")}</TranslatedText> {assignments.length} <TranslatedText>{tr("assignments ·")}</TranslatedText> {contests.length} <TranslatedText>{tr("contests")}</TranslatedText></p>
+            {detailError && <p role="alert" className="teacher-state-failed"><TranslatedText>{tr(detailError)}</TranslatedText></p>}
 
-            <div className="teacher-class-detail-tabs" role="tablist" aria-label="Class details">
+            <div className="teacher-class-detail-tabs" role="tablist" aria-label={tr("Class details")}>
               <button id="class-assignments-tab" type="button" role="tab" aria-selected={detailTab === "assignments"} aria-controls="class-assignments-panel" className={detailTab === "assignments" ? "is-active" : ""} onClick={() => setDetailTab("assignments")}>
-                Class assignments <span>{assignments.length}</span>
+                <TranslatedText>{tr("Class assignments")}</TranslatedText> <span>{assignments.length}</span>
               </button>
               <button id="class-members-tab" type="button" role="tab" aria-selected={detailTab === "members"} aria-controls="class-members-panel" className={detailTab === "members" ? "is-active" : ""} onClick={() => setDetailTab("members")}>
-                Class members <span>{detailMembers.length}</span>
+                <TranslatedText>{tr("Class members")}</TranslatedText> <span>{detailMembers.length}</span>
               </button>
             </div>
 
@@ -218,21 +221,21 @@ export function ClassesPage() {
                   <div className="teacher-class-assignment-topline">
                     <div>
                       <strong>{assignment.title}</strong>
-                      <small>Due {assignment.due || "—"} · {assignment.status}</small>
+                      <small><TranslatedText>{tr("Due")}</TranslatedText> {assignment.due || "—"} · <TranslatedText>{tr(assignment.status)}</TranslatedText></small>
                     </div>
                     <b>{assignment.submitted}</b>
                   </div>
                 </article>
-              )) : <p className="muted">No assignment progress is available for this class yet.</p>}
+              )) : <p className="muted"><TranslatedText>{tr("No assignment progress is available for this class yet.")}</TranslatedText></p>}
             </section>
 
             <section id="class-members-panel" className="teacher-class-detail-section" role="tabpanel" aria-labelledby="class-members-tab" hidden={detailTab !== "members"}>
               <label className="teacher-student-search">
-                <span className="sr-only">Search students</span>
+                <span className="sr-only"><TranslatedText>{tr("Search students")}</TranslatedText></span>
                 <input
                   value={studentSearch}
                   onChange={(event) => setStudentSearch(event.target.value)}
-                  placeholder="Search students..."
+                  placeholder={tr("Search students...")}
                 />
               </label>
               <div className="teacher-class-student-list">
@@ -240,12 +243,12 @@ export function ClassesPage() {
                   <div className="teacher-class-student-row" key={student.id}>
                     <div className="teacher-class-student-name">
                       <strong>{student.name}</strong>
-                      <small>{student.id}</small>
+                      <small>{student.email}</small>
                     </div>
-                    <div className="teacher-class-student-stat"><small>{student.role}</small></div>
+                    <div className="teacher-class-student-stat"><small><TranslatedText>{tr(student.role)}</TranslatedText></small></div>
                   </div>
                 ))}
-                {!filteredStudents.length && <p className="muted">No students match this search.</p>}
+                {!filteredStudents.length && <p className="muted"><TranslatedText>{tr("No students match this search.")}</TranslatedText></p>}
               </div>
             </section>
           </div>

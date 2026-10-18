@@ -1,3 +1,5 @@
+import { TranslatedText } from "./TranslatedText";
+import { useLanguage } from "../context/LanguageContext";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { type Submission } from "../data/models";
@@ -14,6 +16,7 @@ export function SubmissionDetails({
   onClose: () => void;
   inline?: boolean;
 }) {
+  const { t: tr, locale: uiLocale } = useLanguage("common");
   const [copy, setCopy] = useState("");
   const [showCode, setShowCode] = useState(false);
   const p = problem;
@@ -30,16 +33,16 @@ export function SubmissionDetails({
     <>
       <div className="submission-detail-content">
         <p className="tiny muted submission-detail-id">
-          #{submission.id} · Read-only
+          #{submission.id} <TranslatedText>{tr("· Read-only")}</TranslatedText>
         </p>
         <h1>
           {p.number}. {p.title}
         </h1>
         <div className="submission-attempt-meta">
-          <p className="tiny muted">{submissionTimeLabel(submission.submittedAt)}</p>
+          <p className="tiny muted"><TranslatedText>{tr(submissionTimeLabel(submission.submittedAt, uiLocale))}</TranslatedText></p>
           <div className="submission-source-verdict">
             <p className="tiny">
-              {submission.source}
+              <TranslatedText>{tr(submission.source)}</TranslatedText>
               {(submission.contextTitle || submission.context) && (submission.contextTitle || submission.context) !== submission.source && <> · {submission.contextTitle || submission.context}</>}
             </p>
             <Status value={submission.result} />
@@ -47,28 +50,28 @@ export function SubmissionDetails({
         </div>
         <section
           className="submission-evaluation"
-          aria-label="Submission evaluation"
+          aria-label={tr("Submission evaluation")}
         >
           <div className="submission-score-grid">
             <div>
-              <small>Auto score</small>
+              <small><TranslatedText>{tr("Auto score")}</TranslatedText></small>
               <strong>{scoreLabel(submission.score)}</strong>
             </div>
             <div>
-              <small>Final score</small>
+              <small><TranslatedText>{tr("Final score")}</TranslatedText></small>
               <strong>{scoreLabel(finalScore)}</strong>
               <small className="submission-grading-source">
-                {manuallyGraded ? "Manually graded by instructor" : "Automatically graded"}
+                <TranslatedText>{manuallyGraded ? tr("Manually graded by instructor") : tr("Automatically graded")}</TranslatedText>
               </small>
             </div>
           </div>
         </section>
         <section className="submitted-query">
           <div className="section-heading">
-            <h3>Submitted SQL</h3>
+            <h3><TranslatedText>{tr("Submitted SQL")}</TranslatedText></h3>
             {query && (
               <div className="submitted-query-actions">
-              <button type="button" className="text-button" onClick={() => setShowCode(true)}>View code</button>
+              <button type="button" className="text-button" onClick={() => setShowCode(true)}><TranslatedText>{tr("View code")}</TranslatedText></button>
               <button
                 className="text-button"
                 onClick={async () => {
@@ -82,39 +85,37 @@ export function SubmissionDetails({
                   }
                 }}
               >
-                Copy
+                <TranslatedText>{tr("Copy")}</TranslatedText>
               </button>
               </div>
             )}
           </div>
           {query ? (
-            <pre tabIndex={0} aria-label="Submitted SQL snapshot">
+            <pre tabIndex={0} aria-label={tr("Submitted SQL snapshot")}>
               <code>{query}</code>
             </pre>
           ) : (
             <p className="tiny muted">
-              SQL snapshot is unavailable for this submission.
+              <TranslatedText>{tr("SQL snapshot is unavailable for this submission.")}</TranslatedText>
             </p>
           )}
           <small className="muted">
-            Submission snapshot · {submission.database || "Database unavailable"} ·
-            Read-only
+            <TranslatedText>{tr("Submission snapshot ·")}</TranslatedText> <TranslatedText>{submission.database || tr("Database unavailable")}</TranslatedText> <TranslatedText>{tr("· Read-only")}</TranslatedText>
           </small>
           <p role="status" className="tiny">
-            {copy}
+            <TranslatedText>{tr(copy)}</TranslatedText>
           </p>
         </section>
         <section className="instructor-evaluation">
-          <h3>Instructor comments</h3>
+          <h3><TranslatedText>{tr("Instructor comments")}</TranslatedText></h3>
           <p className="tiny muted">
-            {submission.feedback ||
-              "No instructor comments yet."}
+            <TranslatedText>{submission.feedback || tr("No instructor comments yet.")}</TranslatedText>
           </p>
         </section>
       </div>
       <footer className="submission-detail-footer">
         <Link className="button primary" to={"/workspace/" + p.id}>
-          Open problem
+          <TranslatedText>{tr("Open problem")}</TranslatedText>
         </Link>
       </footer>
       {showCode && query && <SubmittedSqlDialog query={query} database={submission.database} onClose={() => setShowCode(false)} />}
@@ -122,14 +123,15 @@ export function SubmissionDetails({
   );
   if (inline) {
     return <div className="submission-inline-details">
-      <header className="submission-inline-heading"><h2>Submission details</h2></header>
+      <header className="submission-inline-heading"><h2><TranslatedText>{tr("Submission details")}</TranslatedText></h2></header>
       {content}
     </div>;
   }
-  return <Dialog className="submission-drawer" title="Submission details" onClose={onClose}>{content}</Dialog>;
+  return <Dialog className="submission-drawer" title={tr("Submission details")} onClose={onClose}>{content}</Dialog>;
 }
 
 function SubmittedSqlDialog({ query, database, onClose }: { query: string; database?: string; onClose: () => void }) {
+  const { t: tr } = useLanguage("common");
   const [code, setCode] = useState(query);
   const [formatState, setFormatState] = useState("Formatting SQL…");
   const [copyState, setCopyState] = useState("");
@@ -145,17 +147,17 @@ function SubmittedSqlDialog({ query, database, onClose }: { query: string; datab
     });
     return () => { active = false; };
   }, [query, database]);
-  return <Dialog title="Submitted SQL" className="submitted-sql-dialog" onClose={onClose}>
+  return <Dialog title={tr("Submitted SQL")} className="submitted-sql-dialog" onClose={onClose}>
     <div className="submitted-sql-dialog-body">
-      <p className="tiny muted" role="status">{formatState}</p>
-      <pre tabIndex={0} aria-label="Full submitted SQL"><code>{code}</code></pre>
+      <p className="tiny muted" role="status"><TranslatedText>{formatState.startsWith("Formatted SQL · ") ? tr("Formatted SQL · {database}", { database: database || "SQL" }) : tr(formatState)}</TranslatedText></p>
+      <pre tabIndex={0} aria-label={tr("Full submitted SQL")}><code>{code}</code></pre>
     </div>
     <footer className="submitted-sql-dialog-footer">
-      <span className="tiny muted" role="status">{copyState}</span>
+      <span className="tiny muted" role="status"><TranslatedText>{tr(copyState)}</TranslatedText></span>
       <button type="button" className="button primary" onClick={async () => {
         try { await navigator.clipboard.writeText(code); setCopyState("Copied SQL."); }
         catch { setCopyState("Copy unavailable. Select the SQL above to copy manually."); }
-      }}>Copy SQL</button>
+      }}><TranslatedText>{tr("Copy SQL")}</TranslatedText></button>
     </footer>
   </Dialog>;
 }

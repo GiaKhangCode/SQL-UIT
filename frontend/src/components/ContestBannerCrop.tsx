@@ -1,5 +1,8 @@
+import { TranslatedText } from "./TranslatedText";
+import { useLanguage } from "../context/LanguageContext";
 import { useEffect, useRef, useState } from "react";
 import { Dialog } from "./ui";
+import { resolveContestBannerUrl } from "../utils/contestBanner";
 
 export type BannerCrop = { x: number; y: number; zoom: number };
 export const defaultBannerCrop: BannerCrop = { x: 0.5, y: 0.5, zoom: 1 };
@@ -34,6 +37,7 @@ export function ContestBannerCrop({ sourceUrl, initialCrop, onClose, onApply }: 
   onClose: () => void;
   onApply: (banner: Blob, source: Blob, crop: BannerCrop) => Promise<void>;
 }) {
+  const { t: tr } = useLanguage("common");
   const frameRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement | null>(null);
   const lastPointer = useRef<{ x: number; y: number } | null>(null);
@@ -54,7 +58,8 @@ export function ContestBannerCrop({ sourceUrl, initialCrop, onClose, onApply }: 
       setDimensions({ width: image.naturalWidth, height: image.naturalHeight });
     };
     image.onerror = () => setError("Could not load this banner image.");
-    image.src = sourceUrl;
+    if (!sourceUrl.startsWith("blob:") && !sourceUrl.startsWith("data:")) image.crossOrigin = "anonymous";
+    image.src = resolveContestBannerUrl(sourceUrl) || sourceUrl;
     return () => { image.onload = null; image.onerror = null; };
   }, [sourceUrl]);
 
@@ -113,8 +118,8 @@ export function ContestBannerCrop({ sourceUrl, initialCrop, onClose, onApply }: 
     }
   }
 
-  return <Dialog title="Adjust contest banner" className="teacher-banner-crop-dialog" onClose={() => { if (!busy) onClose(); }}>
-    <p className="tiny muted">Drag the image inside the fixed 3:1 banner frame. Zoom to choose the visible area.</p>
+  return <Dialog title={tr("Adjust contest banner")} className="teacher-banner-crop-dialog" onClose={() => { if (!busy) onClose(); }}>
+    <p className="tiny muted"><TranslatedText>{tr("Drag the image inside the fixed 3:1 banner frame. Zoom to choose the visible area.")}</TranslatedText></p>
     <div className="teacher-banner-crop-frame" ref={frameRef}
       onPointerDown={(event) => { if (!width) return; event.currentTarget.setPointerCapture(event.pointerId); lastPointer.current = { x: event.clientX, y: event.clientY }; }}
       onPointerMove={(event) => { if (!lastPointer.current) return; move(event.clientX - lastPointer.current.x, event.clientY - lastPointer.current.y); lastPointer.current = { x: event.clientX, y: event.clientY }; }}
@@ -122,15 +127,15 @@ export function ContestBannerCrop({ sourceUrl, initialCrop, onClose, onApply }: 
       {width > 0 && <img src={sourceUrl} alt="Banner crop preview" draggable={false} style={{ width: renderedWidth, height: renderedHeight,
         left: frameWidth / 2 - active.x * renderedWidth, top: frameHeight / 2 - active.y * renderedHeight }} />}
     </div>
-    <label className="teacher-banner-zoom">Zoom
+    <label className="teacher-banner-zoom"><TranslatedText>{tr("Zoom")}</TranslatedText>
       <input type="range" min="1" max="3" step="0.01" value={crop.zoom} onChange={(event) => setCrop((current) => width && height
         ? clampCrop({ ...current, zoom: Number(event.target.value) }, width, height, frameWidth)
-        : { ...current, zoom: Number(event.target.value) })} aria-label="Banner zoom" />
+        : { ...current, zoom: Number(event.target.value) })} aria-label={tr("Banner zoom")} />
       <span>{Math.round(crop.zoom * 100)}%</span>
     </label>
-    {error && <p className="teacher-form-message" role="alert">{error}</p>}
-    <div className="teacher-banner-actions"><button className="button" type="button" disabled={busy} onClick={() => setCrop(defaultBannerCrop)}>Reset</button>
-      <button className="button" type="button" disabled={busy} onClick={onClose}>Cancel</button>
-      <button className="button primary" type="button" disabled={busy || !width} onClick={() => { void apply(); }}>{busy ? "Applying…" : "Apply"}</button></div>
+    {error && <p className="teacher-form-message" role="alert"><TranslatedText>{tr(error)}</TranslatedText></p>}
+    <div className="teacher-banner-actions"><button className="button" type="button" disabled={busy} onClick={() => setCrop(defaultBannerCrop)}><TranslatedText>{tr("Reset")}</TranslatedText></button>
+      <button className="button" type="button" disabled={busy} onClick={onClose}><TranslatedText>{tr("Cancel")}</TranslatedText></button>
+      <button className="button primary" type="button" disabled={busy || !width} onClick={() => { void apply(); }}><TranslatedText>{busy ? tr("Applying…") : tr("Apply")}</TranslatedText></button></div>
   </Dialog>;
 }

@@ -14,10 +14,19 @@ export function contestBannerClass(id: string) {
   return `contest-banner-visual-${bannerHash(id) % bannerVariants}`;
 }
 
+/** Resolve API-relative banner paths against the configured backend origin. */
+export function resolveContestBannerUrl(bannerUrl?: string | null): string | undefined {
+  if (!bannerUrl) return undefined;
+  if (/^(?:[a-z]+:|data:|blob:|\/\/)/i.test(bannerUrl)) return bannerUrl;
+  const apiBase = import.meta.env.VITE_API_URL || window.location.origin;
+  return new URL(bannerUrl, apiBase.endsWith("/") ? apiBase : apiBase + "/").toString();
+}
+
 /** The cropped, display-sized banner is the only banner students should see. */
 export function contestBannerStyle(bannerUrl?: string | null): CSSProperties | undefined {
-  if (!bannerUrl) return undefined;
+  const resolvedUrl = resolveContestBannerUrl(bannerUrl);
+  if (!resolvedUrl) return undefined;
   return {
-    backgroundImage: `linear-gradient(90deg, rgba(14, 14, 51, .82), rgba(14, 14, 51, .48)), url(${JSON.stringify(bannerUrl)})`,
+    backgroundImage: `linear-gradient(90deg, rgba(14, 14, 51, .82), rgba(14, 14, 51, .48)), url(${JSON.stringify(resolvedUrl)})`,
   };
 }

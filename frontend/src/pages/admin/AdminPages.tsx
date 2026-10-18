@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { TranslatedText } from "../../components/TranslatedText";
+import { useLanguage } from "../../context/LanguageContext";
+import React, { useEffect, useMemo, useState, useRef, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { Dialog, Empty, ErrorState, Loading } from "../../components/ui";
 import {
@@ -17,15 +19,18 @@ import { academicTerms } from "../../utils/academicTerms";
 import { localTime, parseServerDateTime } from "../../utils/serverDateTime";
 
 function PageIntro({ title, sub, children, compact = false }: { title: string; sub?: string; children?: ReactNode; compact?: boolean }) {
-  return <div className={`admin-page-intro${compact ? " page-list-intro" : ""}`}><div><h1 className={compact ? "sr-only" : undefined}>{title}</h1>{sub && <p>{sub}</p>}</div>{children && <div className="admin-page-actions">{children}</div>}</div>;
+  const { t: tr } = useLanguage("admin");
+  return <div className={`admin-page-intro${compact ? " page-list-intro" : ""}`}><div><h1 className={compact ? "sr-only" : undefined}><TranslatedText>{title}</TranslatedText></h1>{sub && <p><TranslatedText>{tr(sub)}</TranslatedText></p>}</div>{children && <div className="admin-page-actions">{children}</div>}</div>;
 }
 
 function Split({ main, side, className = "" }: { main: ReactNode; side: ReactNode; className?: string }) {
-  return <div className={`admin-split ${className}`}><section className="admin-primary">{main}</section><aside className="admin-side">{side}</aside></div>;
+  const { t: tr } = useLanguage("admin");
+  return <div className={`admin-split ${className}`}><section className="admin-primary"><TranslatedText>{tr(main)}</TranslatedText></section><aside className="admin-side"><TranslatedText>{tr(side)}</TranslatedText></aside></div>;
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
-  return <label className="admin-field"><span>{label}</span>{children}</label>;
+  const { t: tr } = useLanguage("admin");
+  return <label className="admin-field"><span><TranslatedText>{tr(label)}</TranslatedText></span>{children}</label>;
 }
 
 function Notice({ children }: { children: ReactNode }) {
@@ -33,6 +38,7 @@ function Notice({ children }: { children: ReactNode }) {
 }
 
 function AddUserDialog({ onClose, onAdd }: { onClose: () => void; onAdd: (user: AdminUser) => void }) {
+  const { t: tr } = useLanguage("admin");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<AdminUser["role"]>("Student");
@@ -55,32 +61,411 @@ function AddUserDialog({ onClose, onAdd }: { onClose: () => void; onAdd: (user: 
     }
   }
 
-  return <Dialog title="Add user" onClose={onClose} className="admin-dialog"><form onSubmit={submit} className="admin-dialog-form">
-    <Field label="NAME"><input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" required /></Field>
-    <Field label="EMAIL"><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.edu" required /></Field>
-    <Field label="PASSWORD"><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" required minLength={8} /></Field>
-    <Field label="ROLE"><select value={role} onChange={(e) => setRole(e.target.value as AdminUser["role"])}><option>Student</option><option>Lecturer</option><option>Admin</option></select></Field>
-    {error && <p className="admin-warning" style={{ margin: 0 }}>{error}</p>}
-    <div className="admin-dialog-actions"><button type="button" className="button" onClick={onClose} disabled={loading}>Cancel</button><button className="button primary" disabled={loading}>{loading ? "Adding..." : "Add user"}</button></div>
+  return <Dialog title={tr("Add user")} onClose={onClose} className="admin-dialog"><form onSubmit={submit} className="admin-dialog-form">
+    <Field label={tr("NAME")}><input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={tr("Full name")} required /></Field>
+    <Field label={tr("EMAIL")}><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.edu" required /></Field>
+    <Field label={tr("PASSWORD")}><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={tr("Password")} required minLength={8} /></Field>
+    <Field label={tr("ROLE")}><select value={role} onChange={(e) => setRole(e.target.value as AdminUser["role"])}><option value="Student">{tr("Student")}</option><option value="Lecturer">{tr("Lecturer")}</option><option value="Admin">{tr("Admin")}</option></select></Field>
+    {error && <p className="admin-warning" style={{ margin: 0 }}><TranslatedText>{tr(error)}</TranslatedText></p>}
+    <div className="admin-dialog-actions"><button type="button" className="button" onClick={onClose} disabled={loading}><TranslatedText>{tr("Cancel")}</TranslatedText></button><button className="button primary" disabled={loading}><TranslatedText>{loading ? tr("Adding...") : tr("Add user")}</TranslatedText></button></div>
   </form></Dialog>;
 }
 
+function BulkImportDialog({ onClose, onSuccess }: { onClose: () => void; onSuccess: (message: string) => void }) {
+  const { t: tr } = useLanguage("admin");
+  const [file, setFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<any>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setFile(e.target.files[0]);
+      setError("");
+    }
+  };
+
+  const onDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const onDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const droppedFile = e.dataTransfer.files[0];
+      if (droppedFile.name.endsWith('.csv')) {
+        setFile(droppedFile);
+        setError("");
+      } else {
+        setError("Please upload a .csv file");
+      }
+    }
+  };
+
+  const handleDownloadTemplate = () => {
+    const csvContent = "name,email,role,password\nNguyễn Văn A,nva@example.com,Student,12354678";
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", "template_import_users.csv");
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!file) {
+      setError("Please select a CSV file.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    setResult(null);
+
+    try {
+      const response = await adminService.importUsers(file);
+      setResult(response);
+    } catch (err: any) {
+      setError(err.message || "Failed to import users");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog title={tr("Import Users from CSV")} onClose={onClose} className="admin-dialog">
+      <form onSubmit={submit} className="admin-dialog-form">
+        {!result ? (
+          <>
+            <div style={{ marginBottom: "1.5rem", display: "flex", justifyContent: "flex-end" }}>
+              <button type="button" className="text-button" onClick={handleDownloadTemplate} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                <TranslatedText>{tr("Download CSV Template")}</TranslatedText>
+              </button>
+            </div>
+
+            <div
+              onDragOver={onDragOver}
+              onDragLeave={onDragLeave}
+              onDrop={onDrop}
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                border: `2px dashed ${isDragging ? "var(--color-primary, #6366f1)" : "#cbd5e1"}`,
+                borderRadius: "8px",
+                padding: "2.5rem 2rem",
+                textAlign: "center",
+                backgroundColor: isDragging ? "rgba(99, 102, 241, 0.05)" : "transparent",
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+                marginBottom: "1rem"
+              }}
+            >
+              <input
+                type="file"
+                accept=".csv"
+                onChange={handleFileChange}
+                ref={fileInputRef}
+                style={{ display: "none" }}
+              />
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke={isDragging ? "var(--color-primary, #6366f1)" : "#94a3b8"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: "0 auto 1rem", transition: "stroke 0.2s ease" }}>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              {file ? (
+                <div>
+                  <p style={{ fontWeight: 600, color: "var(--color-primary, #6366f1)", margin: "0 0 0.25rem" }}>{file.name}</p>
+                  <p className="admin-muted" style={{ fontSize: "0.875rem", margin: 0 }}>{(file.size / 1024).toFixed(1)} KB</p>
+                </div>
+              ) : (
+                <>
+                  <p style={{ fontWeight: 500, margin: "0 0 0.5rem" }}><TranslatedText>{tr("Drag & drop your CSV file here")}</TranslatedText></p>
+                  <p className="admin-muted" style={{ fontSize: "0.875rem", margin: 0 }}><TranslatedText>{tr("or click to browse from your computer")}</TranslatedText></p>
+                </>
+              )}
+            </div>
+
+            <p className="admin-muted" style={{ fontSize: "0.875rem", textAlign: "center", margin: "1rem 0" }}>
+              <TranslatedText>{tr("The CSV file must contain at least 2 columns:")}</TranslatedText> <code style={{ backgroundColor: "#f1f5f9", padding: "0.2rem 0.4rem", borderRadius: "4px" }}>name</code>, <code style={{ backgroundColor: "#f1f5f9", padding: "0.2rem 0.4rem", borderRadius: "4px" }}>email</code>.
+            </p>
+
+            <div style={{ backgroundColor: "#fffbeb", border: "1px solid #fef08a", borderRadius: "6px", padding: "0.75rem", marginTop: "0.75rem" }}>
+              <p style={{ fontSize: "0.8rem", color: "#854d0e", margin: 0, display: "flex", alignItems: "flex-start", gap: "0.5rem" }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: "0.1rem" }}><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                <span><strong><TranslatedText>{tr("Important:")}</TranslatedText></strong> <TranslatedText>{tr("When saving from Excel, please select")}</TranslatedText> <strong><TranslatedText>{tr("CSV UTF-8 (Comma delimited)")}</TranslatedText></strong> <TranslatedText>{tr("to prevent corruption of Vietnamese characters.")}</TranslatedText></span>
+              </p>
+            </div>
+
+            {error && <p className="admin-warning" style={{ margin: "1rem 0 0", textAlign: "center" }}><TranslatedText>{tr(error)}</TranslatedText></p>}
+
+            <div className="admin-dialog-actions" style={{ marginTop: "1.5rem" }}>
+              <button type="button" className="button" onClick={onClose} disabled={loading}><TranslatedText>{tr("Cancel")}</TranslatedText></button>
+              <button className="button primary" disabled={loading || !file}>
+                <TranslatedText>{loading ? tr("Importing...") : tr("Import Users")}</TranslatedText>
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ textAlign: "center", marginBottom: "1.5rem", marginTop: "1rem" }}>
+              <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "56px", height: "56px", borderRadius: "50%", backgroundColor: result.failed_count === 0 ? "#dcfce7" : "#fef08a", color: result.failed_count === 0 ? "#166534" : "#854d0e", marginBottom: "1rem" }}>
+                {result.failed_count === 0 ? (
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                ) : (
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                )}
+              </div>
+              <h3 style={{ margin: 0, fontSize: "1.25rem", color: "#0f172a" }}><TranslatedText>{tr("Import Complete")}</TranslatedText></h3>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1rem", textAlign: "center", marginBottom: "1.5rem" }}>
+              <div style={{ padding: "1rem", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                <p className="admin-muted" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 0.5rem" }}><TranslatedText>{tr("Processed")}</TranslatedText></p>
+                <p style={{ fontSize: "1.5rem", fontWeight: 600, margin: 0, color: "#334155" }}>{result.total_processed}</p>
+              </div>
+              <div style={{ padding: "1rem", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px solid #bbf7d0", color: "#166534" }}>
+                <p style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 0.5rem", opacity: 0.8 }}><TranslatedText>{tr("Success")}</TranslatedText></p>
+                <p style={{ fontSize: "1.5rem", fontWeight: 600, margin: 0 }}>{result.success_count}</p>
+              </div>
+              <div style={{ padding: "1rem", backgroundColor: result.failed_count > 0 ? "#fef2f2" : "#f8fafc", borderRadius: "8px", border: `1px solid ${result.failed_count > 0 ? "#fecaca" : "#e2e8f0"}`, color: result.failed_count > 0 ? "#991b1b" : "inherit" }}>
+                <p style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 0.5rem", color: result.failed_count > 0 ? "#991b1b" : "var(--color-text-muted)" }}><TranslatedText>{tr("Failed")}</TranslatedText></p>
+                <p style={{ fontSize: "1.5rem", fontWeight: 600, margin: 0 }}>{result.failed_count}</p>
+              </div>
+            </div>
+
+            {result.errors && result.errors.length > 0 && (
+              <div style={{ maxHeight: "180px", overflowY: "auto", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "1rem", marginTop: "1rem", backgroundColor: "#f8fafc" }}>
+                <p style={{ fontWeight: 600, margin: "0 0 0.75rem", fontSize: "0.875rem", color: "#334155" }}><TranslatedText>{tr("Error Details:")}</TranslatedText></p>
+                <ul style={{ fontSize: "0.875rem", paddingLeft: "1.25rem", margin: 0, color: "#64748b", display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+                  {result.errors.map((e: any, idx: number) => (
+                    <li key={idx} style={{ lineHeight: 1.4 }}>
+                      <span style={{ fontWeight: 600, color: "#475569" }}><TranslatedText>{tr("Row")}</TranslatedText> {e.row}:</span> {e.email} — <span style={{ color: "#ef4444" }}><TranslatedText>{tr(e.error)}</TranslatedText></span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="admin-dialog-actions" style={{ marginTop: "2rem" }}>
+              <button type="button" className="button primary" style={{ width: "100%", justifyContent: "center" }} onClick={() => {
+                onClose();
+                if (result.success_count > 0) onSuccess(`Successfully imported ${result.success_count} users.`);
+              }}>
+                <TranslatedText>{tr("Done")}</TranslatedText>
+              </button>
+            </div>
+          </>
+        )}
+      </form>
+    </Dialog>
+  );
+}
+
+function BulkImportMembersDialog({ classId, onClose, onSuccess }: { classId: string; onClose: () => void; onSuccess: (message: string) => void }) {
+  const { t: tr } = useLanguage("admin");
+  const [file, setFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<any>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setFile(e.target.files[0]);
+      setError("");
+    }
+  };
+
+  const onDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const onDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const droppedFile = e.dataTransfer.files[0];
+      if (droppedFile.name.endsWith('.csv') || droppedFile.name.endsWith('.txt')) {
+        setFile(droppedFile);
+        setError("");
+      } else {
+        setError("Please upload a .csv or .txt file");
+      }
+    }
+  };
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!file) {
+      setError("Please select a file.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    setResult(null);
+
+    try {
+      const response = await teacherService.importClassMembers(classId, file);
+      setResult(response);
+    } catch (err: any) {
+      setError(err.message || "Failed to import members");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog title={tr("Import Class Members")} onClose={onClose} className="admin-dialog">
+      <form onSubmit={submit} className="admin-dialog-form">
+        {!result ? (
+          <>
+            <div
+              onDragOver={onDragOver}
+              onDragLeave={onDragLeave}
+              onDrop={onDrop}
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                border: `2px dashed ${isDragging ? "var(--color-primary, #6366f1)" : "#cbd5e1"}`,
+                borderRadius: "8px",
+                padding: "2.5rem 2rem",
+                textAlign: "center",
+                backgroundColor: isDragging ? "rgba(99, 102, 241, 0.05)" : "transparent",
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+                marginBottom: "1rem"
+              }}
+            >
+              <input
+                type="file"
+                accept=".csv,.txt"
+                onChange={handleFileChange}
+                ref={fileInputRef}
+                style={{ display: "none" }}
+              />
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke={isDragging ? "var(--color-primary, #6366f1)" : "#94a3b8"} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ margin: "0 auto 1rem", transition: "stroke 0.2s ease" }}>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="17 8 12 3 7 8"></polyline>
+                <line x1="12" y1="3" x2="12" y2="15"></line>
+              </svg>
+              {file ? (
+                <div>
+                  <p style={{ fontWeight: 600, color: "var(--color-primary, #6366f1)", margin: "0 0 0.25rem" }}>{file.name}</p>
+                  <p className="admin-muted" style={{ fontSize: "0.875rem", margin: 0 }}>{(file.size / 1024).toFixed(1)} KB</p>
+                </div>
+              ) : (
+                <>
+                  <p style={{ fontWeight: 500, margin: "0 0 0.5rem" }}><TranslatedText>{tr("Drag & drop your CSV/TXT file here")}</TranslatedText></p>
+                  <p className="admin-muted" style={{ fontSize: "0.875rem", margin: 0 }}><TranslatedText>{tr("or click to browse from your computer")}</TranslatedText></p>
+                </>
+              )}
+            </div>
+
+            <p className="admin-muted" style={{ fontSize: "0.875rem", textAlign: "center", margin: "1rem 0" }}>
+              <TranslatedText>{tr("The file can be a comma-separated list of emails or one email per line.")}</TranslatedText>
+            </p>
+
+            {error && <p className="admin-warning" style={{ margin: "1rem 0 0", textAlign: "center" }}><TranslatedText>{tr(error)}</TranslatedText></p>}
+
+            <div className="admin-dialog-actions" style={{ marginTop: "1.5rem" }}>
+              <button type="button" className="button" onClick={onClose} disabled={loading}><TranslatedText>{tr("Cancel")}</TranslatedText></button>
+              <button className="button primary" disabled={loading || !file}>
+                <TranslatedText>{loading ? tr("Importing...") : tr("Import Members")}</TranslatedText>
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ textAlign: "center", marginBottom: "1.5rem", marginTop: "1rem" }}>
+              <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: "56px", height: "56px", borderRadius: "50%", backgroundColor: result.failed_count === 0 ? "#dcfce7" : "#fef08a", color: result.failed_count === 0 ? "#166534" : "#854d0e", marginBottom: "1rem" }}>
+                {result.failed_count === 0 ? (
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                ) : (
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                )}
+              </div>
+              <h3 style={{ margin: 0, fontSize: "1.25rem", color: "#0f172a" }}><TranslatedText>{tr("Import Complete")}</TranslatedText></h3>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1rem", textAlign: "center", marginBottom: "1.5rem" }}>
+              <div style={{ padding: "1rem", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                <p className="admin-muted" style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 0.5rem" }}><TranslatedText>{tr("Processed")}</TranslatedText></p>
+                <p style={{ fontSize: "1.5rem", fontWeight: 600, margin: 0, color: "#334155" }}>{result.total_processed}</p>
+              </div>
+              <div style={{ padding: "1rem", backgroundColor: "#f0fdf4", borderRadius: "8px", border: "1px solid #bbf7d0", color: "#166534" }}>
+                <p style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 0.5rem", opacity: 0.8 }}><TranslatedText>{tr("Added")}</TranslatedText></p>
+                <p style={{ fontSize: "1.5rem", fontWeight: 600, margin: 0 }}>{result.success_count}</p>
+              </div>
+              <div style={{ padding: "1rem", backgroundColor: result.skipped_count > 0 || result.failed_count > 0 ? "#fef2f2" : "#f8fafc", borderRadius: "8px", border: `1px solid ${result.skipped_count > 0 || result.failed_count > 0 ? "#fecaca" : "#e2e8f0"}`, color: result.skipped_count > 0 || result.failed_count > 0 ? "#991b1b" : "inherit" }}>
+                <p style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 0.5rem", color: result.skipped_count > 0 || result.failed_count > 0 ? "#991b1b" : "var(--color-text-muted)" }}><TranslatedText>{tr("Skipped/Failed")}</TranslatedText></p>
+                <p style={{ fontSize: "1.5rem", fontWeight: 600, margin: 0 }}>{result.skipped_count + result.failed_count}</p>
+              </div>
+            </div>
+
+            {result.errors && result.errors.length > 0 && (
+              <div style={{ maxHeight: "180px", overflowY: "auto", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "1rem", marginTop: "1rem", backgroundColor: "#f8fafc" }}>
+                <p style={{ fontWeight: 600, margin: "0 0 0.75rem", fontSize: "0.875rem", color: "#334155" }}><TranslatedText>{tr("Failed/Skipped Details:")}</TranslatedText></p>
+                <ul style={{ fontSize: "0.875rem", paddingLeft: "1.25rem", margin: 0, color: "#64748b", display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+                  {result.errors.map((e: any, idx: number) => (
+                    <li key={idx} style={{ lineHeight: 1.4 }}>
+                      <span style={{ fontWeight: 600, color: "#475569" }}>{e.email}</span> — <span style={{ color: "#ef4444" }}><TranslatedText>{tr(e.error)}</TranslatedText></span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="admin-dialog-actions" style={{ marginTop: "2rem" }}>
+              <button type="button" className="button primary" style={{ width: "100%", justifyContent: "center" }} onClick={() => {
+                onClose();
+                if (result.success_count > 0) onSuccess(`Successfully imported ${result.success_count} members.`);
+              }}>
+                <TranslatedText>{tr("Done")}</TranslatedText>
+              </button>
+            </div>
+          </>
+        )}
+      </form>
+    </Dialog>
+  );
+}
+
 function AdminListPagination({ total, page, onPageChange, label, noun, alwaysVisible = false }: { total: number; page: number; onPageChange: (page: number) => void; label: string; noun: string; alwaysVisible?: boolean }) {
+  const { t: tr, locale: uiLocale } = useLanguage("admin");
   const pageSize = 15;
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const currentPage = Math.min(page, pageCount);
   const firstIndex = (currentPage - 1) * pageSize;
   return <div className="admin-list-table-footer">
-    <p className="admin-table-footer" role="status">Showing {total === 0 ? 0 : firstIndex + 1}–{Math.min(firstIndex + pageSize, total)} of {total.toLocaleString()} {noun}</p>
-    {(pageCount > 1 || alwaysVisible) && <nav className="admin-table-pagination" aria-label={label}>
-      <button type="button" className="button admin-button" disabled={currentPage === 1} onClick={() => onPageChange(currentPage - 1)}>← Previous</button>
-      <span>Page {currentPage} of {pageCount}</span>
-      <button type="button" className="button admin-button" disabled={currentPage === pageCount} onClick={() => onPageChange(currentPage + 1)}>Next →</button>
+    <p className="admin-table-footer" role="status"><TranslatedText>{tr("Showing")}</TranslatedText> {total === 0 ? 0 : firstIndex + 1}–{Math.min(firstIndex + pageSize, total)} <TranslatedText>{tr("of")}</TranslatedText> {total.toLocaleString(uiLocale)} <TranslatedText>{tr(noun)}</TranslatedText></p>
+    {(pageCount > 1 || alwaysVisible) && <nav className="admin-table-pagination" aria-label={tr(label)}>
+      <button type="button" className="button admin-button" disabled={currentPage === 1} onClick={() => onPageChange(currentPage - 1)}><TranslatedText>{tr("← Previous")}</TranslatedText></button>
+      <span><TranslatedText>{tr("Page")}</TranslatedText> {currentPage} <TranslatedText>{tr("of")}</TranslatedText> {pageCount}</span>
+      <button type="button" className="button admin-button" disabled={currentPage === pageCount} onClick={() => onPageChange(currentPage + 1)}><TranslatedText>{tr("Next →")}</TranslatedText></button>
     </nav>}
   </div>;
 }
 
 export function AdminUsersPage() {
+  const { t: tr, locale: uiLocale } = useLanguage("admin");
   const location = useLocation();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [selectedEmail, setSelectedEmail] = useState("");
@@ -91,12 +476,13 @@ export function AdminUsersPage() {
   const [page, setPage] = useState(1);
   const pageSize = 15;
   const [dialog, setDialog] = useState(false);
+  const [bulkImportDialog, setBulkImportDialog] = useState(false);
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(true);
   const [pendingRole, setPendingRole] = useState<string | null>(null);
   const [pendingRequestCount, setPendingRequestCount] = useState(0);
   const [loadError, setLoadError] = useState("");
-  
+
   useEffect(() => {
     adminService.getUsers().then(data => {
       setUsers(data);
@@ -159,59 +545,62 @@ export function AdminUsersPage() {
     const link = document.createElement("a"); link.href = url; link.download = "uit-sql-users.csv"; link.click(); URL.revokeObjectURL(url);
   }
 
-  if (loading) return <div className={"admin-page compact-tables-page compact-admin-list-page" + (showUserDetails ? " show-user-details" : "")}><h1 className="sr-only">Users</h1><Loading label="Loading users…" /></div>;
-  if (loadError) return <div className={"admin-page compact-tables-page compact-admin-list-page" + (showUserDetails ? " show-user-details" : "")}><h1 className="sr-only">Users</h1><ErrorState title="Could not load users" message={loadError} onRetry={() => window.location.reload()} /></div>;
+  if (loading) return <div className={"admin-page compact-tables-page compact-admin-list-page" + (showUserDetails ? " show-user-details" : "")}><h1 className="sr-only"><TranslatedText>{tr("Users")}</TranslatedText></h1><Loading label={tr("Loading users…")} /></div>;
+  if (loadError) return <div className={"admin-page compact-tables-page compact-admin-list-page" + (showUserDetails ? " show-user-details" : "")}><h1 className="sr-only"><TranslatedText>{tr("Users")}</TranslatedText></h1><ErrorState title={tr("Could not load users")} message={tr(loadError)} onRetry={() => window.location.reload()} /></div>;
   return <div className={"admin-page compact-tables-page compact-admin-list-page" + (showUserDetails ? " show-user-details" : "")}>
-    <h1 className="sr-only">Users</h1>
-    {pendingRequestCount > 0 && <div className="admin-pending-banner"><span>{pendingRequestCount} lecturer registrations are awaiting approval. Lecturer access stays locked until approved.</span><Link className="text-button" to="/admin/users/approvals">Review requests →</Link></div>}
+    <h1 className="sr-only"><TranslatedText>{tr("Users")}</TranslatedText></h1>
+    {pendingRequestCount > 0 && <div className="admin-pending-banner"><span>{pendingRequestCount} <TranslatedText>{tr("lecturer registrations are awaiting approval. Lecturer access stays locked until approved.")}</TranslatedText></span><Link className="text-button" to="/admin/users/approvals"><TranslatedText>{tr("Review requests →")}</TranslatedText></Link></div>}
     <div className="admin-user-filter-row">
       <div className="admin-user-filters">
-        <Field label="SEARCH"><input value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder="Search name or email..." /></Field>
-        <Field label="ROLE"><select value={roleFilter} onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}><option>All roles</option><option>Student</option><option>Lecturer</option><option>Admin</option></select></Field>
-        <Field label="STATUS"><select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}><option>Active</option><option>All statuses</option><option>Inactive</option><option>Pending</option></select></Field>
+        <Field label={tr("SEARCH")}><input value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder={tr("Search name or email...")} /></Field>
+        <Field label={tr("ROLE")}><select value={roleFilter} onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}><option value="All roles">{tr("All roles")}</option><option value="Student">{tr("Student")}</option><option value="Lecturer">{tr("Lecturer")}</option><option value="Admin">{tr("Admin")}</option></select></Field>
+        <Field label={tr("STATUS")}><select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}><option value="Active">{tr("Active")}</option><option value="All statuses">{tr("All statuses")}</option><option value="Inactive">{tr("Inactive")}</option><option value="Pending">{tr("Pending")}</option></select></Field>
       </div>
       <div className="admin-user-actions">
-        <button className="button admin-button" onClick={exportCsv} disabled={users.length === 0}>Export all CSV</button>
-        <button className="button primary admin-button" onClick={() => setDialog(true)}>Add user</button>
+        <button className="button admin-button" onClick={exportCsv} disabled={users.length === 0}><TranslatedText>{tr("Export all CSV")}</TranslatedText></button>
+        <button className="button admin-button" onClick={() => setBulkImportDialog(true)}><TranslatedText>{tr("Import Users")}</TranslatedText></button>
+        <button className="button primary admin-button" onClick={() => setDialog(true)}><TranslatedText>{tr("Add user")}</TranslatedText></button>
       </div>
     </div>
-    {notice && <Notice>{notice}</Notice>}
+    {notice && <Notice><TranslatedText>{tr(notice)}</TranslatedText></Notice>}
     <Split main={<>
-      <div className="admin-table-wrap compact-table-scroll" role="region" aria-label="Users table" tabIndex={0}><table className="admin-table admin-users-table"><thead><tr><th>NAME / EMAIL</th><th>ROLE</th><th>STATUS</th><th>LAST ACTIVE</th></tr></thead><tbody>
+      <div className="admin-table-wrap compact-table-scroll" role="region" aria-label={tr("Users table")} tabIndex={0}><table className="admin-table admin-users-table"><thead><tr><th><TranslatedText>{tr("NAME / EMAIL")}</TranslatedText></th><th><TranslatedText>{tr("ROLE")}</TranslatedText></th><th><TranslatedText>{tr("STATUS")}</TranslatedText></th><th><TranslatedText>{tr("LAST ACTIVE")}</TranslatedText></th></tr></thead><tbody>
         {pageUsers.map((user) => <tr key={user.email} className={selected?.email === user.email ? "is-selected" : ""} onClick={() => { setSelectedEmail(user.email); setShowUserDetails(true); }}>
-          <td data-label="NAME / EMAIL"><button className="admin-row-link" onClick={() => { setSelectedEmail(user.email); setShowUserDetails(true); }}>{user.name}</button><small>{user.email}</small></td><td data-label="ROLE">{user.role}</td><td data-label="STATUS" className={user.status === "Active" ? "admin-success" : ""}>{user.status}</td><td data-label="LAST ACTIVE">{user.lastActive}</td>
+          <td data-label={tr("NAME / EMAIL")}><button className="admin-row-link" onClick={() => { setSelectedEmail(user.email); setShowUserDetails(true); }}>{user.name}</button><small>{user.email}</small></td><td data-label={tr("ROLE")}><TranslatedText>{tr(user.role)}</TranslatedText></td><td data-label={tr("STATUS")} className={user.status === "Active" ? "admin-success" : ""}><TranslatedText>{tr(user.status)}</TranslatedText></td><td data-label={tr("LAST ACTIVE")}>{user.lastActive}</td>
         </tr>)}
       </tbody></table>
-      {filtered.length === 0 && <Empty title={users.length === 0 ? "No accounts yet" : "No matching accounts"}>{users.length === 0 ? "Add a user to get started." : "Try a different search or filter."}</Empty>}
+      {filtered.length === 0 && <Empty title={users.length === 0 ? tr("No accounts yet") : tr("No matching accounts")}><TranslatedText>{users.length === 0 ? tr("Add a user to get started.") : tr("Try a different search or filter.")}</TranslatedText></Empty>}
       </div>
       <div className="admin-compact-list-footer">
         <div className="admin-compact-list-controls">
-          <span role="status">Showing {filtered.length === 0 ? 0 : firstIndex + 1}–{Math.min(firstIndex + pageSize, filtered.length)} of {filtered.length.toLocaleString()} accounts</span>
-          <nav className="admin-table-pagination" aria-label="User pages">
-            <button type="button" className="button admin-button" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>← Previous</button>
-            <span>Page {currentPage} of {pageCount}</span>
-            <button type="button" className="button admin-button" disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)}>Next →</button>
+          <span role="status"><TranslatedText>{tr("Showing")}</TranslatedText> {filtered.length === 0 ? 0 : firstIndex + 1}–{Math.min(firstIndex + pageSize, filtered.length)} <TranslatedText>{tr("of")}</TranslatedText> {filtered.length.toLocaleString(uiLocale)} <TranslatedText>{tr("accounts")}</TranslatedText></span>
+          <nav className="admin-table-pagination" aria-label={tr("User pages")}>
+            <button type="button" className="button admin-button" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}><TranslatedText>{tr("← Previous")}</TranslatedText></button>
+            <span><TranslatedText>{tr("Page")}</TranslatedText> {currentPage} <TranslatedText>{tr("of")}</TranslatedText> {pageCount}</span>
+            <button type="button" className="button admin-button" disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)}><TranslatedText>{tr("Next →")}</TranslatedText></button>
           </nav>
         </div>
       </div>
     </>} side={selected ? <>
-      <div className="admin-compact-panel-header"><h2>Account details</h2><button type="button" className="text-button compact-panel-back" onClick={() => setShowUserDetails(false)}>Back to users</button></div><h3 className="admin-detail-title">{selected.name}</h3><p className="admin-muted">{selected.email}</p><div className="admin-detail-divider" />
-      <Field label="ROLE"><select value={pendingRole ?? selected.role} onChange={(e) => setPendingRole(e.target.value)}><option>Student</option><option>Lecturer</option><option>Admin</option></select></Field>
+      <div className="admin-compact-panel-header"><h2><TranslatedText>{tr("Account details")}</TranslatedText></h2><button type="button" className="text-button compact-panel-back" onClick={() => setShowUserDetails(false)}><TranslatedText>{tr("Back to users")}</TranslatedText></button></div><h3 className="admin-detail-title">{selected.name}</h3><p className="admin-muted">{selected.email}</p><div className="admin-detail-divider" />
+      <Field label={tr("ROLE")}><select value={pendingRole ?? selected.role} onChange={(e) => setPendingRole(e.target.value)}><option value="Student">{tr("Student")}</option><option value="Lecturer">{tr("Lecturer")}</option><option value="Admin">{tr("Admin")}</option></select></Field>
       {pendingRole && pendingRole !== selected.role && (
-        <button className="button primary admin-button" style={{ marginBottom: "1rem" }} onClick={() => { handleUpdateRole(selected, pendingRole); setPendingRole(null); }}>Save role</button>
+        <button className="button primary admin-button" style={{ marginBottom: "1rem" }} onClick={() => { handleUpdateRole(selected, pendingRole); setPendingRole(null); }}><TranslatedText>{tr("Save role")}</TranslatedText></button>
       )}
-      <p className={selected.status === "Active" ? "admin-success admin-detail-status" : "admin-warning admin-detail-status"}>{selected.status} · Joined {selected.joined}</p><p className="admin-muted">{selected.detail}</p>
-      <div className="admin-button-stack"><Link className="button admin-button" to={`/admin/users/${encodeURIComponent(selected.email)}/edit`}>Edit account</Link></div>
-    </> : <><h2>Account details</h2><p className="admin-muted">Select an account to review its access.</p></>} />
+      <p className={selected.status === "Active" ? "admin-success admin-detail-status" : "admin-warning admin-detail-status"}><TranslatedText>{tr(selected.status)}</TranslatedText> <TranslatedText>{tr("· Joined")}</TranslatedText> {selected.joined}</p><p className="admin-muted">{selected.detail}</p>
+      <div className="admin-button-stack"><Link className="button admin-button" to={`/admin/users/${encodeURIComponent(selected.email)}/edit`}><TranslatedText>{tr("Edit account")}</TranslatedText></Link></div>
+    </> : <><h2><TranslatedText>{tr("Account details")}</TranslatedText></h2><p className="admin-muted"><TranslatedText>{tr("Select an account to review its access.")}</TranslatedText></p></>} />
     {dialog && <AddUserDialog onClose={() => setDialog(false)} onAdd={(user) => { setUsers((all) => [...all, user]); setSelectedEmail(user.email); setPage(Math.floor(filtered.length / pageSize) + 1); setDialog(false); setNotice(`${user.name} was added successfully.`); }} />}
+    {bulkImportDialog && <BulkImportDialog onClose={() => setBulkImportDialog(false)} onSuccess={(msg) => { setBulkImportDialog(false); setNotice(msg); adminService.getUsers().then(setUsers); }} />}
   </div>;
 }
 
 export function AdminEditAccountPage() {
+  const { t: tr } = useLanguage("admin");
   const { email: encodedEmail = "" } = useParams();
   const email = decodeURIComponent(encodedEmail);
   const navigate = useNavigate();
-  
+
   const [currentUser, setCurrentUser] = useState<AdminUser | null>(null);
   const [name, setName] = useState("");
   const [accountEmail, setAccountEmail] = useState("");
@@ -236,9 +625,9 @@ export function AdminEditAccountPage() {
     }).catch(err => setLoadError(err instanceof Error ? err.message : "Could not load account.")).finally(() => setLoading(false));
   }, [email]);
 
-  if (loading) return <div className="admin-page"><Loading label="Loading account…" /></div>;
-  if (loadError) return <div className="admin-page"><PageIntro title="Could not load account" /><Notice>{loadError}</Notice><Link className="button admin-button" to="/admin/users">Back to users</Link></div>;
-  if (!currentUser) return <div className="admin-page"><PageIntro title="Account not found" /><p className="admin-muted">This account may have been removed or its email has changed.</p><Link className="button admin-button" to="/admin/users">Back to users</Link></div>;
+  if (loading) return <div className="admin-page"><Loading label={tr("Loading account…")} /></div>;
+  if (loadError) return <div className="admin-page"><PageIntro title={tr("Could not load account")} /><Notice><TranslatedText>{tr(loadError)}</TranslatedText></Notice><Link className="button admin-button" to="/admin/users"><TranslatedText>{tr("Back to users")}</TranslatedText></Link></div>;
+  if (!currentUser) return <div className="admin-page"><PageIntro title={tr("Account not found")} /><p className="admin-muted"><TranslatedText>{tr("This account may have been removed or its email has changed.")}</TranslatedText></p><Link className="button admin-button" to="/admin/users"><TranslatedText>{tr("Back to users")}</TranslatedText></Link></div>;
 
   async function persistAccount() {
     if (!currentUser) return;
@@ -276,23 +665,23 @@ export function AdminEditAccountPage() {
     <div className="admin-edit-layout admin-account-edit-layout">
       <form className="admin-edit-form" onSubmit={save}>
         <div className="admin-account-form-header">
-          <div><h1>Account information</h1><p className="admin-muted">Update this user’s profile, role, and sign-in status.</p></div>
-          <Link className="button admin-button" to="/admin/users">Back to users</Link>
+          <div><h1><TranslatedText>{tr("Account information")}</TranslatedText></h1><p className="admin-muted"><TranslatedText>{tr("Update this user’s profile, role, and sign-in status.")}</TranslatedText></p></div>
+          <Link className="button admin-button" to="/admin/users"><TranslatedText>{tr("Back to users")}</TranslatedText></Link>
         </div>
         <div className="admin-account-fields">
-        <Field label="FULL NAME"><input value={name} onChange={(event) => setName(event.target.value)} required /></Field>
-        <Field label="EMAIL ADDRESS"><input type="email" value={accountEmail} onChange={(event) => setAccountEmail(event.target.value)} required /></Field>
-        <Field label="ROLE"><select value={role} onChange={(event) => setRole(event.target.value as AdminUser["role"])}><option>Student</option><option>Lecturer</option><option>Admin</option></select></Field>
-        <Field label="ACCOUNT STATUS"><select value={status} onChange={(event) => setStatus(event.target.value as AdminUser["status"])}><option>Active</option><option>Inactive</option><option>Pending</option></select></Field>
+        <Field label={tr("FULL NAME")}><input value={name} onChange={(event) => setName(event.target.value)} required /></Field>
+        <Field label={tr("EMAIL ADDRESS")}><input type="email" value={accountEmail} onChange={(event) => setAccountEmail(event.target.value)} required /></Field>
+        <Field label={tr("ROLE")}><select value={role} onChange={(event) => setRole(event.target.value as AdminUser["role"])}><option value="Student">{tr("Student")}</option><option value="Lecturer">{tr("Lecturer")}</option><option value="Admin">{tr("Admin")}</option></select></Field>
+        <Field label={tr("ACCOUNT STATUS")}><select value={status} onChange={(event) => setStatus(event.target.value as AdminUser["status"])}><option value="Active">{tr("Active")}</option><option value="Inactive">{tr("Inactive")}</option><option value="Pending">{tr("Pending")}</option></select></Field>
         </div>
-        {notice && <Notice>{notice}</Notice>}
-        <div className="admin-edit-actions"><Link className="button admin-button" to="/admin/users">Cancel</Link><button className="button primary admin-button" disabled={saving}>{saving ? "Saving..." : "Save changes"}</button></div>
+        {notice && <Notice><TranslatedText>{tr(notice)}</TranslatedText></Notice>}
+        <div className="admin-edit-actions"><Link className="button admin-button" to="/admin/users"><TranslatedText>{tr("Cancel")}</TranslatedText></Link><button className="button primary admin-button" disabled={saving}><TranslatedText>{saving ? tr("Saving...") : tr("Save changes")}</TranslatedText></button></div>
       </form>
     </div>
-    {confirmDeactivationSave && <Dialog title="Deactivate account" onClose={() => setConfirmDeactivationSave(false)} className="admin-dialog">
+    {confirmDeactivationSave && <Dialog title={tr("Deactivate account")} onClose={() => setConfirmDeactivationSave(false)} className="admin-dialog">
       <div className="admin-dialog-form">
-        <p>Save these changes and deactivate <strong>{currentUser.name}</strong> ({currentUser.email})? They will no longer be able to sign in. Their classes and submissions will be retained.</p>
-        <div className="admin-dialog-actions"><button type="button" className="button" onClick={() => setConfirmDeactivationSave(false)}>Cancel</button><button type="button" className="button admin-reject-button" onClick={() => void persistAccount()}>Save and deactivate</button></div>
+        <p><TranslatedText>{tr("Save these changes and deactivate")}</TranslatedText> <strong>{currentUser.name}</strong> ({currentUser.email}<TranslatedText>{tr(")? They will no longer be able to sign in. Their classes and submissions will be retained.")}</TranslatedText></p>
+        <div className="admin-dialog-actions"><button type="button" className="button" onClick={() => setConfirmDeactivationSave(false)}><TranslatedText>{tr("Cancel")}</TranslatedText></button><button type="button" className="button admin-reject-button" onClick={() => void persistAccount()}><TranslatedText>{tr("Save and deactivate")}</TranslatedText></button></div>
       </div>
     </Dialog>}
   </div>;
@@ -307,22 +696,24 @@ function RejectLecturerDialog({
   onClose: () => void;
   onReject: (reason: string) => void;
 }) {
+  const { t: tr } = useLanguage("admin");
   const [reason, setReason] = useState("");
-  return <Dialog title="Reject lecturer request" onClose={onClose} className="admin-reject-dialog">
+  return <Dialog title={tr("Reject lecturer request")} onClose={onClose} className="admin-reject-dialog">
     <form className="admin-dialog-form" onSubmit={(event) => { event.preventDefault(); onReject(reason.trim()); }}>
       <p className="admin-muted">{request.name} · {request.email}</p>
-      <Field label="REASON (OPTIONAL, SENT TO APPLICANT)">
-        <textarea rows={3} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Explain why this request was declined…" />
+      <Field label={tr("REASON (OPTIONAL, SENT TO APPLICANT)")}>
+        <textarea rows={3} value={reason} onChange={(event) => setReason(event.target.value)} placeholder={tr("Explain why this request was declined…")} />
       </Field>
       <div className="admin-dialog-actions">
-        <button type="button" className="button admin-button" onClick={onClose}>Cancel</button>
-        <button className="button admin-button admin-reject-button">Reject request</button>
+        <button type="button" className="button admin-button" onClick={onClose}><TranslatedText>{tr("Cancel")}</TranslatedText></button>
+        <button className="button admin-button admin-reject-button"><TranslatedText>{tr("Reject request")}</TranslatedText></button>
       </div>
     </form>
   </Dialog>;
 }
 
 export function AdminLecturerApprovalsPage() {
+  const { t: tr } = useLanguage("admin");
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -363,37 +754,38 @@ export function AdminLecturerApprovalsPage() {
   }
 
   return <div className="admin-page admin-approvals-page">
-    <PageIntro title="Lecturer approvals" sub={`People & access / ${requests.length} pending lecturer requests`} />
+    <PageIntro title={tr("Lecturer approvals")} sub={tr("People & access / {value0} pending lecturer requests", { value0: requests.length })} />
     <div className="admin-section-tabs">
-      <Link to="/admin/users">All users</Link>
-      <Link className="active" to="/admin/users/approvals">Lecturer approvals ({requests.length})</Link>
+      <Link to="/admin/users"><TranslatedText>{tr("All users")}</TranslatedText></Link>
+      <Link className="active" to="/admin/users/approvals"><TranslatedText>{tr("Lecturer approvals (")}</TranslatedText>{requests.length})</Link>
     </div>
-    {notice && <Notice>{notice}</Notice>}
-    {loading ? <Loading label="Loading lecturer requests…" /> : loadError ? <p className="admin-notice" role="alert">{loadError}</p> :
+    {notice && <Notice><TranslatedText>{tr(notice)}</TranslatedText></Notice>}
+    {loading ? <Loading label={tr("Loading lecturer requests…")} /> : loadError ? <p className="admin-notice" role="alert"><TranslatedText>{tr(loadError)}</TranslatedText></p> :
     <Split main={<>
-      <div className="admin-table-wrap sticky-list-table-wrap"><table className="admin-table sticky-list-table admin-approval-table"><thead><tr><th>NAME / EMAIL</th><th>DEPARTMENT</th><th>SUBMITTED</th><th>STATUS</th></tr></thead><tbody>
+      <div className="admin-table-wrap sticky-list-table-wrap"><table className="admin-table sticky-list-table admin-approval-table"><thead><tr><th><TranslatedText>{tr("NAME / EMAIL")}</TranslatedText></th><th><TranslatedText>{tr("DEPARTMENT")}</TranslatedText></th><th><TranslatedText>{tr("SUBMITTED")}</TranslatedText></th><th><TranslatedText>{tr("STATUS")}</TranslatedText></th></tr></thead><tbody>
         {requests.map((request) => <tr key={request.email} className={request.email === selected?.email ? "is-selected" : ""} onClick={() => setSelectedEmail(request.email)}>
-          <td data-label="NAME / EMAIL"><button className="admin-row-link" type="button" onClick={() => setSelectedEmail(request.email)}>{request.name}</button><small>{request.email}</small></td>
-          <td data-label="DEPARTMENT">{request.department}</td><td data-label="SUBMITTED">{request.submitted}</td><td data-label="STATUS" className="admin-warning">Pending</td>
+          <td data-label={tr("NAME / EMAIL")}><button className="admin-row-link" type="button" onClick={() => setSelectedEmail(request.email)}>{request.name}</button><small>{request.email}</small></td>
+          <td data-label={tr("DEPARTMENT")}>{request.department}</td><td data-label={tr("SUBMITTED")}>{request.submitted}</td><td data-label={tr("STATUS")} className="admin-warning"><TranslatedText>{tr("Pending")}</TranslatedText></td>
         </tr>)}
-        {!requests.length && <tr><td colSpan={4} className="admin-muted">No lecturer registrations are waiting for approval.</td></tr>}
+        {!requests.length && <tr><td colSpan={4} className="admin-muted"><TranslatedText>{tr("No lecturer registrations are waiting for approval.")}</TranslatedText></td></tr>}
       </tbody></table></div>
-      <p className="admin-table-footer">Showing {requests.length} pending requests</p>
+      <p className="admin-table-footer"><TranslatedText>{tr("Showing")}</TranslatedText> {requests.length} <TranslatedText>{tr("pending requests")}</TranslatedText></p>
     </>} side={selected ? <>
-      <h2>Request details</h2><h3 className="admin-detail-title">{selected.name}</h3><p className="admin-muted">{selected.email}</p><div className="admin-detail-divider" />
-      <Field label="DEPARTMENT"><input value={selected.department} readOnly /></Field>
-      <p className="admin-warning admin-detail-status">Pending · Submitted {selected.submitted}</p>
-      <p className="admin-muted">Registered as Lecturer<br />Lecturer access stays locked until approved.</p>
-      <button className="button primary admin-button" type="button" onClick={() => resolveRequest(selected, true)}>Approve lecturer</button>
+      <h2><TranslatedText>{tr("Request details")}</TranslatedText></h2><h3 className="admin-detail-title">{selected.name}</h3><p className="admin-muted">{selected.email}</p><div className="admin-detail-divider" />
+      <Field label={tr("DEPARTMENT")}><input value={selected.department} readOnly /></Field>
+      <p className="admin-warning admin-detail-status"><TranslatedText>{tr("Pending · Submitted")}</TranslatedText> {selected.submitted}</p>
+      <p className="admin-muted"><TranslatedText>{tr("Registered as Lecturer")}</TranslatedText><br /><TranslatedText>{tr("Lecturer access stays locked until approved.")}</TranslatedText></p>
+      <button className="button primary admin-button" type="button" onClick={() => resolveRequest(selected, true)}><TranslatedText>{tr("Approve lecturer")}</TranslatedText></button>
       <div className="admin-detail-divider" />
-      <button className="admin-danger-link" type="button" onClick={() => setRejecting(selected)}>Reject request</button>
-      <p className="admin-muted">Lecturer access stays locked. The server does not send the entered reason.</p>
-    </> : <><h2>Request details</h2><p className="admin-muted">There are no pending lecturer requests.</p></>} />}
+      <button className="admin-danger-link" type="button" onClick={() => setRejecting(selected)}><TranslatedText>{tr("Reject request")}</TranslatedText></button>
+      <p className="admin-muted"><TranslatedText>{tr("Lecturer access stays locked. The server does not send the entered reason.")}</TranslatedText></p>
+    </> : <><h2><TranslatedText>{tr("Request details")}</TranslatedText></h2><p className="admin-muted"><TranslatedText>{tr("There are no pending lecturer requests.")}</TranslatedText></p></>} />}
     {rejecting && <RejectLecturerDialog request={rejecting} onClose={() => setRejecting(null)} onReject={(reason) => resolveRequest(rejecting, false, reason)} />}
   </div>;
 }
 
 export function AdminRolesPage() {
+  const { t: tr } = useLanguage("admin");
   const [selectedRole, setSelectedRole] = useState<AdminRoleName>("Lecturer");
   const policy = defaultAdminRolePolicy;
   const roleInfo: Record<AdminRoleName, { title: string; description: string }> = {
@@ -403,21 +795,22 @@ export function AdminRolesPage() {
   };
   const enabledCount = adminCapabilities.filter(({ key }) => policy.permissions[key]?.[selectedRole]).length;
   return <div className="admin-page admin-roles-page">
-    <h1 className="sr-only">Roles &amp; permissions</h1>
-    <Split main={<div className="admin-table-wrap sticky-list-table-wrap"><table className="admin-table sticky-list-table admin-permissions-table"><thead><tr><th>CAPABILITY</th><th>STUDENT</th><th>LECTURER</th><th>ADMIN</th></tr></thead><tbody>{adminCapabilities.map(({ key, label }) => <tr key={key}><td data-label="CAPABILITY">{label}</td>{(["Student", "Lecturer", "Admin"] as const).map((role) => {
+    <h1 className="sr-only"><TranslatedText>{tr("Roles & permissions")}</TranslatedText></h1>
+    <Split main={<div className="admin-table-wrap sticky-list-table-wrap"><table className="admin-table sticky-list-table admin-permissions-table"><thead><tr><th><TranslatedText>{tr("CAPABILITY")}</TranslatedText></th><th><TranslatedText>{tr("STUDENT")}</TranslatedText></th><th><TranslatedText>{tr("LECTURER")}</TranslatedText></th><th><TranslatedText>{tr("ADMIN")}</TranslatedText></th></tr></thead><tbody>{adminCapabilities.map(({ key, label }) => <tr key={key}><td data-label={tr("CAPABILITY")}><TranslatedText>{tr(label)}</TranslatedText></td>{(["Student", "Lecturer", "Admin"] as const).map((role) => {
       const enabled = policy.permissions[key]?.[role] ?? false;
-      return <td data-label={role.toUpperCase()} key={role}><span className={enabled ? "admin-success" : "admin-muted"}>{enabled ? "Allowed" : "—"}</span></td>;
+      return <td data-label={tr(role.toUpperCase())} key={role}><span className={enabled ? "admin-success" : "admin-muted"}><TranslatedText>{enabled ? tr("Allowed") : "—"}</TranslatedText></span></td>;
     })}</tr>)}</tbody></table></div>} side={<>
-      <div className="admin-role-tabs">{(["Student", "Lecturer", "Admin"] as const).map((role) => <button type="button" key={role} className={selectedRole === role ? "active" : ""} onClick={() => setSelectedRole(role)}>{role}</button>)}</div>
-      <h3 className="admin-detail-title">{roleInfo[selectedRole].title}</h3><p className="admin-muted">{roleInfo[selectedRole].description}</p><div className="admin-detail-divider" /><h3 className="admin-subheading">Effective access</h3>
-      <p className="admin-role-summary">{enabledCount} of {adminCapabilities.length} capabilities enabled</p>
-      <dl className="teacher-list-detail-facts"><div><dt>Class access</dt><dd>{policy.scopes[selectedRole].classAccess}</dd></div><div><dt>Problem access</dt><dd>{policy.scopes[selectedRole].problemAccess}</dd></div></dl>
-      <p className="admin-muted">This guide describes intended product roles. The server enforces access; these detailed capability labels are not fetched from it.</p>
+      <div className="admin-role-tabs">{(["Student", "Lecturer", "Admin"] as const).map((role) => <button type="button" key={role} className={selectedRole === role ? "active" : ""} onClick={() => setSelectedRole(role)}><TranslatedText>{tr(role)}</TranslatedText></button>)}</div>
+      <h3 className="admin-detail-title"><TranslatedText>{tr(roleInfo[selectedRole].title)}</TranslatedText></h3><p className="admin-muted"><TranslatedText>{tr(roleInfo[selectedRole].description)}</TranslatedText></p><div className="admin-detail-divider" /><h3 className="admin-subheading"><TranslatedText>{tr("Effective access")}</TranslatedText></h3>
+      <p className="admin-role-summary">{enabledCount} <TranslatedText>{tr("of")}</TranslatedText> {adminCapabilities.length} <TranslatedText>{tr("capabilities enabled")}</TranslatedText></p>
+      <dl className="teacher-list-detail-facts"><div><dt><TranslatedText>{tr("Class access")}</TranslatedText></dt><dd><TranslatedText>{tr(policy.scopes[selectedRole].classAccess)}</TranslatedText></dd></div><div><dt><TranslatedText>{tr("Problem access")}</TranslatedText></dt><dd><TranslatedText>{tr(policy.scopes[selectedRole].problemAccess)}</TranslatedText></dd></div></dl>
+      <p className="admin-muted"><TranslatedText>{tr("This guide describes intended product roles. The server enforces access; these detailed capability labels are not fetched from it.")}</TranslatedText></p>
     </>} />
   </div>;
 }
 
 function CourseDialog({ onClose, onCreate, error, busy }: { onClose: () => void; onCreate: (id: string, course: string, term: string) => void; error: string; busy: boolean }) {
+  const { t: tr } = useLanguage("admin");
   const [newClassForm, setNewClassForm] = useState({
     id: "",
     course: "",
@@ -425,41 +818,42 @@ function CourseDialog({ onClose, onCreate, error, busy }: { onClose: () => void;
   });
 
   return (
-    <Dialog title="Create a new class" onClose={onClose}>
+    <Dialog title={tr("Create a new class")} onClose={onClose}>
       <form className="teacher-manage-dialog" onSubmit={(e) => { e.preventDefault(); if (newClassForm.id.trim() && newClassForm.course.trim() && newClassForm.term) onCreate(newClassForm.id.trim(), newClassForm.course.trim(), newClassForm.term); }}>
-        <p className="tiny muted">Set up a new class or section</p>
-        
+        <p className="tiny muted"><TranslatedText>{tr("Set up a new class or section")}</TranslatedText></p>
+
         <label className="teacher-field" style={{ marginTop: "1rem" }}>
-          <span>CLASS CODE</span>
-          <input required autoFocus value={newClassForm.id} onChange={e => setNewClassForm({...newClassForm, id: e.target.value})} placeholder="E.g. IS207.R14" />
+          <span><TranslatedText>{tr("CLASS CODE")}</TranslatedText></span>
+          <input required autoFocus value={newClassForm.id} onChange={e => setNewClassForm({...newClassForm, id: e.target.value})} placeholder={tr("E.g. IS207.R14")} />
         </label>
 
         <label className="teacher-field">
-          <span>COURSE NAME</span>
-          <input required value={newClassForm.course} onChange={e => setNewClassForm({...newClassForm, course: e.target.value})} placeholder="E.g. Web Development" />
+          <span><TranslatedText>{tr("COURSE NAME")}</TranslatedText></span>
+          <input required value={newClassForm.course} onChange={e => setNewClassForm({...newClassForm, course: e.target.value})} placeholder={tr("E.g. Web Development")} />
         </label>
 
         <label className="teacher-field">
-          <span>TERM</span>
+          <span><TranslatedText>{tr("TERM")}</TranslatedText></span>
           <select required value={newClassForm.term} onChange={e => setNewClassForm({...newClassForm, term: e.target.value})}>
-            <option value="" disabled>Select a term...</option>
+            <option value="" disabled>{tr("Select a term...")}</option>
             {academicTerms().map(t => (
-              <option key={t} value={t}>{t}</option>
+              <option key={t} value={t}>{tr(t)}</option>
             ))}
           </select>
         </label>
 
         <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem" }}>
-          <button type="button" className="button" onClick={onClose}>Cancel</button>
-          <button className="button primary" disabled={busy} type="submit">{busy ? "Creating…" : "Create class"}</button>
+          <button type="button" className="button" onClick={onClose}><TranslatedText>{tr("Cancel")}</TranslatedText></button>
+          <button className="button primary" disabled={busy} type="submit"><TranslatedText>{busy ? tr("Creating…") : tr("Create class")}</TranslatedText></button>
         </div>
-        {error && <p className="admin-notice" role="alert">{error}</p>}
+        {error && <p className="admin-notice" role="alert"><TranslatedText>{tr(error)}</TranslatedText></p>}
       </form>
     </Dialog>
   );
 }
 
 export function AdminCoursesPage() {
+  const { t: tr } = useLanguage("admin");
   const location = useLocation();
   const [classes, setClasses] = useState<AdminClass[]>([]);
   const [selectedId, setSelectedId] = useState("");
@@ -484,7 +878,7 @@ export function AdminCoursesPage() {
     }).catch((error) => setLoadError(error instanceof Error ? error.message : "Could not load classes.")).finally(() => setLoading(false));
   }, []);
 
-  
+
   useEffect(() => {
     if (loading) return;
     const state = location.state as { selectedId?: string; notice?: string } | null;
@@ -508,22 +902,22 @@ export function AdminCoursesPage() {
 
   useEffect(() => { setPage(current => Math.min(current, pageCount)); }, [pageCount]);
 
-  if (loading) return <div className="admin-page compact-tables-page compact-admin-list-page admin-course-page"><h1 className="sr-only">Courses & classes</h1><Loading label="Loading courses and classes…" /></div>;
-  if (loadError) return <div className="admin-page compact-tables-page compact-admin-list-page admin-course-page"><h1 className="sr-only">Courses & classes</h1><ErrorState title="Could not load courses" message={loadError} onRetry={() => window.location.reload()} /></div>;
+  if (loading) return <div className="admin-page compact-tables-page compact-admin-list-page admin-course-page"><h1 className="sr-only"><TranslatedText>{tr("Courses & classes")}</TranslatedText></h1><Loading label={tr("Loading courses and classes…")} /></div>;
+  if (loadError) return <div className="admin-page compact-tables-page compact-admin-list-page admin-course-page"><h1 className="sr-only"><TranslatedText>{tr("Courses & classes")}</TranslatedText></h1><ErrorState title={tr("Could not load courses")} message={tr(loadError)} onRetry={() => window.location.reload()} /></div>;
 
   return <div className={"admin-page compact-tables-page compact-admin-list-page admin-course-page" + (showCourseDetails ? " show-course-details" : "")}>
-    <h1 className="sr-only">Courses & classes</h1>
+    <h1 className="sr-only"><TranslatedText>{tr("Courses & classes")}</TranslatedText></h1>
     <div className="admin-course-filter-row">
-      <Field label="SEARCH"><input value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder="Search course or class..." /></Field>
+      <Field label={tr("SEARCH")}><input value={query} onChange={(e) => { setQuery(e.target.value); setPage(1); }} placeholder={tr("Search course or class...")} /></Field>
       <div className="admin-course-options">
-        <Field label="SEMESTER"><select value={semester} onChange={(event) => { setSemester(event.target.value); setPage(1); }}><option>All semesters</option>{semesters.map((term) => <option key={term}>{term}</option>)}</select></Field>
-        <button className="button primary admin-button" onClick={() => { setCreateError(""); setDialog(true); }}>Add class</button>
+        <Field label={tr("SEMESTER")}><select value={semester} onChange={(event) => { setSemester(event.target.value); setPage(1); }}><option value="All semesters">{tr("All semesters")}</option>{semesters.map((term) => <option key={term} value={term}>{tr(term)}</option>)}</select></Field>
+        <button className="button primary admin-button" onClick={() => { setCreateError(""); setDialog(true); }}><TranslatedText>{tr("Add class")}</TranslatedText></button>
       </div>
     </div>
-    {loadError && <Notice>{loadError}</Notice>}{notice && <Notice>{notice}</Notice>}
-    <Split main={<><div className="admin-table-wrap compact-table-scroll" role="region" aria-label="Courses and classes table" tabIndex={0}><table className="admin-table admin-course-table"><thead><tr><th>COURSE / CLASS</th><th>LECTURER</th><th>STUDENTS</th><th>STATUS</th></tr></thead><tbody>{pageClasses.map((item) => <tr key={item.id} className={item.id === selected?.id ? "is-selected" : ""} onClick={() => { setSelectedId(item.id); setShowCourseDetails(true); }}><td data-label="COURSE / CLASS"><button className="admin-row-link" onClick={() => { setSelectedId(item.id); setShowCourseDetails(true); }}>{item.course}</button><small>{item.id}</small></td><td data-label="LECTURER" className={item.lecturer === "Unassigned" ? "admin-warning" : ""}>{item.lecturer}</td><td data-label="STUDENTS">{item.students}</td><td data-label="STATUS" className={item.status === "Active" ? "admin-success" : "admin-warning"}>{item.status}</td></tr>)}</tbody></table>{!loadError && classes.length === 0 && <p className="admin-table-footer">No classes yet. Add a class to get started.</p>}{!loadError && classes.length > 0 && visible.length === 0 && <p className="admin-table-footer">No classes match these filters.</p>}</div><AdminListPagination total={visible.length} page={currentPage} onPageChange={setPage} label="Course and class pages" noun="classes" alwaysVisible /></>} side={selected ? <>
-      <div className="admin-compact-panel-header"><h2>{selected.id}</h2><button type="button" className="text-button compact-panel-back" onClick={() => setShowCourseDetails(false)}>Back to classes</button></div><h3 className="admin-detail-title">{selected.course.split(" · ")[1] || selected.course}</h3><p className={selected.status === "Active" ? "admin-success" : "admin-warning"}>{selected.status}{selected.lecturer === "Unassigned" ? " · Lecturer needed" : ""}</p><div className="admin-detail-divider" />
-      <Field label="SEMESTER"><select value={selected.semester} onChange={async (event) => {
+    {loadError && <Notice><TranslatedText>{tr(loadError)}</TranslatedText></Notice>}{notice && <Notice><TranslatedText>{tr(notice)}</TranslatedText></Notice>}
+    <Split main={<><div className="admin-table-wrap compact-table-scroll" role="region" aria-label={tr("Courses and classes table")} tabIndex={0}><table className="admin-table admin-course-table"><thead><tr><th><TranslatedText>{tr("COURSE / CLASS")}</TranslatedText></th><th><TranslatedText>{tr("LECTURER")}</TranslatedText></th><th><TranslatedText>{tr("STUDENTS")}</TranslatedText></th><th><TranslatedText>{tr("STATUS")}</TranslatedText></th></tr></thead><tbody>{pageClasses.map((item) => <tr key={item.id} className={item.id === selected?.id ? "is-selected" : ""} onClick={() => { setSelectedId(item.id); setShowCourseDetails(true); }}><td data-label={tr("COURSE / CLASS")}><button className="admin-row-link" onClick={() => { setSelectedId(item.id); setShowCourseDetails(true); }}>{item.course}</button><small>{item.id}</small></td><td data-label={tr("LECTURER")} className={item.lecturer === "Unassigned" ? "admin-warning" : ""}>{item.lecturer}</td><td data-label={tr("STUDENTS")}>{item.students}</td><td data-label={tr("STATUS")} className={item.status === "Active" ? "admin-success" : "admin-warning"}><TranslatedText>{tr(item.status)}</TranslatedText></td></tr>)}</tbody></table>{!loadError && classes.length === 0 && <p className="admin-table-footer"><TranslatedText>{tr("No classes yet. Add a class to get started.")}</TranslatedText></p>}{!loadError && classes.length > 0 && visible.length === 0 && <p className="admin-table-footer"><TranslatedText>{tr("No classes match these filters.")}</TranslatedText></p>}</div><AdminListPagination total={visible.length} page={currentPage} onPageChange={setPage} label={tr("Course and class pages")} noun={tr("classes")} alwaysVisible /></>} side={selected ? <>
+      <div className="admin-compact-panel-header"><h2>{selected.id}</h2><button type="button" className="text-button compact-panel-back" onClick={() => setShowCourseDetails(false)}><TranslatedText>{tr("Back to classes")}</TranslatedText></button></div><h3 className="admin-detail-title">{selected.course.split(" · ")[1] || selected.course}</h3><p className={selected.status === "Active" ? "admin-success" : "admin-warning"}><TranslatedText>{tr(selected.status)}</TranslatedText><TranslatedText>{selected.lecturer === "Unassigned" ? tr("· Lecturer needed") : ""}</TranslatedText></p><div className="admin-detail-divider" />
+      <Field label={tr("SEMESTER")}><select value={selected.semester} onChange={async (event) => {
         const newSemester = event.target.value;
         try {
           const res = await adminService.updateClass(selected.id, { semester: newSemester });
@@ -532,12 +926,12 @@ export function AdminCoursesPage() {
         } catch (error) { setNotice(error instanceof Error ? error.message : "Could not update semester."); }
       }}>
         {academicTerms(selected.semester).map(t => (
-          <option key={t} value={t}>{t}</option>
+          <option key={t} value={t}>{tr(t)}</option>
         ))}
       </select></Field>
-      <Field label="CLASS DATES"><input readOnly value={selected.startDate && selected.endDate ? `${selected.startDate} – ${selected.endDate}` : selected.dates} /></Field><p className="admin-muted">{selected.students} enrolled student{selected.students === 1 ? "" : "s"}</p>
-      <div className="admin-button-stack"><Link className="button admin-button" to={`/admin/courses/classes/${encodeURIComponent(selected.id)}/edit`}>Edit class</Link></div>
-    </> : <h2>Class details</h2>} />
+      <Field label={tr("CLASS DATES")}><input readOnly value={selected.startDate && selected.endDate ? `${selected.startDate} – ${selected.endDate}` : selected.dates} /></Field><p className="admin-muted">{selected.students} <TranslatedText>{tr("enrolled student")}</TranslatedText><TranslatedText>{selected.students === 1 ? "" : tr("s")}</TranslatedText></p>
+      <div className="admin-button-stack"><Link className="button admin-button" to={`/admin/courses/classes/${encodeURIComponent(selected.id)}/edit`}><TranslatedText>{tr("Edit class")}</TranslatedText></Link></div>
+    </> : <h2><TranslatedText>{tr("Class details")}</TranslatedText></h2>} />
     {dialog && <CourseDialog error={createError} busy={creating} onClose={() => setDialog(false)} onCreate={async (id, course, term) => {
       if (classes.some((item) => item.id.toLowerCase() === id.toLowerCase())) { setCreateError(`A class with ID ${id} already exists.`); return; }
       setCreating(true);
@@ -553,6 +947,7 @@ export function AdminCoursesPage() {
 }
 
 export function AdminEditClassPage() {
+  const { t: tr } = useLanguage("admin");
   const { classId: routeId = "" } = useParams();
   const classId = decodeURIComponent(routeId);
   const navigate = useNavigate();
@@ -575,6 +970,7 @@ export function AdminEditClassPage() {
   const [membersNotice, setMembersNotice] = useState("");
   const [memberSearch, setMemberSearch] = useState("");
   const [memberTab, setMemberTab] = useState<"remove" | "add">("remove");
+  const [bulkImportDialog, setBulkImportDialog] = useState(false);
   const [memberBusyId, setMemberBusyId] = useState("");
 
   useEffect(() => {
@@ -614,10 +1010,10 @@ export function AdminEditClassPage() {
     return () => { active = false; };
   }, [classId]);
 
-  if (loading) return <div className="admin-page"><Loading label="Loading class details…" /></div>;
-  if (loadError) return <div className="admin-page"><Notice>{loadError}</Notice></div>;
-  if (!record) return <div className="admin-page"><p className="admin-muted">This class may have been removed.</p></div>;
-  
+  if (loading) return <div className="admin-page"><Loading label={tr("Loading class details…")} /></div>;
+  if (loadError) return <div className="admin-page"><Notice><TranslatedText>{tr(loadError)}</TranslatedText></Notice></div>;
+  if (!record) return <div className="admin-page"><p className="admin-muted"><TranslatedText>{tr("This class may have been removed.")}</TranslatedText></p></div>;
+
   const currentRecord = record;
 
   const enrolledIds = new Set(members.map((member) => member.id).filter(Boolean));
@@ -674,61 +1070,64 @@ export function AdminEditClassPage() {
   return <div className="admin-page">
     <div className="admin-edit-layout admin-class-edit-layout">
     <form className="admin-edit-form admin-class-form" onSubmit={save}>
-      <h2>{currentRecord.id} · Class details</h2>
-      <Field label="CLASS ID"><input value={currentRecord.id} readOnly /><small className="admin-muted">Class IDs stay fixed so existing student work keeps its link.</small></Field>
-      <Field label="COURSE"><input value={course} onChange={(event) => setCourse(event.target.value)} /></Field>
-      <Field label="SEMESTER"><select value={semester} onChange={(event) => setSemester(event.target.value)}>
+      <h2>{currentRecord.id} <TranslatedText>{tr("· Class details")}</TranslatedText></h2>
+      <Field label={tr("CLASS ID")}><input value={currentRecord.id} readOnly /><small className="admin-muted"><TranslatedText>{tr("Class IDs stay fixed so existing student work keeps its link.")}</TranslatedText></small></Field>
+      <Field label={tr("COURSE")}><input value={course} onChange={(event) => setCourse(event.target.value)} /></Field>
+      <Field label={tr("SEMESTER")}><select value={semester} onChange={(event) => setSemester(event.target.value)}>
         {academicTerms(semester).map(t => (
-          <option key={t} value={t}>{t}</option>
+          <option key={t} value={t}>{tr(t)}</option>
         ))}
       </select></Field>
-      <Field label="LECTURER"><select value={lecturer} onChange={(event) => setLecturer(event.target.value)}><option value="Unassigned">Unassigned</option>{lecturers.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></Field>
-      <Field label="CLASS STATUS"><select value={status} onChange={(event) => setStatus(event.target.value as AdminClass["status"])}><option>Draft</option><option>Active</option><option>Archived</option></select></Field>
-      {notice && <Notice>{notice}</Notice>}
+      <Field label={tr("LECTURER")}><select value={lecturer} onChange={(event) => setLecturer(event.target.value)}><option value="Unassigned">{tr("Unassigned")}</option>{lecturers.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></Field>
+      <Field label={tr("CLASS STATUS")}><select value={status} onChange={(event) => setStatus(event.target.value as AdminClass["status"])}><option value="Draft">{tr("Draft")}</option><option value="Active">{tr("Active")}</option><option value="Archived">{tr("Archived")}</option></select></Field>
+      {notice && <Notice><TranslatedText>{tr(notice)}</TranslatedText></Notice>}
       <div className="admin-class-form-bottom">
         <div className="admin-class-date-row">
-          <Field label="START DATE"><input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} required /></Field>
-          <Field label="END DATE"><input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} required /></Field>
+          <Field label={tr("START DATE")}><input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} required /></Field>
+          <Field label={tr("END DATE")}><input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} required /></Field>
         </div>
-        <div className="admin-edit-actions admin-class-inline-actions"><Link className="button admin-button" to="/admin/courses">Cancel</Link><button className="button primary admin-button" disabled={saving}>{saving ? "Saving…" : "Save class"}</button></div>
+        <div className="admin-edit-actions admin-class-inline-actions"><Link className="button admin-button" to="/admin/courses"><TranslatedText>{tr("Cancel")}</TranslatedText></Link><button className="button primary admin-button" disabled={saving}><TranslatedText>{saving ? tr("Saving…") : tr("Save class")}</TranslatedText></button></div>
       </div>
     </form>
     <aside className="admin-edit-form admin-edit-members" aria-labelledby="admin-class-members-title">
       <div className="admin-members-heading">
-        <div><h2 id="admin-class-members-title">Manage members</h2><p className="admin-muted">Add students to or remove them from this class.</p></div>
+        <div><h2 id="admin-class-members-title"><TranslatedText>{tr("Manage members")}</TranslatedText></h2><p className="admin-muted"><TranslatedText>{tr("Add students to or remove them from this class.")}</TranslatedText></p></div>
       </div>
-      {membersError && <Notice>{membersError}</Notice>}
-      {membersNotice && <p className="admin-member-notice" role="status">{membersNotice}</p>}
-      {membersLoading ? <Loading label="Loading class members…" /> : <>
-        <Field label="SEARCH STUDENTS"><input value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} placeholder="Search by name, ID, or email..." /></Field>
-        <div className="admin-member-tabs" role="tablist" aria-label="Manage class members">
-          <button id="remove-students-tab" type="button" role="tab" aria-selected={memberTab === "remove"} aria-controls="remove-students-panel" className={memberTab === "remove" ? "is-active" : ""} onClick={() => setMemberTab("remove")}>Remove students <span>{members.length}</span></button>
-          <button id="add-students-tab" type="button" role="tab" aria-selected={memberTab === "add"} aria-controls="add-students-panel" className={memberTab === "add" ? "is-active" : ""} onClick={() => setMemberTab("add")}>Add students <span>{availableStudentCount}</span></button>
+      {membersError && <Notice><TranslatedText>{tr(membersError)}</TranslatedText></Notice>}
+      {membersNotice && <p className="admin-member-notice" role="status"><TranslatedText>{tr(membersNotice)}</TranslatedText></p>}
+      {membersLoading ? <Loading label={tr("Loading class members…")} /> : <>
+        <Field label={tr("SEARCH STUDENTS")}><input value={memberSearch} onChange={(event) => setMemberSearch(event.target.value)} placeholder={tr("Search by name, ID, or email...")} /></Field>
+        <div className="admin-member-tabs" role="tablist" aria-label={tr("Manage class members")}>
+          <button id="remove-students-tab" type="button" role="tab" aria-selected={memberTab === "remove"} aria-controls="remove-students-panel" className={memberTab === "remove" ? "is-active" : ""} onClick={() => setMemberTab("remove")}><TranslatedText>{tr("Remove students")}</TranslatedText> <span>{members.length}</span></button>
+          <button id="add-students-tab" type="button" role="tab" aria-selected={memberTab === "add"} aria-controls="add-students-panel" className={memberTab === "add" ? "is-active" : ""} onClick={() => setMemberTab("add")}><TranslatedText>{tr("Add students")}</TranslatedText> <span>{availableStudentCount}</span></button>
+          <button id="import-students-tab" type="button" role="tab" aria-selected={false} className="" onClick={() => setBulkImportDialog(true)}><TranslatedText>{tr("Import CSV")}</TranslatedText> <span>+</span></button>
         </div>
         {memberTab === "remove" ? <section id="remove-students-panel" className="admin-member-list" role="tabpanel" aria-labelledby="remove-students-tab">
           {filteredMembers.map((member) => <div className="admin-member-row" key={member.id || member.email}>
-            <div><strong>{member.name}</strong><small>{member.id}{member.email ? ` · ${member.email}` : ""}</small></div>
-            <button className="admin-member-remove" type="button" disabled={Boolean(memberBusyId)} onClick={() => void changeMembership(member, "remove")}>{memberBusyId === member.id ? "…" : "Remove"}</button>
+            <div><strong>{member.name}</strong><small>{member.email}</small></div>
+            <button className="admin-member-remove" type="button" disabled={Boolean(memberBusyId)} onClick={() => void changeMembership(member, "remove")}><TranslatedText>{memberBusyId === member.id ? "…" : tr("Remove")}</TranslatedText></button>
           </div>)}
-          {!filteredMembers.length && <p className="admin-member-empty">{members.length ? "No enrolled students match this search." : "No students are enrolled yet."}</p>}
+          {!filteredMembers.length && <p className="admin-member-empty"><TranslatedText>{members.length ? tr("No enrolled students match this search.") : tr("No students are enrolled yet.")}</TranslatedText></p>}
         </section> : <section id="add-students-panel" className="admin-member-list" role="tabpanel" aria-labelledby="add-students-tab">
           {availableStudents.map((student) => <div className="admin-member-row" key={student.id}>
-            <div><strong>{student.name}</strong><small>{student.id}{student.email ? ` · ${student.email}` : ""}</small></div>
-            <button className="admin-member-add" type="button" disabled={Boolean(memberBusyId)} onClick={() => void changeMembership(student, "add")}>{memberBusyId === student.id ? "…" : "Add"}</button>
+            <div><strong>{student.name}</strong><small>{student.email}</small></div>
+            <button className="admin-member-add" type="button" disabled={Boolean(memberBusyId)} onClick={() => void changeMembership(student, "add")}><TranslatedText>{memberBusyId === student.id ? "…" : tr("Add")}</TranslatedText></button>
           </div>)}
-          {!availableStudents.length && <p className="admin-member-empty">{students.every((student) => !student.id || enrolledIds.has(student.id)) ? "All students are already in this class." : "No available students match this search."}</p>}
+          {!availableStudents.length && <p className="admin-member-empty"><TranslatedText>{students.every((student) => !student.id || enrolledIds.has(student.id)) ? tr("All students are already in this class.") : tr("No available students match this search.")}</TranslatedText></p>}
         </section>}
       </>}
     </aside>
     </div>
+    {bulkImportDialog && <BulkImportMembersDialog classId={classId} onClose={() => setBulkImportDialog(false)} onSuccess={(msg) => { setBulkImportDialog(false); setMembersNotice(msg); teacherService.getClassMembers(classId).then((data) => setMembers(data)).catch(() => {}); }} />}
   </div>;
 }
 
 export function AdminLecturersPage() {
+  const { t: tr } = useLanguage("admin");
   const location = useLocation();
   const state = location.state as { selectedId?: string } | null;
   const initialSelectedId = state?.selectedId || "";
-  
+
   const [assignments, setAssignments] = useState<AdminClass[]>([]);
   const [selectedId, setSelectedId] = useState(initialSelectedId);
   const [lecturer, setLecturer] = useState("Unassigned");
@@ -737,7 +1136,7 @@ export function AdminLecturersPage() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [saving, setSaving] = useState(false);
-  
+
   useEffect(() => {
     Promise.all([
       adminService.getClasses(),
@@ -759,7 +1158,7 @@ export function AdminLecturersPage() {
   const selected = assignments.find((item) => item.id === selectedId);
 
   return <div className="admin-page">
-    <PageIntro title="Lecturer assignment" sub={`Class ownership / ${selected?.semester || ""}`}>
+    <PageIntro title={tr("Lecturer assignment")} sub={tr("Class ownership / {value0}", { value0: selected?.semester || "" })}>
       <button className="button primary admin-button" disabled={!selected || saving || lecturer === (selected.lecturerId || "Unassigned")} onClick={async () => {
         if (!selected) return;
         setSaving(true);
@@ -773,32 +1172,34 @@ export function AdminLecturersPage() {
         } finally {
           setSaving(false);
         }
-      }}>{saving ? "Saving…" : "Save assignment"}</button>
-    </PageIntro>{notice && <Notice>{notice}</Notice>}
-    {loading ? <Loading label="Loading classes and lecturers…" /> : loadError ? <p className="admin-notice" role="alert">{loadError}</p> : assignments.length === 0 ? <p className="admin-muted">No classes are available for lecturer assignment.</p> :
-    <Split main={<div className="admin-table-wrap sticky-list-table-wrap"><table className="admin-table sticky-list-table admin-lecturer-table"><thead><tr><th>CLASS</th><th>CURRENT LECTURER</th><th>STATUS</th></tr></thead><tbody>{assignments.map((item) => <tr key={item.id} className={item.id === selectedId ? "is-selected" : ""} onClick={() => { setSelectedId(item.id); setLecturer(item.lecturerId || "Unassigned"); }}><td data-label="CLASS"><b>{item.id}</b></td><td data-label="CURRENT LECTURER" className={item.lecturer === "Unassigned" ? "admin-warning" : ""}>{item.lecturer}</td><td data-label="STATUS">{item.lecturer === "Unassigned" ? "Needs lecturer" : "Assigned"}</td></tr>)}</tbody></table></div>} side={selected ? <>
-      <h2>Assign {selected.id}</h2><p className="admin-muted">{selected.course.split(" · ")[1] || selected.course} · {selected.semester} · {selected.students} student{selected.students === 1 ? "" : "s"}</p><Field label="LECTURER"><select value={lecturer} onChange={(e) => setLecturer(e.target.value)}><option value="Unassigned">Unassigned</option>{lecturers.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></Field><div className="admin-detail-divider" /><h3 className="admin-subheading">Access preview</h3><p className="admin-muted">The selected lecturer can manage assignments, view class results and review submissions after assignment is saved.</p>
-    </> : <h2>No class selected</h2>} />}
+      }}><TranslatedText>{saving ? tr("Saving…") : tr("Save assignment")}</TranslatedText></button>
+    </PageIntro>{notice && <Notice><TranslatedText>{tr(notice)}</TranslatedText></Notice>}
+    {loading ? <Loading label={tr("Loading classes and lecturers…")} /> : loadError ? <p className="admin-notice" role="alert"><TranslatedText>{tr(loadError)}</TranslatedText></p> : assignments.length === 0 ? <p className="admin-muted"><TranslatedText>{tr("No classes are available for lecturer assignment.")}</TranslatedText></p> :
+    <Split main={<div className="admin-table-wrap sticky-list-table-wrap"><table className="admin-table sticky-list-table admin-lecturer-table"><thead><tr><th><TranslatedText>{tr("CLASS")}</TranslatedText></th><th><TranslatedText>{tr("CURRENT LECTURER")}</TranslatedText></th><th><TranslatedText>{tr("STATUS")}</TranslatedText></th></tr></thead><tbody>{assignments.map((item) => <tr key={item.id} className={item.id === selectedId ? "is-selected" : ""} onClick={() => { setSelectedId(item.id); setLecturer(item.lecturerId || "Unassigned"); }}><td data-label={tr("CLASS")}><b>{item.id}</b></td><td data-label={tr("CURRENT LECTURER")} className={item.lecturer === "Unassigned" ? "admin-warning" : ""}>{item.lecturer}</td><td data-label={tr("STATUS")}><TranslatedText>{item.lecturer === "Unassigned" ? tr("Needs lecturer") : tr("Assigned")}</TranslatedText></td></tr>)}</tbody></table></div>} side={selected ? <>
+      <h2><TranslatedText>{tr("Assign")}</TranslatedText> {selected.id}</h2><p className="admin-muted">{selected.course.split(" · ")[1] || selected.course} · {selected.semester} · {selected.students} <TranslatedText>{tr("student")}</TranslatedText><TranslatedText>{selected.students === 1 ? "" : tr("s")}</TranslatedText></p><Field label={tr("LECTURER")}><select value={lecturer} onChange={(e) => setLecturer(e.target.value)}><option value="Unassigned">{tr("Unassigned")}</option>{lecturers.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</select></Field><div className="admin-detail-divider" /><h3 className="admin-subheading"><TranslatedText>{tr("Access preview")}</TranslatedText></h3><p className="admin-muted"><TranslatedText>{tr("The selected lecturer can manage assignments, view class results and review submissions after assignment is saved.")}</TranslatedText></p>
+    </> : <h2><TranslatedText>{tr("No class selected")}</TranslatedText></h2>} />}
   </div>;
 }
 
 type CatalogProblem = AdminPracticeProblem & { id: string };
 function PracticePreviewDialog({ problem, onClose }: { problem: CatalogProblem; onClose: () => void }) {
+  const { t: tr } = useLanguage("admin");
   const reviewSignal = problem.attempted ? problem.acceptance < 45
     ? "Low solve rate · consider adding a hint"
     : problem.acceptance > 80
       ? "High solve rate · suitable for an introductory set"
       : "Balanced solve rate" : "Activity statistics unavailable";
-  return <Dialog title="Student practice preview" onClose={onClose} className="admin-practice-preview">
-    <div className="admin-preview-heading"><h3>{problem.title}</h3><p>{problem.difficulty} · {problem.topics} · {problem.database}</p></div>
-    <section className="admin-preview-section"><h4>Problem</h4><p>{problem.description}</p>{problem.expectedColumns && <p className="admin-muted">Return columns: <code>{problem.expectedColumns}</code></p>}</section>
-    <section className="admin-preview-section"><h4>Available tables</h4><pre>{problem.schemaPreview}</pre></section>
-    <section className="admin-preview-insight"><b>Practice signal</b><span>{reviewSignal}</span>{problem.attempted > 0 && <small>{problem.attempted} attempts · {problem.acceptance}% accepted</small>}</section>
-    <div className="admin-dialog-actions"><button type="button" className="button primary admin-button" onClick={onClose}>Done</button></div>
+  return <Dialog title={tr("Student practice preview")} onClose={onClose} className="admin-practice-preview">
+    <div className="admin-preview-heading"><h3>{problem.title}</h3><p><TranslatedText>{tr(problem.difficulty)}</TranslatedText> · {problem.topics} · {problem.database}</p></div>
+    <section className="admin-preview-section"><h4><TranslatedText>{tr("Problem")}</TranslatedText></h4><p>{problem.description}</p>{problem.expectedColumns && <p className="admin-muted"><TranslatedText>{tr("Return columns:")}</TranslatedText> <code>{problem.expectedColumns}</code></p>}</section>
+    <section className="admin-preview-section"><h4><TranslatedText>{tr("Available tables")}</TranslatedText></h4><pre>{problem.schemaPreview}</pre></section>
+    <section className="admin-preview-insight"><b><TranslatedText>{tr("Practice signal")}</TranslatedText></b><span><TranslatedText>{tr(reviewSignal)}</TranslatedText></span>{problem.attempted > 0 && <small>{problem.attempted} <TranslatedText>{tr("attempts ·")}</TranslatedText> {problem.acceptance}<TranslatedText>{tr("% accepted")}</TranslatedText></small>}</section>
+    <div className="admin-dialog-actions"><button type="button" className="button primary admin-button" onClick={onClose}><TranslatedText>{tr("Done")}</TranslatedText></button></div>
   </Dialog>;
 }
 
 export function AdminPracticeCatalogPage() {
+  const { t: tr, locale: uiLocale } = useLanguage("admin");
   const [problems, setProblems] = useState<CatalogProblem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState("");
@@ -824,7 +1225,7 @@ export function AdminPracticeCatalogPage() {
         solvedBy: p.solvedBy || 0,
         status: p.practiceListed ? "Visible" : "Hidden",
         author: "—",
-        published: p.updatedAt ? new Date(p.updatedAt).toLocaleDateString() : "—",
+        published: p.updatedAt ? new Date(p.updatedAt).toLocaleDateString(uiLocale) : "—",
         database: p.databaseType || "SQL Server",
         attempted: p.attempted || 0,
         acceptance: p.acceptance || 0,
@@ -889,56 +1290,58 @@ export function AdminPracticeCatalogPage() {
   useEffect(() => { setPage(current => Math.min(current, pageCount)); }, [pageCount]);
 
   if (loading) {
-    return <div className="admin-page compact-tables-page compact-admin-list-page admin-practice-page"><h1 className="sr-only">Practice catalog</h1><Loading label="Loading catalog…" /></div>;
+    return <div className="admin-page compact-tables-page compact-admin-list-page admin-practice-page"><h1 className="sr-only"><TranslatedText>{tr("Practice catalog")}</TranslatedText></h1><Loading label={tr("Loading catalog…")} /></div>;
   }
-  if (catalogError) return <div className="admin-page compact-tables-page compact-admin-list-page admin-practice-page"><h1 className="sr-only">Practice catalog</h1><ErrorState title="Could not load catalog" message={catalogError} onRetry={() => window.location.reload()} /></div>;
+  if (catalogError) return <div className="admin-page compact-tables-page compact-admin-list-page admin-practice-page"><h1 className="sr-only"><TranslatedText>{tr("Practice catalog")}</TranslatedText></h1><ErrorState title={tr("Could not load catalog")} message={tr(catalogError)} onRetry={() => window.location.reload()} /></div>;
 
   return <div className={"admin-page compact-tables-page compact-admin-list-page admin-practice-page" + (showPracticeDetails ? " show-practice-details" : "")}>
-    <h1 className="sr-only">Practice catalog</h1>
-    {notice && <Notice>{notice}</Notice>}
+    <h1 className="sr-only"><TranslatedText>{tr("Practice catalog")}</TranslatedText></h1>
+    {notice && <Notice><TranslatedText>{tr(notice)}</TranslatedText></Notice>}
     <div className="admin-practice-filters admin-practice-topic-filters">
       <div className="admin-practice-main-filters">
-        <Field label="SEARCH"><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Search title..." /></Field>
-        <Field label="TOPIC"><select value={topic} onChange={event => { setTopic(event.target.value); setPage(1); }}><option value="">All topics</option>{computedTopics.map(item => <option key={item.name} value={item.name}>{item.name} ({item.problems})</option>)}</select></Field>
-        <Field label="DIFFICULTY"><select value={difficulty} onChange={(event) => { setDifficulty(event.target.value); setPage(1); }}><option>All levels</option><option>Easy</option><option>Medium</option><option>Hard</option></select></Field>
+        <Field label={tr("SEARCH")}><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder={tr("Search title...")} /></Field>
+        <Field label={tr("TOPIC")}><select value={topic} onChange={event => { setTopic(event.target.value); setPage(1); }}><option value="">{tr("All topics")}</option>{computedTopics.map(item => <option key={item.name} value={item.name}>{item.name} ({item.problems})</option>)}</select></Field>
+        <Field label={tr("DIFFICULTY")}><select value={difficulty} onChange={(event) => { setDifficulty(event.target.value); setPage(1); }}><option value="All levels">{tr("All levels")}</option><option value="Easy">{tr("Easy")}</option><option value="Medium">{tr("Medium")}</option><option value="Hard">{tr("Hard")}</option></select></Field>
       </div>
-      <Field label="VISIBILITY"><select value={visibility} onChange={(event) => { setVisibility(event.target.value); setPage(1); }}><option>All</option><option>Visible</option><option>Hidden</option></select></Field>
+      <Field label={tr("VISIBILITY")}><select value={visibility} onChange={(event) => { setVisibility(event.target.value); setPage(1); }}><option value="All">{tr("All")}</option><option value="Visible">{tr("Visible")}</option><option value="Hidden">{tr("Hidden")}</option></select></Field>
     </div>
-    <Split className="admin-practice-split" main={<><div className="admin-table-wrap compact-table-scroll" role="region" aria-label="Practice problems table" tabIndex={0}><table className="admin-table admin-practice-table"><thead><tr><th>PROBLEM</th><th>TOPICS</th><th>DIFFICULTY</th><th>SOLVED BY</th><th>STATUS</th></tr></thead><tbody>
+    <Split className="admin-practice-split" main={<><div className="admin-table-wrap compact-table-scroll" role="region" aria-label={tr("Practice problems table")} tabIndex={0}><table className="admin-table admin-practice-table"><thead><tr><th><TranslatedText>{tr("PROBLEM")}</TranslatedText></th><th><TranslatedText>{tr("TOPICS")}</TranslatedText></th><th><TranslatedText>{tr("DIFFICULTY")}</TranslatedText></th><th><TranslatedText>{tr("SOLVED BY")}</TranslatedText></th><th><TranslatedText>{tr("STATUS")}</TranslatedText></th></tr></thead><tbody>
       {pageProblems.map((problem) => <tr key={problem.id} className={problem.id === selected?.id ? "is-selected" : ""} onClick={() => { setSelectedId(problem.id); setShowPracticeDetails(true); }}>
-        <td data-label="PROBLEM"><button className="admin-row-link" type="button" onClick={() => { setSelectedId(problem.id); setShowPracticeDetails(true); }}>{problem.title}</button></td><td data-label="TOPICS">{problem.topics}</td><td data-label="DIFFICULTY">{problem.difficulty}</td><td data-label="SOLVED BY">{problem.solvedBy}</td><td data-label="STATUS" className={problem.status === "Visible" ? "admin-success" : ""}>{problem.status}</td>
+        <td data-label={tr("PROBLEM")}><button className="admin-row-link" type="button" onClick={() => { setSelectedId(problem.id); setShowPracticeDetails(true); }}>{problem.title}</button></td><td data-label={tr("TOPICS")}>{problem.topics}</td><td data-label={tr("DIFFICULTY")}><TranslatedText>{tr(problem.difficulty)}</TranslatedText></td><td data-label={tr("SOLVED BY")}>{problem.solvedBy}</td><td data-label={tr("STATUS")} className={problem.status === "Visible" ? "admin-success" : ""}><TranslatedText>{tr(problem.status)}</TranslatedText></td>
       </tr>)}
-      {!list.length && <tr><td colSpan={5} className="admin-muted">No practice problems match these filters.</td></tr>}
-    </tbody></table></div><AdminListPagination total={list.length} page={currentPage} onPageChange={setPage} label="Practice problem pages" noun="problems" alwaysVisible /></>} side={selected ? <>
-      <div className="admin-compact-panel-header"><h2>{selected.title}</h2><button type="button" className="text-button compact-panel-back" onClick={() => setShowPracticeDetails(false)}>Back to problems</button></div>
-      {selected.published !== "—" && <p className="admin-muted">Updated {selected.published}</p>}
-      <p className="admin-accent">{selected.difficulty} · {selected.database}</p>
+      {!list.length && <tr><td colSpan={5} className="admin-muted"><TranslatedText>{tr("No practice problems match these filters.")}</TranslatedText></td></tr>}
+    </tbody></table></div><AdminListPagination total={list.length} page={currentPage} onPageChange={setPage} label={tr("Practice problem pages")} noun={tr("problems")} alwaysVisible /></>} side={selected ? <>
+      <div className="admin-compact-panel-header"><h2>{selected.title}</h2><button type="button" className="text-button compact-panel-back" onClick={() => setShowPracticeDetails(false)}><TranslatedText>{tr("Back to problems")}</TranslatedText></button></div>
+      {selected.published !== "—" && <p className="admin-muted"><TranslatedText>{tr("Updated")}</TranslatedText> {selected.published}</p>}
+      <p className="admin-accent"><TranslatedText>{tr(selected.difficulty)}</TranslatedText> · {selected.database}</p>
       {selected.topics && <p className="admin-muted">{selected.topics}</p>}
       <div className="admin-detail-divider" />
       <dl className="teacher-list-detail-facts">
-        <div><dt>Visibility</dt><dd>{selected.status}</dd></div>
-        <div><dt>Attempts</dt><dd>{selected.attempted}</dd></div>
-        <div><dt>Acceptance</dt><dd>{selected.attempted ? selected.acceptance + "%" : "—"}</dd></div>
-        <div><dt>Submissions</dt><dd>{selected.submissions}</dd></div>
+        <div><dt><TranslatedText>{tr("Visibility")}</TranslatedText></dt><dd><TranslatedText>{tr(selected.status)}</TranslatedText></dd></div>
+        <div><dt><TranslatedText>{tr("Attempts")}</TranslatedText></dt><dd>{selected.attempted}</dd></div>
+        <div><dt><TranslatedText>{tr("Acceptance")}</TranslatedText></dt><dd>{selected.attempted ? selected.acceptance + "%" : "—"}</dd></div>
+        <div><dt><TranslatedText>{tr("Submissions")}</TranslatedText></dt><dd>{selected.submissions}</dd></div>
       </dl>
-      <div className="admin-practice-actions"><button className="button admin-button" type="button" disabled={previewBusy} onClick={() => void openPreview(selected)}>{previewBusy ? "Loading…" : "View details"}</button></div>
-    </> : <p className="admin-muted">Select a problem.</p>} />
+      <div className="admin-practice-actions"><button className="button admin-button" type="button" disabled={previewBusy} onClick={() => void openPreview(selected)}><TranslatedText>{previewBusy ? tr("Loading…") : tr("View details")}</TranslatedText></button></div>
+    </> : <p className="admin-muted"><TranslatedText>{tr("Select a problem.")}</TranslatedText></p>} />
     {previewing && <PracticePreviewDialog problem={previewing} onClose={() => setPreviewing(null)} />}
   </div>;
 }
 
 function OverviewPagination({ total, page, onPageChange, label }: { total: number; page: number; onPageChange: (page: number) => void; label: string }) {
+  const { t: tr } = useLanguage("admin");
   const pageSize = 10;
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const currentPage = Math.min(page, pageCount);
-  return <nav className="admin-table-pagination" aria-label={label}>
-      <button type="button" className="button admin-button" disabled={currentPage === 1} onClick={() => onPageChange(currentPage - 1)}>← Previous</button>
-      <span>Page {currentPage} of {pageCount}</span>
-      <button type="button" className="button admin-button" disabled={currentPage === pageCount} onClick={() => onPageChange(currentPage + 1)}>Next →</button>
+  return <nav className="admin-table-pagination" aria-label={tr(label)}>
+      <button type="button" className="button admin-button" disabled={currentPage === 1} onClick={() => onPageChange(currentPage - 1)}><TranslatedText>{tr("← Previous")}</TranslatedText></button>
+      <span><TranslatedText>{tr("Page")}</TranslatedText> {currentPage} <TranslatedText>{tr("of")}</TranslatedText> {pageCount}</span>
+      <button type="button" className="button admin-button" disabled={currentPage === pageCount} onClick={() => onPageChange(currentPage + 1)}><TranslatedText>{tr("Next →")}</TranslatedText></button>
     </nav>;
 }
 
 function OverviewLecturerApprovalsPanel({ onClose, onResolved }: { onClose: () => void; onResolved: (pendingCount: number) => void }) {
+  const { t: tr } = useLanguage("admin");
   const [requests, setRequests] = useState<(AdminLecturerRequest & { id: string })[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -988,35 +1391,36 @@ function OverviewLecturerApprovalsPanel({ onClose, onResolved }: { onClose: () =
   }
 
   return <div className="admin-overview-approvals">
-    <div className="admin-overview-panel-header"><h2>Lecturer approvals</h2><button type="button" className="text-button" disabled={busy} onClick={onClose}>Close</button></div>
-    {loading ? <Loading label="Loading lecturer requests…" /> : <>
-      {notice && <Notice>{notice}</Notice>}
-      {error && <p className="admin-warning" role="alert">{error}</p>}
+    <div className="admin-overview-panel-header"><h2><TranslatedText>{tr("Lecturer approvals")}</TranslatedText></h2><button type="button" className="text-button" disabled={busy} onClick={onClose}><TranslatedText>{tr("Close")}</TranslatedText></button></div>
+    {loading ? <Loading label={tr("Loading lecturer requests…")} /> : <>
+      {notice && <Notice><TranslatedText>{tr(notice)}</TranslatedText></Notice>}
+      {error && <p className="admin-warning" role="alert"><TranslatedText>{tr(error)}</TranslatedText></p>}
       {selected ? <>
         <Field label={"PENDING REQUESTS (" + requests.length + ")"}><select value={selected.id} disabled={busy} onChange={event => { setSelectedId(event.target.value); setConfirmReject(false); setError(""); setNotice(""); }}>{requests.map(request => <option key={request.id} value={request.id}>{request.name} · {request.email}</option>)}</select></Field>
         <div className="admin-detail-divider" />
         <h3 className="admin-detail-title">{selected.name}</h3>
         <dl className="teacher-list-detail-facts">
-          <div><dt>Email</dt><dd>{selected.email}</dd></div>
-          <div><dt>Department</dt><dd>{selected.department || "—"}</dd></div>
-          <div><dt>Submitted</dt><dd>{selected.submitted || "—"}</dd></div>
+          <div><dt><TranslatedText>{tr("Email")}</TranslatedText></dt><dd>{selected.email}</dd></div>
+          <div><dt><TranslatedText>{tr("Department")}</TranslatedText></dt><dd>{selected.department || "—"}</dd></div>
+          <div><dt><TranslatedText>{tr("Submitted")}</TranslatedText></dt><dd>{selected.submitted || "—"}</dd></div>
         </dl>
         {confirmReject ? <div className="admin-overview-reject-confirm">
-          <p>Reject the registration for <strong>{selected.name}</strong>?</p>
-          <div className="admin-overview-request-actions"><button type="button" className="button admin-button" disabled={busy} onClick={() => setConfirmReject(false)}>Cancel</button><button type="button" className="button admin-button admin-reject-button" disabled={busy} onClick={() => void resolveRequest(false)}>{busy ? "Rejecting…" : "Confirm rejection"}</button></div>
+          <p><TranslatedText>{tr("Reject the registration for")}</TranslatedText> <strong>{selected.name}</strong>?</p>
+          <div className="admin-overview-request-actions"><button type="button" className="button admin-button" disabled={busy} onClick={() => setConfirmReject(false)}><TranslatedText>{tr("Cancel")}</TranslatedText></button><button type="button" className="button admin-button admin-reject-button" disabled={busy} onClick={() => void resolveRequest(false)}><TranslatedText>{busy ? tr("Rejecting…") : tr("Confirm rejection")}</TranslatedText></button></div>
         </div> : <div className="admin-overview-request-actions">
-          <button type="button" className="button primary admin-button" disabled={busy} onClick={() => void resolveRequest(true)}>{busy ? "Approving…" : "Approve lecturer"}</button>
-          <button type="button" className="button admin-button admin-reject-button" disabled={busy} onClick={() => setConfirmReject(true)}>Reject request</button>
+          <button type="button" className="button primary admin-button" disabled={busy} onClick={() => void resolveRequest(true)}><TranslatedText>{busy ? tr("Approving…") : tr("Approve lecturer")}</TranslatedText></button>
+          <button type="button" className="button admin-button admin-reject-button" disabled={busy} onClick={() => setConfirmReject(true)}><TranslatedText>{tr("Reject request")}</TranslatedText></button>
         </div>}
-      </> : error ? <button type="button" className="button admin-button" onClick={() => void loadRequests()}>Retry</button> : <>
-        <p className="admin-muted">No pending requests.</p>
-        <button type="button" className="text-button" onClick={() => void loadRequests()}>Refresh</button>
+      </> : error ? <button type="button" className="button admin-button" onClick={() => void loadRequests()}><TranslatedText>{tr("Retry")}</TranslatedText></button> : <>
+        <p className="admin-muted"><TranslatedText>{tr("No pending requests.")}</TranslatedText></p>
+        <button type="button" className="text-button" onClick={() => void loadRequests()}><TranslatedText>{tr("Refresh")}</TranslatedText></button>
       </>}
     </>}
   </div>;
 }
 
 function OverviewActivityPanel({ activity, onClose }: { activity: any; onClose: () => void }) {
+  const { t: tr, locale: uiLocale } = useLanguage("admin");
   const [classes, setClasses] = useState<AdminClass[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1039,38 +1443,39 @@ function OverviewActivityPanel({ activity, onClose }: { activity: any; onClose: 
   }, []);
 
   return <div className="admin-overview-details">
-    <div className="admin-overview-panel-header"><h2>Activity details</h2><button type="button" className="text-button" onClick={onClose}>Close</button></div>
-    <h3 className="admin-detail-title">{activity.action}</h3>
+    <div className="admin-overview-panel-header"><h2><TranslatedText>{tr("Activity details")}</TranslatedText></h2><button type="button" className="text-button" onClick={onClose}><TranslatedText>{tr("Close")}</TranslatedText></button></div>
+    <h3 className="admin-detail-title"><TranslatedText>{tr(activity.action)}</TranslatedText></h3>
     <dl className="teacher-list-detail-facts">
-      <div><dt>Performed by</dt><dd>{activity.by || "System"}</dd></div>
-      <div><dt>Time</dt><dd>{activity.time ? parseServerDateTime(activity.time).toLocaleString() : "Unknown"}</dd></div>
+      <div><dt><TranslatedText>{tr("Performed by")}</TranslatedText></dt><dd><TranslatedText>{activity.by || tr("System")}</TranslatedText></dd></div>
+      <div><dt><TranslatedText>{tr("Time")}</TranslatedText></dt><dd><TranslatedText>{activity.time ? parseServerDateTime(activity.time).toLocaleString(uiLocale) : tr("Unknown")}</TranslatedText></dd></div>
     </dl>
-    {loading ? <Loading label="Loading related information…" /> : <>
-      {error && <p className="admin-warning" role="alert">{error}</p>}
+    {loading ? <Loading label={tr("Loading related information…")} /> : <>
+      {error && <p className="admin-warning" role="alert"><TranslatedText>{tr(error)}</TranslatedText></p>}
       {classId && <>
         <div className="admin-detail-divider" />
-        <h3 className="admin-subheading">Current class information</h3>
+        <h3 className="admin-subheading"><TranslatedText>{tr("Current class information")}</TranslatedText></h3>
         {relatedClass ? <dl className="teacher-list-detail-facts">
-          <div><dt>Class code</dt><dd>{relatedClass.id}</dd></div>
-          <div><dt>Course</dt><dd>{relatedClass.course}</dd></div>
-          <div><dt>Semester</dt><dd>{relatedClass.semester || "—"}</dd></div>
-          <div><dt>Lecturer</dt><dd>{relatedClass.lecturer}</dd></div>
-          <div><dt>Students</dt><dd>{relatedClass.students}</dd></div>
-          <div><dt>Status</dt><dd>{relatedClass.status}</dd></div>
-          <div><dt>Dates</dt><dd>{relatedClass.startDate && relatedClass.endDate ? relatedClass.startDate + " – " + relatedClass.endDate : "Not specified"}</dd></div>
-        </dl> : <p className="admin-muted">Class {classId}: current information is unavailable.</p>}
-        <p className="admin-muted admin-overview-context-note">Class information reflects its current state. This activity record does not contain the previous field values.</p>
+          <div><dt><TranslatedText>{tr("Class code")}</TranslatedText></dt><dd>{relatedClass.id}</dd></div>
+          <div><dt><TranslatedText>{tr("Course")}</TranslatedText></dt><dd>{relatedClass.course}</dd></div>
+          <div><dt><TranslatedText>{tr("Semester")}</TranslatedText></dt><dd>{relatedClass.semester || "—"}</dd></div>
+          <div><dt><TranslatedText>{tr("Lecturer")}</TranslatedText></dt><dd>{relatedClass.lecturer}</dd></div>
+          <div><dt><TranslatedText>{tr("Students")}</TranslatedText></dt><dd>{relatedClass.students}</dd></div>
+          <div><dt><TranslatedText>{tr("Status")}</TranslatedText></dt><dd><TranslatedText>{tr(relatedClass.status)}</TranslatedText></dd></div>
+          <div><dt><TranslatedText>{tr("Dates")}</TranslatedText></dt><dd><TranslatedText>{relatedClass.startDate && relatedClass.endDate ? relatedClass.startDate + " – " + relatedClass.endDate : tr("Not specified")}</TranslatedText></dd></div>
+        </dl> : <p className="admin-muted"><TranslatedText>{tr("Class")}</TranslatedText> <TranslatedText>{tr(classId)}</TranslatedText><TranslatedText>{tr(": current information is unavailable.")}</TranslatedText></p>}
+        <p className="admin-muted admin-overview-context-note"><TranslatedText>{tr("Class information reflects its current state. This activity record does not contain the previous field values.")}</TranslatedText></p>
       </>}
       {actor && <>
-        <div className="admin-detail-divider" /><h3 className="admin-subheading">Current account information</h3>
-        <dl className="teacher-list-detail-facts"><div><dt>Email</dt><dd>{actor.email}</dd></div><div><dt>Role</dt><dd>{actor.role}</dd></div><div><dt>Status</dt><dd>{actor.status}</dd></div><div><dt>Joined</dt><dd>{actor.joined}</dd></div>{actor.detail && <div><dt>Department</dt><dd>{actor.detail}</dd></div>}</dl>
+        <div className="admin-detail-divider" /><h3 className="admin-subheading"><TranslatedText>{tr("Current account information")}</TranslatedText></h3>
+        <dl className="teacher-list-detail-facts"><div><dt><TranslatedText>{tr("Email")}</TranslatedText></dt><dd>{actor.email}</dd></div><div><dt><TranslatedText>{tr("Role")}</TranslatedText></dt><dd><TranslatedText>{tr(actor.role)}</TranslatedText></dd></div><div><dt><TranslatedText>{tr("Status")}</TranslatedText></dt><dd><TranslatedText>{tr(actor.status)}</TranslatedText></dd></div><div><dt><TranslatedText>{tr("Joined")}</TranslatedText></dt><dd>{actor.joined}</dd></div>{actor.detail && <div><dt><TranslatedText>{tr("Department")}</TranslatedText></dt><dd>{actor.detail}</dd></div>}</dl>
       </>}
     </>}
-    <details className="admin-overview-record-reference"><summary>Record reference</summary><p className="admin-muted">{activity.id}</p></details>
+    <details className="admin-overview-record-reference"><summary><TranslatedText>{tr("Record reference")}</TranslatedText></summary><p className="admin-muted">{activity.id}</p></details>
   </div>;
 }
 
 function OverviewUnassignedClassesPanel({ onClose }: { onClose: () => void }) {
+  const { t: tr } = useLanguage("admin");
   const [classes, setClasses] = useState<AdminClass[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -1092,24 +1497,25 @@ function OverviewUnassignedClassesPanel({ onClose }: { onClose: () => void }) {
   useEffect(() => { void loadClasses(); }, []);
 
   return <div className="admin-overview-details">
-    <div className="admin-overview-panel-header"><h2>Classes without a lecturer</h2><button type="button" className="text-button" onClick={onClose}>Close</button></div>
-    {loading ? <Loading label="Loading classes…" /> : error ? <><p className="admin-warning" role="alert">{error}</p><button type="button" className="button admin-button" onClick={() => void loadClasses()}>Retry</button></> : selected ? <>
+    <div className="admin-overview-panel-header"><h2><TranslatedText>{tr("Classes without a lecturer")}</TranslatedText></h2><button type="button" className="text-button" onClick={onClose}><TranslatedText>{tr("Close")}</TranslatedText></button></div>
+    {loading ? <Loading label={tr("Loading classes…")} /> : error ? <><p className="admin-warning" role="alert"><TranslatedText>{tr(error)}</TranslatedText></p><button type="button" className="button admin-button" onClick={() => void loadClasses()}><TranslatedText>{tr("Retry")}</TranslatedText></button></> : selected ? <>
       <Field label={"UNASSIGNED CLASSES (" + classes.length + ")"}><select value={selected.id} onChange={event => setSelectedId(event.target.value)}>{classes.map(item => <option key={item.id} value={item.id}>{item.id} · {item.course}</option>)}</select></Field>
       <div className="admin-detail-divider" />
       <h3 className="admin-detail-title">{selected.id}</h3>
       <dl className="teacher-list-detail-facts">
-        <div><dt>Course</dt><dd>{selected.course}</dd></div>
-        <div><dt>Semester</dt><dd>{selected.semester || "—"}</dd></div>
-        <div><dt>Status</dt><dd>{selected.status}</dd></div>
-        <div><dt>Lecturer</dt><dd className="admin-warning">Unassigned</dd></div>
-        <div><dt>Students</dt><dd>{selected.students}</dd></div>
-        <div><dt>Dates</dt><dd>{selected.startDate && selected.endDate ? selected.startDate + " – " + selected.endDate : selected.dates || "—"}</dd></div>
+        <div><dt><TranslatedText>{tr("Course")}</TranslatedText></dt><dd>{selected.course}</dd></div>
+        <div><dt><TranslatedText>{tr("Semester")}</TranslatedText></dt><dd>{selected.semester || "—"}</dd></div>
+        <div><dt><TranslatedText>{tr("Status")}</TranslatedText></dt><dd><TranslatedText>{tr(selected.status)}</TranslatedText></dd></div>
+        <div><dt><TranslatedText>{tr("Lecturer")}</TranslatedText></dt><dd className="admin-warning"><TranslatedText>{tr("Unassigned")}</TranslatedText></dd></div>
+        <div><dt><TranslatedText>{tr("Students")}</TranslatedText></dt><dd>{selected.students}</dd></div>
+        <div><dt><TranslatedText>{tr("Dates")}</TranslatedText></dt><dd>{selected.startDate && selected.endDate ? selected.startDate + " – " + selected.endDate : selected.dates || "—"}</dd></div>
       </dl>
-    </> : <p className="admin-muted">All classes have an assigned lecturer.</p>}
+    </> : <p className="admin-muted"><TranslatedText>{tr("All classes have an assigned lecturer.")}</TranslatedText></p>}
   </div>;
 }
 
 export function AdminOverviewPage() {
+  const { t: tr, locale: uiLocale } = useLanguage("admin");
   const [notice, setNotice] = useState("");
   const [stats, setStats] = useState({ users: 0, classes: 0, pendingRequests: 0, unassignedClasses: 0, submissionsToday: 0, gradingErrors: 0 });
   const [activities, setActivities] = useState<any[]>([]);
@@ -1154,29 +1560,29 @@ export function AdminOverviewPage() {
   }, []);
 
   if (loading) {
-    return <div className={"admin-page compact-tables-page admin-overview-page" + (selection ? " has-overview-selection" : "")}><h1 className="sr-only">System overview</h1><Loading label="Loading overview…" /></div>;
+    return <div className={"admin-page compact-tables-page admin-overview-page" + (selection ? " has-overview-selection" : "")}><h1 className="sr-only"><TranslatedText>{tr("System overview")}</TranslatedText></h1><Loading label={tr("Loading overview…")} /></div>;
   }
-  if (notice) return <div className={"admin-page compact-tables-page admin-overview-page" + (selection ? " has-overview-selection" : "")}><h1 className="sr-only">System overview</h1><p className="admin-notice" role="alert">{notice}</p></div>;
+  if (notice) return <div className={"admin-page compact-tables-page admin-overview-page" + (selection ? " has-overview-selection" : "")}><h1 className="sr-only"><TranslatedText>{tr("System overview")}</TranslatedText></h1><p className="admin-notice" role="alert"><TranslatedText>{tr(notice)}</TranslatedText></p></div>;
 
   return <div className={"admin-page compact-tables-page admin-overview-page" + (selection ? " has-overview-selection" : "")}>
-    <h1 className="sr-only">System overview</h1>
+    <h1 className="sr-only"><TranslatedText>{tr("System overview")}</TranslatedText></h1>
     <Split className="admin-overview-split" main={<>
       <section className="admin-attention">
         <div className="admin-overview-table-heading">
-          <h2 className="admin-section-heading">Needs attention</h2>
+          <h2 className="admin-section-heading"><TranslatedText>{tr("Needs attention")}</TranslatedText></h2>
           <div className="admin-overview-table-controls">
-            <span className="admin-muted" role="status">Showing {attentionItems.length === 0 ? 0 : (currentAttentionPage - 1) * pageSize + 1}–{Math.min(currentAttentionPage * pageSize, attentionItems.length)} of {attentionItems.length.toLocaleString()} items</span>
-            <OverviewPagination total={attentionItems.length} page={currentAttentionPage} onPageChange={setAttentionPage} label="Needs attention pages" />
+            <span className="admin-muted" role="status"><TranslatedText>{tr("Showing")}</TranslatedText> {attentionItems.length === 0 ? 0 : (currentAttentionPage - 1) * pageSize + 1}–{Math.min(currentAttentionPage * pageSize, attentionItems.length)} <TranslatedText>{tr("of")}</TranslatedText> {attentionItems.length.toLocaleString(uiLocale)} <TranslatedText>{tr("items")}</TranslatedText></span>
+            <OverviewPagination total={attentionItems.length} page={currentAttentionPage} onPageChange={setAttentionPage} label={tr("Needs attention pages")} />
           </div>
         </div>
-        <div className="compact-table-scroll" role="region" aria-label="Needs attention table" tabIndex={0}>
-        <table className="admin-table admin-attention-table"><thead><tr><th>ITEM</th><th>COUNT</th></tr></thead><tbody>
+        <div className="compact-table-scroll" role="region" aria-label={tr("Needs attention table")} tabIndex={0}>
+        <table className="admin-table admin-attention-table"><thead><tr><th><TranslatedText>{tr("ITEM")}</TranslatedText></th><th><TranslatedText>{tr("COUNT")}</TranslatedText></th></tr></thead><tbody>
           {visibleAttention.map(item => {
             const isSelected = selection?.type === "attention" && selection.id === item.id;
             const selectRow = () => setSelection({ type: "attention", id: item.id });
             return <tr key={item.id} className={isSelected ? "is-selected" : ""} onClick={selectRow}>
-              <td data-label="ITEM"><button type="button" className="admin-overview-row-button" aria-pressed={isSelected} onClick={selectRow}>{item.title}</button></td>
-              <td data-label="COUNT" className={item.count > 0 ? "admin-warning" : ""}>{item.count} {item.unit}</td>
+              <td data-label={tr("ITEM")}><button type="button" className="admin-overview-row-button" aria-pressed={isSelected} onClick={selectRow}><TranslatedText>{tr(item.title)}</TranslatedText></button></td>
+              <td data-label={tr("COUNT")} className={item.count > 0 ? "admin-warning" : ""}>{item.count} <TranslatedText>{tr(item.unit)}</TranslatedText></td>
             </tr>;
           })}
         </tbody></table>
@@ -1184,21 +1590,21 @@ export function AdminOverviewPage() {
       </section>
       <section className="admin-recent-activity">
         <div className="admin-overview-table-heading">
-          <h2 className="admin-section-heading">Recent activity</h2>
+          <h2 className="admin-section-heading"><TranslatedText>{tr("Recent activity")}</TranslatedText></h2>
           <div className="admin-overview-table-controls">
-            <span className="admin-muted" role="status">Showing {activities.length === 0 ? 0 : (currentActivityPage - 1) * pageSize + 1}–{Math.min(currentActivityPage * pageSize, activities.length)} of {activities.length.toLocaleString()} items</span>
-            <OverviewPagination total={activities.length} page={currentActivityPage} onPageChange={setActivityPage} label="Recent activity pages" />
+            <span className="admin-muted" role="status"><TranslatedText>{tr("Showing")}</TranslatedText> {activities.length === 0 ? 0 : (currentActivityPage - 1) * pageSize + 1}–{Math.min(currentActivityPage * pageSize, activities.length)} <TranslatedText>{tr("of")}</TranslatedText> {activities.length.toLocaleString(uiLocale)} <TranslatedText>{tr("items")}</TranslatedText></span>
+            <OverviewPagination total={activities.length} page={currentActivityPage} onPageChange={setActivityPage} label={tr("Recent activity pages")} />
           </div>
         </div>
-        <div className="compact-table-scroll" role="region" aria-label="Recent activity table" tabIndex={0}>
-        <table className="admin-table admin-activity-table"><thead><tr><th>ACTION</th><th>BY</th><th>TIME</th></tr></thead><tbody>
+        <div className="compact-table-scroll" role="region" aria-label={tr("Recent activity table")} tabIndex={0}>
+        <table className="admin-table admin-activity-table"><thead><tr><th><TranslatedText>{tr("ACTION")}</TranslatedText></th><th><TranslatedText>{tr("BY")}</TranslatedText></th><th><TranslatedText>{tr("TIME")}</TranslatedText></th></tr></thead><tbody>
           {activities.length > 0 ? visibleActivities.map(item => {
             const isSelected = selection?.type === "activity" && selection.id === item.id;
             const selectRow = () => setSelection({ type: "activity", id: item.id });
             return <tr key={item.id} className={isSelected ? "is-selected" : ""} onClick={selectRow}>
-              <td><button type="button" className="admin-overview-row-button" aria-pressed={isSelected} onClick={selectRow}>{item.action}</button></td><td>{item.by}</td><td>{item.time ? localTime(item.time) : "Unknown"}</td>
+              <td><button type="button" className="admin-overview-row-button" aria-pressed={isSelected} onClick={selectRow}><TranslatedText>{tr(item.action)}</TranslatedText></button></td><td>{item.by}</td><td><TranslatedText>{item.time ? localTime(item.time) : tr("Unknown")}</TranslatedText></td>
             </tr>;
-          }) : <tr><td colSpan={3} className="admin-muted">No recent activity</td></tr>}
+          }) : <tr><td colSpan={3} className="admin-muted"><TranslatedText>{tr("No recent activity")}</TranslatedText></td></tr>}
         </tbody></table>
         </div>
       </section>
@@ -1206,8 +1612,8 @@ export function AdminOverviewPage() {
       setStats(current => ({ ...current, pendingRequests: pendingCount }));
       adminService.getActivities().then(setActivities).catch(console.error);
     }} /> : selection?.type === "attention" && selection.id === "unassigned" ? <OverviewUnassignedClassesPanel onClose={() => setSelection(null)} /> : selectedActivity ? <OverviewActivityPanel key={selectedActivity.id} activity={selectedActivity} onClose={() => setSelection(null)} /> : <>
-      <h2>Grading health</h2><p className={stats.gradingErrors === 0 ? "admin-health" : "admin-health admin-warning"}>{stats.gradingErrors === 0 ? "Operational" : "Needs Attention"}</p><p className="admin-muted">{stats.submissionsToday} submitted today / {stats.gradingErrors} need attention</p><div className="admin-detail-divider" /><h3 className="admin-subheading">Recent errors</h3>
-      {errors.length > 0 ? errors.map(err => <p key={err.id} className="admin-warning admin-error">#{err.id.substring(0, 8)} · {err.errorType}<br />{err.problemTitle}</p>) : <p className="admin-muted">No errors recently</p>}
+      <h2><TranslatedText>{tr("Grading health")}</TranslatedText></h2><p className={stats.gradingErrors === 0 ? "admin-health" : "admin-health admin-warning"}><TranslatedText>{stats.gradingErrors === 0 ? tr("Operational") : tr("Needs Attention")}</TranslatedText></p><p className="admin-muted">{stats.submissionsToday} <TranslatedText>{tr("submitted today /")}</TranslatedText> {stats.gradingErrors} <TranslatedText>{tr("need attention")}</TranslatedText></p><div className="admin-detail-divider" /><h3 className="admin-subheading"><TranslatedText>{tr("Recent errors")}</TranslatedText></h3>
+      {errors.length > 0 ? errors.map(err => <p key={err.id} className="admin-warning admin-error">#{err.id.substring(0, 8)} · {err.errorType}<br />{err.problemTitle}</p>) : <p className="admin-muted"><TranslatedText>{tr("No errors recently")}</TranslatedText></p>}
     </>} />
   </div>;
 }

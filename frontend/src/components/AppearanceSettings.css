@@ -1,0 +1,30 @@
+.u219-account-menu.role-account-menu { width:240px; max-width:calc(100vw - 32px); }
+.u219-settings { display:grid; gap:2px; min-width:0; }
+.u219-settings .u219-heading { display:flex; align-items:center; gap:6px; padding:4px 6px; color:var(--text-secondary); }
+.u219-settings .u219-theme-toggle, .u219-settings .u219-language-toggle { min-height:40px; }
+.u219-settings .u219-theme-icon { position:relative; display:block; flex:none; width:18px; height:18px; }
+.u219-settings .u219-theme-icon svg { position:absolute; inset:0; transition:transform .6s cubic-bezier(.3,1.4,.5,1),opacity .25s; }
+.u219-settings .u219-theme-icon svg:first-child { transform:rotate(0); opacity:1; }
+.u219-settings .u219-theme-icon svg:last-child { transform:rotate(90deg) scale(.5); opacity:0; }
+.u219-settings .u219-theme-icon[data-dark=true] svg:first-child { transform:rotate(-90deg) scale(.5); opacity:0; }
+.u219-settings .u219-theme-icon[data-dark=true] svg:last-child { transform:rotate(0); opacity:1; }
+.u219-settings .u219-track { margin-left:auto; width:30px; height:18px; padding:2px; border-radius:999px; background:var(--border-default); flex:none; }
+.u219-settings .u219-track > span { display:block; width:14px; height:14px; border-radius:50%; background:var(--surface); transition:transform .25s cubic-bezier(.2,.8,.2,1); }
+.u219-settings .u219-track[data-dark=true] { background:var(--accent); }
+.u219-settings .u219-track[data-dark=true] > span { transform:translateX(12px); }
+.u219-account-menu.role-account-menu > button:last-child { margin-top:4px; border-top:1px solid var(--border-subtle); border-radius:0 0 var(--radius-sm) var(--radius-sm); }
+/* Only the browser's temporary root snapshots need document-level selectors. */
+:root.u219-theme-reveal::view-transition-group(root) { animation:none; }
+:root.u219-theme-reveal::view-transition-old(root),
+:root.u219-theme-reveal::view-transition-new(root) { animation:none; mix-blend-mode:normal; }
+:root.u219-theme-reveal::view-transition-old(root) { z-index:1; }
+:root.u219-theme-reveal::view-transition-new(root) { z-index:2; animation:u219-reveal .7s cubic-bezier(.65,0,.35,1) both; }
+:root.u219-theme-reveal::view-transition { pointer-events:none; }
+@keyframes u219-reveal {
+  from { clip-path:circle(0px at var(--u219-x) var(--u219-y)); }
+  to { clip-path:circle(var(--u219-radius) at var(--u219-x) var(--u219-y)); }
+}
+@media (prefers-reduced-motion:reduce) {
+  .u219-settings .u219-theme-icon svg, .u219-settings .u219-track > span { transition:none; }
+  :root.u219-theme-reveal::view-transition-new(root) { animation:none; }
+}

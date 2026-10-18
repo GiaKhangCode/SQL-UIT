@@ -1,4 +1,15 @@
+import type { DataTable, WorkspacePart } from "./models";
+
+export type TeacherSqlSolution = {
+  id: string;
+  name: string;
+  query: string;
+  enabled: boolean;
+  timeLimitMs: number;
+};
+
 export type TeacherProblem = {
+  workspaceParts?: WorkspacePart[];
   id: string;
   number: string;
   title: string;
@@ -9,10 +20,14 @@ export type TeacherProblem = {
   requirements: string;
   hints: string[];
   database: string;
+  schemaFileName: string;
   schema: string;
   seedData: string;
   seedSummary: string;
   referenceSolution: string;
+  sqlSolutions?: TeacherSqlSolution[];
+  expectedOutputs: DataTable[];
+  expectedOutputVisible: boolean;
   expectedColumns: string[];
   expectedRows: (string | number)[][];
   testCases?: { seedData: string; isHidden: boolean }[];

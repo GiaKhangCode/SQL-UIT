@@ -1,3 +1,5 @@
+import { TranslatedText } from "./TranslatedText";
+import { useLanguage } from "../context/LanguageContext";
 import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import { studentApi } from "../services/studentApi";
@@ -23,6 +25,7 @@ function resizeChatInput(textarea: HTMLTextAreaElement) {
 }
 
 export function AiChatPanel({ problem, code, onClose }: AiChatPanelProps) {
+  const { t: tr, locale: uiLocale } = useLanguage("workspace");
   const defaultMessage = {
     role: "ai" as const,
     content: `Hi! I can help you work through "${problem.title}". What would you like to ask?`,
@@ -141,16 +144,16 @@ export function AiChatPanel({ problem, code, onClose }: AiChatPanelProps) {
     <div className="ai-chat-panel">
       <div className="ai-chat-header">
         <div className="ai-chat-title">
-          <span className="sparkles-icon">✨</span> Ask AI
+          <span className="sparkles-icon">✨</span> <TranslatedText>{tr("Ask AI")}</TranslatedText>
         </div>
         <div className="ai-chat-actions">
-          <button className="icon-button" onClick={startNewChat} aria-label="New chat" title="New chat">
+          <button className="icon-button" onClick={startNewChat} aria-label={tr("New chat")} title={tr("New chat")}>
             <Plus size={18} />
           </button>
-          <button className={"icon-button " + (showHistory ? "active" : "")} onClick={() => setShowHistory(!showHistory)} aria-label="Chat history" aria-pressed={showHistory} title="History">
+          <button className={"icon-button " + (showHistory ? "active" : "")} onClick={() => setShowHistory(!showHistory)} aria-label={tr("Chat history")} aria-pressed={showHistory} title={tr("History")}>
             <History size={18} />
           </button>
-          <button className="icon-button" onClick={onClose} aria-label="Close AI panel" title="Close">
+          <button className="icon-button" onClick={onClose} aria-label={tr("Close AI panel")} title={tr("Close")}>
             <X size={18} />
           </button>
         </div>
@@ -159,8 +162,8 @@ export function AiChatPanel({ problem, code, onClose }: AiChatPanelProps) {
       <div className="ai-chat-body">
         {showHistory ? (
           <div className="ai-chat-history-list">
-            {historyLoading ? <div className="empty-history" role="status">Loading chat history…</div> : historyError ? <div className="empty-history" role="alert">{historyError}</div> : sessions.length === 0 ? (
-              <div className="empty-history">No chat history yet.</div>
+            {historyLoading ? <div className="empty-history" role="status"><TranslatedText>{tr("Loading chat history…")}</TranslatedText></div> : historyError ? <div className="empty-history" role="alert"><TranslatedText>{tr(historyError)}</TranslatedText></div> : sessions.length === 0 ? (
+              <div className="empty-history"><TranslatedText>{tr("No chat history yet.")}</TranslatedText></div>
             ) : (
               sessions.map(s => (
                 <button 
@@ -169,7 +172,7 @@ export function AiChatPanel({ problem, code, onClose }: AiChatPanelProps) {
                   onClick={() => loadSession(s.id)}
                 >
                   <MessageSquare size={16} />
-                  <span>{s.createdAt || s.created_at ? parseServerDateTime(s.createdAt || s.created_at).toLocaleString() : "Chat session"}</span>
+                  <span><TranslatedText>{s.createdAt || s.created_at ? parseServerDateTime(s.createdAt || s.created_at).toLocaleString(uiLocale) : tr("Chat session")}</TranslatedText></span>
                 </button>
               ))
             )}
@@ -179,14 +182,14 @@ export function AiChatPanel({ problem, code, onClose }: AiChatPanelProps) {
             {messages.map((msg, i) => (
               <div key={i} className={`ai-message ${msg.role}`}>
                 <div className="message-bubble">
-                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  <ReactMarkdown>{msg === messages[0] && msg.role === "ai" && msg.content.startsWith("Hi! I can help you work through") ? tr(msg.content) : msg.content}</ReactMarkdown>
                 </div>
               </div>
             ))}
             {isLoading && (
               <div className="ai-message ai">
                 <div className="message-bubble loading">
-                  Thinking...
+                  <TranslatedText>{tr("Thinking...")}</TranslatedText>
                 </div>
               </div>
             )}
@@ -195,12 +198,12 @@ export function AiChatPanel({ problem, code, onClose }: AiChatPanelProps) {
       </div>
 
       <div className="ai-chat-input">
-        {chatError && <p role="alert" className="field-error">{chatError}</p>}
+        {chatError && <p role="alert" className="field-error"><TranslatedText>{tr(chatError)}</TranslatedText></p>}
         <textarea
           ref={inputRef}
           rows={1}
-          aria-label="Ask AI a question"
-          title="Enter to send; Ctrl + Enter or Shift + Enter for a new line"
+          aria-label={tr("Ask AI a question")}
+          title={tr("Enter to send; Ctrl + Enter or Shift + Enter for a new line")}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
@@ -215,12 +218,12 @@ export function AiChatPanel({ problem, code, onClose }: AiChatPanelProps) {
               handleSend();
             }
           }}
-          placeholder="Ask a question about this problem..."
+          placeholder={tr("Ask a question about this problem...")}
           disabled={isLoading || showHistory}
         />
         <button 
           className="send-button" 
-          aria-label="Send AI message"
+          aria-label={tr("Send AI message")}
           onClick={handleSend}
           disabled={isLoading || showHistory || !input.trim()}
         >

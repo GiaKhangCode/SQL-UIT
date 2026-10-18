@@ -23,9 +23,9 @@ export function toDateTimeLocal(value: string): string {
   return value ? `${localDate(value)}T${localTime(value)}` : "";
 }
 
-export function submissionTimeLabel(value: string): string {
+export function submissionTimeLabel(value: string, locale?: string): string {
   if (!value) return "Time unavailable";
   if (!/^\d{4}-\d{2}-\d{2}T/.test(value)) return `${value} UTC`;
   const date = parseServerDateTime(value);
-  return Number.isFinite(date.getTime()) ? date.toLocaleString() : value;
+  return Number.isFinite(date.getTime()) ? date.toLocaleString(locale) : value;
 }

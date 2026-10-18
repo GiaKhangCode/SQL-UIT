@@ -973,7 +973,8 @@ body:has(.practice-page) {
 .workspace-hint-content { margin-bottom:12px; }
 .workspace-hint-content p { white-space:pre-line; }
 .teacher-preview-dialog > h4 { margin:14px 0 6px; font-size:12px; }
-.contest-rules { white-space:pre-line; line-height:1.6; }
+.contest-rules { line-height:1.6; }
+.contest-rules p { white-space:pre-line; }
 .contest-leaderboard { margin-top:20px; }
 .contest-leaderboard h3 { font-size:13px; }
 .contest-leaderboard ol { margin:8px 0; padding:0; list-style:none; }

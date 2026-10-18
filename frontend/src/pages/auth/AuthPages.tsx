@@ -1,3 +1,6 @@
+import { TranslatedText } from "../../components/TranslatedText";
+import { LanguageSwitch } from "../../components/LanguageSwitch";
+import { useLanguage } from "../../context/LanguageContext";
 import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
@@ -21,16 +24,17 @@ function PasswordField({
   autoComplete: string;
   placeholder?: string;
 }) {
+  const { t: tr } = useLanguage("auth");
   const [visible, setVisible] = useState(false);
   return (
     <label className="field" htmlFor={id}>
-      {label}
+      <TranslatedText>{tr(label)}</TranslatedText>
       <span className="password-input">
         <input
           id={id}
           type={visible ? "text" : "password"}
           value={value}
-          placeholder={placeholder}
+          placeholder={tr(placeholder)}
           autoComplete={autoComplete}
           onChange={(e) => onChange(e.target.value)}
           aria-invalid={!!error}
@@ -46,12 +50,12 @@ function PasswordField({
               : "Show " + label.toLowerCase()
           }
         >
-          {visible ? "Hide" : "Show"}
+          <TranslatedText>{visible ? tr("Hide") : tr("Show")}</TranslatedText>
         </button>
       </span>
       {error && (
         <small id={id + "-error"} className="field-error">
-          {error}
+          <TranslatedText>{tr(error)}</TranslatedText>
         </small>
       )}
     </label>
@@ -74,21 +78,22 @@ function AuthLayout({
   compact?: boolean;
   children: React.ReactNode;
 }) {
+  const { t: tr } = useLanguage("auth");
   return (
     <main
       id="main-content"
       className={`auth-page${centered ? " auth-page--centered" : " auth-page--split"}${compact ? " auth-page--compact" : ""}${register ? " auth-page--register" : ""}`}
     >
       {!centered && (
-      <section className="auth-brand-panel" aria-label={`${APP_NAME} introduction`}>
+      <section className="auth-brand-panel" aria-label={tr("{value0} introduction", { value0: APP_NAME })}>
         <div className="auth-wordmark"><img src="/favicon.svg" width="32" height="32" alt="" /><b>{APP_NAME}</b></div>
         <div className="auth-pitch">
-          <div className="auth-pitch-copy"><span className="auth-eyebrow">SQL PRACTICE AT UIT</span><h2>Write queries.<br /><span>Understand data.</span></h2><p>Practice on real schemas, see the result of every query, and build your SQL skills one problem at a time.</p></div>
-          <div className="editor-preview" aria-label="SQL editor preview">
-            <div className="preview-bar"><b>join-orders.sql</b><span>Run</span></div>
+          <div className="auth-pitch-copy"><span className="auth-eyebrow"><TranslatedText>{tr("SQL PRACTICE AT UIT")}</TranslatedText></span><h2><TranslatedText>{tr("Write queries.")}</TranslatedText><br /><span><TranslatedText>{tr("Understand data.")}</TranslatedText></span></h2><p><TranslatedText>{tr("Practice on real schemas, see the result of every query, and build your SQL skills one problem at a time.")}</TranslatedText></p></div>
+          <div className="editor-preview" aria-label={tr("SQL editor preview")}>
+            <div className="preview-bar"><b>join-orders.sql</b><span><TranslatedText>{tr("Run")}</TranslatedText></span></div>
             <pre><code><i>1</i>  <em>-- Orders per customer</em>{"\n"}<i>2</i>  <strong>SELECT</strong> c.name, COUNT(o.id) <strong>AS</strong> orders{"\n"}<i>3</i>  <strong>FROM</strong> customers c{"\n"}<i>4</i>  <strong>LEFT JOIN</strong> orders o <strong>ON</strong> o.customer_id = c.id{"\n"}<i>5</i>  <strong>GROUP BY</strong> c.name{"\n"}<i>6</i>  <strong>ORDER BY</strong> orders <strong>DESC</strong>;</code></pre>
             <div className="preview-result">
-              <table aria-label="Sample query result">
+              <table aria-label={tr("Sample query result")}>
                 <thead><tr><th scope="col">name</th><th scope="col">orders</th></tr></thead>
                 <tbody>
                   <tr><td>Nguyen An</td><td>4</td></tr>
@@ -96,29 +101,27 @@ function AuthLayout({
                   <tr><td>Le Chi</td><td>0</td></tr>
                 </tbody>
               </table>
-              <b>Accepted · 3 rows · 12 ms</b>
+              <b><TranslatedText>{tr("Accepted · 3 rows · 12 ms")}</TranslatedText></b>
             </div>
           </div>
         </div>
-        <small>{APP_NAME} · Viết truy vấn. Hiểu dữ liệu.</small>
+        <small>{APP_NAME} · <TranslatedText>{tr("Write queries. Understand data.")}</TranslatedText></small>
       </section>
       )}
       <section className="auth-form-panel">
         <div className="auth-form-wrap">
+          <div className="u267-auth-language"><LanguageSwitch /></div>
           <div className="auth-heading">
-            <span className="auth-form-eyebrow">{APP_NAME} ACCOUNT</span>
-            <h1>{title ?? (register ? "Create your account" : "Welcome back")}</h1>
+            <span className="auth-form-eyebrow">{APP_NAME} <TranslatedText>{tr("ACCOUNT")}</TranslatedText></span>
+            <h1><TranslatedText>{title ?? (register ? tr("Create your account") : tr("Welcome back"))}</TranslatedText></h1>
             <p>
-              {subtitle ??
-                (register
-                  ? "Register with your student email to start practicing SQL."
-                  : "Sign in to continue practicing SQL.")}
+              <TranslatedText>{tr(subtitle) ?? (register ? tr("Register with your student email to start practicing SQL.") : tr("Sign in to continue practicing SQL."))}</TranslatedText>
             </p>
           </div>
           {children}
           {showTeacherNote && (
             <p className="auth-note">
-              Teacher accounts are created by an administrator.
+              <TranslatedText>{tr("Teacher accounts are created by an administrator.")}</TranslatedText>
             </p>
           )}
         </div>
@@ -127,6 +130,7 @@ function AuthLayout({
   );
 }
 export function LoginPage() {
+  const { t: tr } = useLanguage("auth");
   const auth = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -188,7 +192,7 @@ export function LoginPage() {
     <AuthLayout showTeacherNote={false} compact>
       <form onSubmit={submit} noValidate>
         <label className="field" htmlFor="login-email">
-          Email or account
+          <TranslatedText>{tr("Email or account")}</TranslatedText>
           <input
             id="login-email"
             type="text"
@@ -207,32 +211,32 @@ export function LoginPage() {
         </label>
         <PasswordField
           id="login-password"
-          label="Password"
+          label={tr("Password")}
           value={password}
           onChange={setPassword}
           error={errors.password}
           autoComplete="current-password"
-          placeholder="Enter your password"
+          placeholder={tr("Enter your password")}
         />
         <button
           className="forgot-link"
           type="button"
           onClick={() => navigate("/forgot-password", { state: { email } })}
         >
-          Forgot password?
+          <TranslatedText>{tr("Forgot password?")}</TranslatedText>
         </button>
         {message && (
           <p role="alert" className="form-message">
-            {message}
+            <TranslatedText>{tr(message)}</TranslatedText>
           </p>
         )}
         <button className="button primary full" disabled={busy}>
-          {busy ? "Signing in…" : "Sign in"}
+          <TranslatedText>{busy ? tr("Signing in…") : tr("Sign in")}</TranslatedText>
         </button>
         <p className="auth-switch">
-          New student? <Link to="/register">Create an account</Link>
+          <TranslatedText>{tr("New student?")}</TranslatedText> <Link to="/register"><TranslatedText>{tr("Create an account")}</TranslatedText></Link>
           <br />
-          Want to teach? <Link to="/register-lecturer">Register as Lecturer</Link>
+          <TranslatedText>{tr("Want to teach?")}</TranslatedText> <Link to="/register-lecturer"><TranslatedText>{tr("Register as Lecturer")}</TranslatedText></Link>
         </p>
       </form>
     </AuthLayout>
@@ -240,15 +244,16 @@ export function LoginPage() {
 }
 
 function RecoveryUnavailable() {
+  const { t: tr } = useLanguage("auth");
   return (
     <p className="form-message" role="status">
-      Password recovery is not connected yet. Ask an administrator to reset
-      your account password.
+      <TranslatedText>{tr("Password recovery is not connected yet. Ask an administrator to reset your account password.")}</TranslatedText>
     </p>
   );
 }
 
 export function ForgotPasswordPage() {
+  const { t: tr } = useLanguage("auth");
   const location = useLocation();
   const [email, setEmail] = useState(
     (location.state as { email?: string } | null)?.email ?? "",
@@ -269,15 +274,13 @@ export function ForgotPasswordPage() {
 
   return (
     <AuthLayout
-      title="Forgot your password?"
+      title={tr("Forgot your password?")}
       compact
       subtitle="Enter your email and we’ll send you a verification code."
       showTeacherNote={false}
     >
       <form onSubmit={submit} noValidate>
-        <label className="field" htmlFor="recovery-email">
-          Email
-          <input
+        <label className="field" htmlFor="recovery-email"><TranslatedText>{tr("Email")}</TranslatedText><input
             id="recovery-email"
             type="email"
             autoComplete="email"
@@ -286,19 +289,20 @@ export function ForgotPasswordPage() {
             onChange={(event) => setEmail(event.target.value)}
             aria-invalid={!!error}
           />
-          {error && <small className="field-error">{error}</small>}
+          {error && <small className="field-error"><TranslatedText>{tr(error)}</TranslatedText></small>}
         </label>
         {unavailable && <RecoveryUnavailable />}
         <button className="button primary full" type="submit">
-          Send code
+          <TranslatedText>{tr("Send code")}</TranslatedText>
         </button>
       </form>
-      <p className="auth-switch"><Link to="/login">← Back to sign in</Link></p>
+      <p className="auth-switch"><Link to="/login"><TranslatedText>{tr("← Back to sign in")}</TranslatedText></Link></p>
     </AuthLayout>
   );
 }
 
 export function VerifyOtpPage() {
+  const { t: tr } = useLanguage("auth");
   const location = useLocation();
   const email =
     (location.state as { email?: string } | null)?.email ?? "name@example.com";
@@ -307,7 +311,7 @@ export function VerifyOtpPage() {
   const [unavailable, setUnavailable] = useState(false);
   return (
     <AuthLayout
-      title="Verify your email"
+      title={tr("Verify your email")}
       subtitle={`Enter the 6-digit code sent to ${email}.`}
       showTeacherNote={false}
       centered
@@ -319,13 +323,13 @@ export function VerifyOtpPage() {
         }}
       >
         <fieldset className="otp-fieldset">
-          <legend className="sr-only">Verification code</legend>
+          <legend className="sr-only"><TranslatedText>{tr("Verification code")}</TranslatedText></legend>
           <div className="otp-cells">
             {code.map((digit, index) => (
               <input
                 key={index}
                 ref={(node) => { cells.current[index] = node; }}
-                aria-label={`Verification code digit ${index + 1} of 6`}
+                aria-label={tr("Verification code digit {value0} of 6", { value0: index + 1 })}
                 inputMode="numeric"
                 autoComplete={index === 0 ? "one-time-code" : "off"}
                 maxLength={1}
@@ -359,18 +363,19 @@ export function VerifyOtpPage() {
             ))}
           </div>
         </fieldset>
-        <p className="tiny muted">Resend code in 42s</p>
+        <p className="tiny muted"><TranslatedText>{tr("Resend code in 42s")}</TranslatedText></p>
         {unavailable && <RecoveryUnavailable />}
         <button className="button primary full" type="submit">
-          Verify
+          <TranslatedText>{tr("Verify")}</TranslatedText>
         </button>
       </form>
-      <p className="auth-switch"><Link to="/forgot-password" state={{ email }}>← Back</Link></p>
+      <p className="auth-switch"><Link to="/forgot-password" state={{ email }}><TranslatedText>{tr("← Back")}</TranslatedText></Link></p>
     </AuthLayout>
   );
 }
 
 export function ResetPasswordPage() {
+  const { t: tr } = useLanguage("auth");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState("");
@@ -385,43 +390,44 @@ export function ResetPasswordPage() {
   }
   return (
     <AuthLayout
-      title="Set a new password"
+      title={tr("Set a new password")}
       subtitle="Choose a new password for your account."
       showTeacherNote={false}
     >
       <form onSubmit={submit} noValidate>
         <PasswordField
           id="new-password"
-          label="New password"
+          label={tr("New password")}
           value={password}
           onChange={setPassword}
           autoComplete="new-password"
-          placeholder="Enter a new password"
+          placeholder={tr("Enter a new password")}
         />
-        <p className="password-requirements">At least 8 characters.</p>
+        <p className="password-requirements"><TranslatedText>{tr("At least 8 characters.")}</TranslatedText></p>
         <PasswordField
           id="confirm-new-password"
-          label="Confirm password"
+          label={tr("Confirm password")}
           value={confirm}
           onChange={setConfirm}
           autoComplete="new-password"
-          placeholder="Re-enter the new password"
+          placeholder={tr("Re-enter the new password")}
         />
         {error && (
           <p className="field-error" role="alert">
-            {error}
+            <TranslatedText>{tr(error)}</TranslatedText>
           </p>
         )}
         {unavailable && <RecoveryUnavailable />}
         <button className="button primary full" type="submit">
-          Update password
+          <TranslatedText>{tr("Update password")}</TranslatedText>
         </button>
       </form>
-      <p className="auth-switch"><Link to="/login">← Back to sign in</Link></p>
+      <p className="auth-switch"><Link to="/login"><TranslatedText>{tr("← Back to sign in")}</TranslatedText></Link></p>
     </AuthLayout>
   );
 }
 export function RegisterPage() {
+  const { t: tr } = useLanguage("auth");
   const auth = useAuth();
   const navigate = useNavigate();
   const [name, setName] = useState("");
@@ -457,7 +463,7 @@ export function RegisterPage() {
     <AuthLayout register showTeacherNote={false}>
       <form onSubmit={(e) => void submit(e)} noValidate>
         <label className="field" htmlFor="register-name">
-          Full name
+          <TranslatedText>{tr("Full name")}</TranslatedText>
           <input
             id="register-name"
             type="text"
@@ -471,9 +477,7 @@ export function RegisterPage() {
             <small className="field-error">{errors.name}</small>
           )}
         </label>
-        <label className="field" htmlFor="register-email">
-          Email
-          <input
+        <label className="field" htmlFor="register-email"><TranslatedText>{tr("Email")}</TranslatedText><input
             id="register-email"
             type="email"
             autoComplete="email"
@@ -488,33 +492,33 @@ export function RegisterPage() {
         </label>
         <PasswordField
           id="register-password"
-          label="Password"
+          label={tr("Password")}
           value={password}
           onChange={setPassword}
           error={errors.password}
           autoComplete="new-password"
-          placeholder="Create a password"
+          placeholder={tr("Create a password")}
         />
-        <p className="password-requirements">At least 8 characters.</p>
+        <p className="password-requirements"><TranslatedText>{tr("At least 8 characters.")}</TranslatedText></p>
         <PasswordField
           id="register-confirm"
-          label="Confirm password"
+          label={tr("Confirm password")}
           value={confirm}
           onChange={setConfirm}
           error={errors.confirm}
           autoComplete="new-password"
-          placeholder="Re-enter your password"
+          placeholder={tr("Re-enter your password")}
         />
         {message && (
           <p role="alert" className="form-message">
-            {message}
+            <TranslatedText>{tr(message)}</TranslatedText>
           </p>
         )}
         <button className="button primary full" disabled={busy}>
-          {busy ? "Creating your account…" : "Continue"}
+          <TranslatedText>{busy ? tr("Creating your account…") : tr("Continue")}</TranslatedText>
         </button>
         <p className="auth-switch" style={{ marginBottom: "0.5rem" }}>
-          Already have an account? <Link to="/login">Sign in</Link>
+          <TranslatedText>{tr("Already have an account?")}</TranslatedText> <Link to="/login"><TranslatedText>{tr("Sign in")}</TranslatedText></Link>
         </p>
       </form>
     </AuthLayout>
@@ -522,6 +526,7 @@ export function RegisterPage() {
 }
 
 export function RegisterLecturerPage() {
+  const { t: tr } = useLanguage("auth");
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -559,45 +564,43 @@ export function RegisterLecturerPage() {
 
   if (success) {
     return (
-      <AuthLayout register title="Request Submitted" subtitle="Your lecturer account request is awaiting approval." showTeacherNote={false}>
+      <AuthLayout register title={tr("Request Submitted")} subtitle="Your lecturer account request is awaiting approval." showTeacherNote={false}>
         <div style={{ textAlign: "center", margin: "2rem 0" }}>
-          <p style={{ marginBottom: "2rem" }}>An administrator will review your request. You will be able to log in once it has been approved.</p>
-          <button className="button primary full" onClick={() => navigate("/login")}>Back to Sign in</button>
+          <p style={{ marginBottom: "2rem" }}><TranslatedText>{tr("An administrator will review your request. You will be able to log in once it has been approved.")}</TranslatedText></p>
+          <button className="button primary full" onClick={() => navigate("/login")}><TranslatedText>{tr("Back to Sign in")}</TranslatedText></button>
         </div>
       </AuthLayout>
     );
   }
 
   return (
-    <AuthLayout register title="Register as Lecturer" subtitle={`Submit a request to become a lecturer on ${APP_NAME}.`} showTeacherNote={false}>
+    <AuthLayout register title={tr("Register as Lecturer")} subtitle={`Submit a request to become a lecturer on ${APP_NAME}.`} showTeacherNote={false}>
       <form onSubmit={(e) => void submit(e)} noValidate>
         <label className="field" htmlFor="reg-name">
-          Full Name
+          <TranslatedText>{tr("Full Name")}</TranslatedText>
           <input id="reg-name" type="text" placeholder="Nguyen Van A" value={name} onChange={(e) => setName(e.target.value)} aria-invalid={!!errors.name} />
           {errors.name && <small className="field-error">{errors.name}</small>}
         </label>
         
         <label className="field" htmlFor="reg-department">
-          Department / Faculty
-          <input id="reg-department" type="text" placeholder="Computer Science" value={department} onChange={(e) => setDepartment(e.target.value)} aria-invalid={!!errors.department} />
+          <TranslatedText>{tr("Department / Faculty")}</TranslatedText>
+          <input id="reg-department" type="text" placeholder={tr("Computer Science")} value={department} onChange={(e) => setDepartment(e.target.value)} aria-invalid={!!errors.department} />
           {errors.department && <small className="field-error">{errors.department}</small>}
         </label>
         
-        <label className="field" htmlFor="reg-email">
-          Email
-          <input id="reg-email" type="email" autoComplete="email" placeholder="name@example.edu.vn" value={email} onChange={(e) => setEmail(e.target.value)} aria-invalid={!!errors.email} />
+        <label className="field" htmlFor="reg-email"><TranslatedText>{tr("Email")}</TranslatedText><input id="reg-email" type="email" autoComplete="email" placeholder="name@example.edu.vn" value={email} onChange={(e) => setEmail(e.target.value)} aria-invalid={!!errors.email} />
           {errors.email && <small className="field-error">{errors.email}</small>}
         </label>
         
-        <PasswordField id="reg-password" label="Password" value={password} onChange={setPassword} error={errors.password} autoComplete="new-password" placeholder="Create a password" />
-        <p className="password-requirements">At least 8 characters.</p>
+        <PasswordField id="reg-password" label={tr("Password")} value={password} onChange={setPassword} error={errors.password} autoComplete="new-password" placeholder={tr("Create a password")} />
+        <p className="password-requirements"><TranslatedText>{tr("At least 8 characters.")}</TranslatedText></p>
         
-        <PasswordField id="reg-confirm" label="Confirm password" value={confirm} onChange={setConfirm} error={errors.confirm} autoComplete="new-password" placeholder="Re-enter your password" />
+        <PasswordField id="reg-confirm" label={tr("Confirm password")} value={confirm} onChange={setConfirm} error={errors.confirm} autoComplete="new-password" placeholder={tr("Re-enter your password")} />
         
-        {message && <p role="alert" className="form-message">{message}</p>}
+        {message && <p role="alert" className="form-message"><TranslatedText>{tr(message)}</TranslatedText></p>}
         
-        <button className="button primary full" disabled={busy}>{busy ? "Submitting…" : "Submit Request"}</button>
-        <p className="auth-switch" style={{ marginBottom: "0.5rem" }}>Already have an account? <Link to="/login">Sign in</Link></p>
+        <button className="button primary full" disabled={busy}><TranslatedText>{busy ? tr("Submitting…") : tr("Submit Request")}</TranslatedText></button>
+        <p className="auth-switch" style={{ marginBottom: "0.5rem" }}><TranslatedText>{tr("Already have an account?")}</TranslatedText> <Link to="/login"><TranslatedText>{tr("Sign in")}</TranslatedText></Link></p>
       </form>
     </AuthLayout>
   );

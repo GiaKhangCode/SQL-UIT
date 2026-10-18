@@ -21,6 +21,9 @@ export type ProblemFilters = {
 };
 
 export type QueryResult = {
+  executionTimeMs?: number;
+  schemaTables?: import("../utils/parseDatabaseSchema").SchemaTable[];
+  tables?: import("../data/models").DataTable[];
   status: string;
   message: string;
   table?: any;
@@ -129,11 +132,25 @@ export const studentApi = {
         rank: item.rank,
         leaderboardEnabled: item.leaderboardEnabled,
         aiAllowed: item.aiAllowed,
+        examMode: item.examMode,
         leaderboard: item.leaderboard,
+        examType: item.examType || item.exam_type || "classic",
+        ddlPoints: item.ddlPoints ?? item.ddl_points ?? 30,
+        dmlPoints: item.dmlPoints ?? item.dml_points ?? 20,
+        sqlPoints: item.sqlPoints ?? item.sql_points ?? 50,
+        dmlSeedScript: item.dmlSeedScript || item.dml_seed_script || "",
       } as Contest;
     });
   },
 
+
+  submitWorkspace: async (id: string, input: { part: "DDL" | "DML" | "SQL"; ddl: string; dml: string; query: string; source: string; context: string }): Promise<QueryResult> => {
+    return apiFetch(`/api/problems/${encodeURIComponent(id)}/workspace/submit`, { method: "POST", body: JSON.stringify(input) });
+  },
+
+  runWorkspace: async (id: string, input: { part: "DDL" | "DML" | "SQL"; ddl: string; dml: string; query: string; source: string; context: string }): Promise<QueryResult> => {
+    return await apiFetch(`/api/problems/${encodeURIComponent(id)}/workspace/run`, { method: "POST", body: JSON.stringify(input) });
+  },
 
   runQuery: async (id: string, query: string, database: string, source = "Practice", context = "Practice"): Promise<QueryResult> => {
     return await apiFetch(`/api/problems/${id}/run`, {
@@ -155,9 +172,115 @@ export const studentApi = {
     });
   },
 
+  setupContestDb: async (contestId: string): Promise<{
+    status: string;
+    schemaName: string;
+    databaseName: string;
+    tables: string[];
+    examType: string;
+    ddlPoints: number;
+    dmlPoints: number;
+    sqlPoints: number;
+    hasSeedScript: boolean;
+  }> => {
+    return await apiFetch(`/api/contests/${contestId}/setup-db`, { method: "POST" });
+  },
+
+  runContestDdl: async (contestId: string, script: string): Promise<{
+    status: string;
+    messages: string[];
+    tables: string[];
+    schemaName: string;
+  }> => {
+    return await apiFetch(`/api/contests/${contestId}/run-ddl`, {
+      method: "POST",
+      body: JSON.stringify({ script }),
+    });
+  },
+
+  seedContestDml: async (contestId: string): Promise<{
+    status: string;
+    message: string;
+    tables: string[];
+  }> => {
+    return await apiFetch(`/api/contests/${contestId}/seed-dml`, { method: "POST" });
+  },
+
+  inspectContestSchema: async (contestId: string): Promise<{
+    schemaName: string;
+    tables: Array<{
+      tableName: string;
+      rowCount: number;
+      columns: Array<{
+        name: string;
+        type: string;
+        maxLen: number | null;
+        nullable: boolean;
+        isPk: boolean;
+        isFk: boolean;
+        fkTarget?: string | null;
+      }>;
+    }>;
+    tableCount: number;
+    relationships?: Array<{
+      fromTable: string;
+      fromCol: string;
+      toTable: string;
+      toCol: string;
+    }>;
+  }> => {
+    return await apiFetch(`/api/contests/${contestId}/schema-inspector`);
+  },
+
+  runContestQuery: async (contestId: string, query: string): Promise<{
+    status: string;
+    columns: string[];
+    rows: any[][];
+    rowCount: number;
+  }> => {
+    return await apiFetch(`/api/contests/${contestId}/run-query`, {
+      method: "POST",
+      body: JSON.stringify({ query }),
+    });
+  },
+
+  submitContestExam: async (
+    contestId: string,
+    ddlScript: string,
+    queryAnswers: Record<string, string>
+  ): Promise<{
+    status: string;
+    submissionId: string;
+    scorecard: {
+      total_score: number;
+      max_score: number;
+      passed: boolean;
+      ddl: { score: number; max_score: number; feedback: string; details: string[] };
+      dml: { score: number; max_score: number; feedback: string; details: string[] };
+      queries: {
+        score: number;
+        max_score: number;
+        questions: Array<{
+          title: string;
+          score: number;
+          max_score: number;
+          status: string;
+          message: string;
+          table?: any;
+        }>;
+      };
+      schemaName: string;
+    };
+  }> => {
+    return await apiFetch(`/api/contests/${contestId}/submit-exam`, {
+      method: "POST",
+      body: JSON.stringify({ ddlScript, queryAnswers }),
+    });
+  },
+
   getHint: async (id: string, context?: string) => {
     const problem = await apiFetch(`/api/problems/${id}${context ? `?context=${encodeURIComponent(context)}` : ""}`);
-    return problem.hint || "Không có gợi ý cho bài tập này.";
+    return problem.hint || "No hint is available for this problem.";
   },
 
   askAi: async (problemContext: any, codeDraft: string, userMessage: string, sessionId?: string) => {

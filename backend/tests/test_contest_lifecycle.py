@@ -13,7 +13,7 @@ from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from app.models import Assignment, Base, Class, ClassEnrollment, Problem, Submission, User
+from app.models import Assignment, AssignmentProblem, Base, Class, ClassEnrollment, Problem, Submission, User
 from app.routers.assignments import create_assignment, get_assignment, get_assignments, get_audience_count, update_assignment, upload_contest_banner
 from app.routers.problems import get_problem, run_query, submit_query
 from app.routers.student_assignments import get_student_assignments
@@ -110,6 +110,25 @@ class ContestLifecycleTests(unittest.TestCase):
             self.assertEqual(len(activities), expected)
         teacher_rows = [a for a in get_assignments(db=self.db, current_user=self.teacher) if a["isContest"]]
         self.assertEqual({row["submitted"] for row in teacher_rows}, {"0/1", "0/2"})
+
+    def test_contest_problem_workspace_parts_are_saved_and_applied(self):
+        payload = self.payload()
+        self.assertEqual(payload.problems[0].workspace_parts, ["DDL", "DML", "SQL"])
+        payload.problems[0].workspace_parts = ["DML", "SQL"]
+
+        contest = create_assignment(payload, db=self.db, current_user=self.teacher)
+        stored_problem = self.db.query(AssignmentProblem).filter_by(
+            assignment_id=contest["id"], problem_id="P"
+        ).one()
+        self.assertEqual(stored_problem.workspace_parts, ["DML", "SQL"])
+        self.assertEqual(
+            get_assignment(contest["id"], db=self.db, current_user=self.teacher)["problemList"][0]["workspaceParts"],
+            ["DML", "SQL"],
+        )
+        self.assertEqual(
+            get_problem("P", context=contest["id"], db=self.db, current_user=self.enrolled).workspace_parts,
+            ["DML", "SQL"],
+        )
 
     def test_upcoming_hides_problems_and_rejects_access(self):
         activity = create_assignment(self.payload("all_students", start_hours=2, end_hours=3),

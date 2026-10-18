@@ -1,3 +1,5 @@
+import { TranslatedText } from "../../components/TranslatedText";
+import { useLanguage } from "../../context/LanguageContext";
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { studentApi } from "../../services/studentApi";
@@ -7,6 +9,7 @@ import { parseServerDateTime } from "../../utils/serverDateTime";
 import { ContestDetailView } from "./ContestDetailView";
 
 export function ContestDetailPage() {
+  const { t: tr } = useLanguage("student");
   const { contestId } = useParams();
   const { data, loading, error, mutate } = useLoad(studentApi.getContests);
   const [now, setNow] = useState(Date.now());
@@ -27,10 +30,10 @@ export function ContestDetailPage() {
     }
   }, [data, contestId, now, mutate]);
 
-  if (loading) return <section className="page contest-detail-page compact-contest-detail"><Loading label="Loading contest…" /></section>;
-  if (!data || error) return <section className="page contest-detail-page compact-contest-detail"><ErrorState title="Contest unavailable" message={error || "Could not load contest."} onRetry={() => window.location.reload()} /></section>;
+  if (loading) return <section className="page contest-detail-page compact-contest-detail"><Loading label={tr("Loading contest…")} /></section>;
+  if (!data || error) return <section className="page contest-detail-page compact-contest-detail"><ErrorState title={tr("Contest unavailable")} message={tr(error) || tr("Could not load contest.")} onRetry={() => window.location.reload()} /></section>;
   const contest = data.find((item) => item.id === contestId);
-  if (!contest) return <Empty title="Contest unavailable"><Link to="/contests">Back to contests</Link></Empty>;
+  if (!contest) return <Empty title={tr("Contest unavailable")}><Link to="/contests"><TranslatedText>{tr("Back to contests")}</TranslatedText></Link></Empty>;
 
   const starts = parseServerDateTime(contest.opensAt).getTime();
   const ends = parseServerDateTime(contest.closesAt).getTime();

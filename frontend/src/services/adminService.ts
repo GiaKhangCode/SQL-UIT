@@ -30,6 +30,16 @@ export const adminService = {
     });
   },
 
+  async importUsers(file: File): Promise<any> {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    return apiFetch("/api/admin/users/import", {
+      method: "POST",
+      body: formData,
+    });
+  },
+
   async getClasses(): Promise<any[]> {
     return apiFetch("/api/admin/classes");
   },

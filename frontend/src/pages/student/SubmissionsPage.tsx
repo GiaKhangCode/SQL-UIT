@@ -1,3 +1,5 @@
+import { TranslatedText } from "../../components/TranslatedText";
+import { useLanguage } from "../../context/LanguageContext";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { studentApi } from "../../services/studentApi";
@@ -10,6 +12,7 @@ import { submissionTimeLabel } from "../../utils/serverDateTime";
 const SUBMISSION_PAGE_SIZE = 15;
 
 export function SubmissionsPage() {
+  const { t: tr, locale: uiLocale } = useLanguage("student");
   const [selected, setSelected] = useState<Submission | null>(null);
   const [search, setSearch] = useState("");
   const [result, setResult] = useState("");
@@ -40,31 +43,31 @@ export function SubmissionsPage() {
   }, [data, firstIndex]);
   return (
     <section className="page submissions-page compact-tables-page compact-student-submissions">
-      <h1 className="sr-only">Submissions</h1>
+      <h1 className="sr-only"><TranslatedText>{tr("Submissions")}</TranslatedText></h1>
       <div className="submissions-split">
       <div className="submissions-list-column">
       <div className="filters submissions-filters">
         <label className="field search-field">
-          Search
+          <TranslatedText>{tr("Search")}</TranslatedText>
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search SQL problems…"
+            placeholder={tr("Search SQL problems…")}
           />
         </label>
         <label className="field">
-          Source
+          <TranslatedText>{tr("Source")}</TranslatedText>
           <select value={source} onChange={(e) => setSource(e.target.value)}>
-            <option value="">All sources</option>
+            <option value="">{tr("All sources")}</option>
             {["Practice", "Assignments", "Contests"].map((v) => (
-              <option key={v}>{v}</option>
+              <option key={v} value={v}>{tr(v)}</option>
             ))}
           </select>
         </label>
         <label className="field">
-          Result
+          <TranslatedText>{tr("Result")}</TranslatedText>
           <select value={result} onChange={(e) => setResult(e.target.value)}>
-            <option value="">All results</option>
+            <option value="">{tr("All results")}</option>
             {[
               "Accepted",
               "Wrong Answer",
@@ -72,7 +75,7 @@ export function SubmissionsPage() {
               "Time Limit Exceeded",
               "Rejected",
             ].map((v) => (
-              <option key={v}>{v}</option>
+              <option key={v} value={v}>{tr(v)}</option>
             ))}
           </select>
         </label>
@@ -81,11 +84,11 @@ export function SubmissionsPage() {
       {loading && !data ? (
         <Loading />
       ) : error ? (
-        <ErrorState title="Could not load submissions" message={error} onRetry={() => window.location.reload()} />
+        <ErrorState title={tr("Could not load submissions")} message={tr(error)} onRetry={() => window.location.reload()} />
       ) : !data?.length ? (
-        <Empty title="No submissions found">
-          Your attempts will appear here. Try changing the filters or{" "}
-          <Link to="/practice">open a practice problem</Link>.
+        <Empty title={tr("No submissions found")}>
+          <TranslatedText>{tr("Your attempts will appear here. Try changing the filters or")}</TranslatedText>{" "}
+          <Link to="/assignments"><TranslatedText>{tr("view assignments")}</TranslatedText></Link>.
         </Empty>
       ) : (
         <>
@@ -94,16 +97,16 @@ export function SubmissionsPage() {
             ref={desktopListRef}
             aria-busy={loading}
             tabIndex={0}
-            aria-label="Submission history"
+            aria-label={tr("Submission history")}
           >
             <table className="submissions-table">
               <colgroup><col style={{ width: "40%" }} /><col style={{ width: "23%" }} /><col style={{ width: "15%" }} /><col style={{ width: "22%" }} /></colgroup>
               <thead>
                 <tr>
-                  <th>SQL problem</th>
-                  <th>Source</th>
-                  <th>Result</th>
-                  <th>Submitted ↓</th>
+                  <th><TranslatedText>{tr("SQL problem")}</TranslatedText></th>
+                  <th><TranslatedText>{tr("Source")}</TranslatedText></th>
+                  <th><TranslatedText>{tr("Result")}</TranslatedText></th>
+                  <th><TranslatedText>{tr("Submitted ↓")}</TranslatedText></th>
                 </tr>
               </thead>
               <tbody>
@@ -121,14 +124,14 @@ export function SubmissionsPage() {
                         </button>
                       </td>
                       <td>
-                        {s.source}
+                        <TranslatedText>{tr(s.source)}</TranslatedText>
                         <small>{s.contextTitle || s.context}</small>
                       </td>
                       <td>
                         <Status value={s.result} />
                       </td>
                       <td className="muted">
-                        {submissionTimeLabel(s.submittedAt)}
+                        <TranslatedText>{tr(submissionTimeLabel(s.submittedAt, uiLocale))}</TranslatedText>
                       </td>
                     </tr>
                   );
@@ -140,7 +143,7 @@ export function SubmissionsPage() {
             className="submission-mobile-list"
             ref={mobileListRef}
             aria-busy={loading}
-            aria-label="Submission history"
+            aria-label={tr("Submission history")}
           >
             {pageSubmissions.map((s: Submission) => {
               const p =
@@ -160,30 +163,30 @@ export function SubmissionsPage() {
                       <b>
                         {p.number}. {p.title}
                       </b>
-                      <small>{s.source} · {s.contextTitle || s.context}</small>
+                      <small><TranslatedText>{tr(s.source)}</TranslatedText> · {s.contextTitle || s.context}</small>
                     </span>
                     <Status value={s.result} />
                   </span>
                   <span className="submission-mobile-meta">
-                    <small>{submissionTimeLabel(s.submittedAt)}</small>
+                    <small><TranslatedText>{tr(submissionTimeLabel(s.submittedAt, uiLocale))}</TranslatedText></small>
                   </span>
                 </button>
               );
             })}
           </div>
           <div className="submissions-pagination-footer">
-            <p aria-live="polite">Showing {firstIndex + 1}–{Math.min(firstIndex + SUBMISSION_PAGE_SIZE, data.length)} of {data.length} submissions · Newest first</p>
-            <nav className="submissions-pagination" aria-label="Submission pages">
-              <button type="button" className="button" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>← Previous</button>
-              <span>Page {currentPage} of {pageCount}</span>
-              <button type="button" className="button" disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)}>Next →</button>
+            <p aria-live="polite"><TranslatedText>{tr("Showing")}</TranslatedText> {firstIndex + 1}–{Math.min(firstIndex + SUBMISSION_PAGE_SIZE, data.length)} <TranslatedText>{tr("of")}</TranslatedText> {data.length} <TranslatedText>{tr("submissions · Newest first")}</TranslatedText></p>
+            <nav className="submissions-pagination" aria-label={tr("Submission pages")}>
+              <button type="button" className="button" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}><TranslatedText>{tr("← Previous")}</TranslatedText></button>
+              <span><TranslatedText>{tr("Page")}</TranslatedText> {currentPage} <TranslatedText>{tr("of")}</TranslatedText> {pageCount}</span>
+              <button type="button" className="button" disabled={currentPage === pageCount} onClick={() => setPage(currentPage + 1)}><TranslatedText>{tr("Next →")}</TranslatedText></button>
             </nav>
           </div>
         </>
       )}
       </div>
       </div>
-      <aside className="submission-inline-panel" aria-label="Selected submission details">
+      <aside className="submission-inline-panel" aria-label={tr("Selected submission details")}>
       {selected ? (
         <SubmissionDetails
           key={selected.id}
@@ -199,7 +202,7 @@ export function SubmissionsPage() {
           onClose={() => setSelected(null)}
         />
       ) : (
-        <Empty title="Submission details">Select a submission to view its result and submitted SQL.</Empty>
+        <Empty title={tr("Submission details")}><TranslatedText>{tr("Select a submission to view its result and submitted SQL.")}</TranslatedText></Empty>
       )}
       </aside>
       </div>

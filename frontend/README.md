@@ -1,6 +1,6 @@
-# SQL-UIT Frontend
+# iSQL Frontend
 
-A modern React frontend for the SQL-UIT application, built with Vite, TypeScript, React Router, and CodeMirror.
+A modern React frontend for the iSQL application, built with Vite, TypeScript, React Router, and CodeMirror.
 
 ## Prerequisites
 
@@ -59,3 +59,49 @@ Once both the backend and frontend are running, you can log in using the demo ac
 - **Student:** `student@demo.local` / `password123`
 - **Instructor:** `instructor@demo.local` / `password123`
 - **Admin:** `admin@demo.local` / `123`
+
+### Comprehensive contest workspace
+
+The student exam page is available at `/contests/:contestId/exam` for contests
+whose `examType` is `comprehensive`. The contest details page shows a
+“Enter exam” button while the contest is live. Classic contests keep using
+the existing problem workspace.
+
+The workspace includes DDL execution, schema inspection/diagram, DML seeding,
+SQL queries, local draft recovery and the submission scorecard. It requires a
+backend with the comprehensive exam API from the original SQL-UIT project:
+
+- `POST /api/contests/{contestId}/setup-db`
+- `POST /api/contests/{contestId}/run-ddl`
+- `POST /api/contests/{contestId}/seed-dml`
+- `GET /api/contests/{contestId}/schema-inspector`
+- `POST /api/contests/{contestId}/run-query`
+- `POST /api/contests/{contestId}/submit-exam`
+
+The assignment response must include `examType`, `ddlPoints`, `dmlPoints`,
+`sqlPoints`, `dmlSeedScript` and question descriptions in `problemDetails`.
+The backend in this checkout does not yet implement these endpoints; use the
+original SQL-UIT backend on the configured API target to run comprehensive exams.
+
+### Assignment workspace sections (DDL / DML / SQL)
+
+Each problem in an assignment can enable DDL, DML and SQL independently. New
+problems in an assignment start with all three sections enabled. Existing problem
+workspace settings remain in effect for Practice and Contests.
+
+Before using this with an existing SQL Server database, run
+`python scripts/add_assignment_workspace_parts.py` from `backend/`. The new
+assignment-problem setting is stored separately from the reusable problem.
+
+### SQL Solution checks
+
+Teachers can rename or disable the single SQL Solution. Run executes it on every
+dataset and reports SQL execution/fetch time, excluding database setup and network
+latency. Student time limits are configurable (100–60,000 ms, default 5,000).
+SQL-only submissions contain one SELECT query; Accepted requires it to pass every
+dataset. Staged workspace SQL runs apply the same student limit. Disabling the
+solution excludes it from grading until it is enabled again.
+
+The backend creates `problem_sql_solutions` on startup. For an API without reload,
+restart it or run `python scripts/add_sql_solutions.py` from `backend/` before using
+the new editor. Existing single-query problems retain their previous behavior.

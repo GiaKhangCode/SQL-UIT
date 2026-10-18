@@ -152,8 +152,9 @@
 .teacher-code-editor,.teacher-readonly-code { font-family:var(--font-mono); line-height:1.5; background:var(--subtle); border:1px solid var(--border); border-radius:var(--radius-md); }
 .teacher-list-detail-facts dd,.admin-side p { font-size:12px; line-height:18px; }
 .teacher-list-filters,.teacher-problem-filters,.teacher-activity-filters,.teacher-results-filters { width:100%; grid-template-columns:minmax(210px,2fr) repeat(3,minmax(130px,1fr)); gap:12px; }
-.teacher-library-page .teacher-problem-filters { grid-template-columns:minmax(230px,1.4fr) repeat(3,minmax(115px,.85fr)) auto; align-items:end; }
+.teacher-library-page .teacher-problem-filters { grid-template-columns:minmax(230px,1.4fr) repeat(3,minmax(115px,.85fr)) auto auto; align-items:end; }
 .teacher-library-page .teacher-problem-new { align-self:end; min-height:40px; padding:9px 14px; }
+.teacher-library-page .teacher-database-library-trigger { display:flex; align-items:center; justify-content:center; align-self:end; gap:7px; min-height:40px; padding:9px 12px; white-space:nowrap; }
 .teacher-classes-page .teacher-class-filters,.teacher-classes-page .teacher-classes-layout { grid-template-columns:minmax(0,2.3fr) minmax(280px,1fr); gap:24px; }
 .teacher-contest-page .teacher-contest-filters { grid-template-columns:minmax(0,1fr) minmax(280px,340px); gap:24px; align-items:end; }
 .teacher-contest-options { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:end; min-width:0; }
@@ -175,7 +176,7 @@
 .teacher-list-summary small,.teacher-result-metrics small,.teacher-list-footer,.teacher-results-footer small,.admin-table-footer { font-size:11px; line-height:17px; }
 .teacher-list-detail-panel > p,.teacher-list-detail-facts > div,.teacher-empty-state p,.teacher-preview-dialog p,.teacher-draft-visibility,.teacher-form-message,.teacher-option-row b,.teacher-option-row small,.teacher-publish-checklist li,.teacher-timezone,.teacher-visibility-help,.teacher-editor-state,.teacher-seed-summary,.teacher-code-title { font-size:12px; line-height:18px; }
 .teacher-code-editor,.teacher-readonly-code { font-size:12px; }
-.teacher-class-chip,.teacher-class-options label,.teacher-readonly-field,.teacher-add-class,.teacher-add-problem-list small,.teacher-class-detail-heading p,.teacher-class-details > p,.teacher-class-assignment-topline strong,.teacher-class-assignment-topline b,.teacher-class-student-name strong,.teacher-class-student-stat strong,.teacher-table-link,.teacher-class-identity small,.teacher-member-list small,.teacher-review-code-section h2,.teacher-auto-score,.teacher-attempt-label,.teacher-attempt-pill,.teacher-status-review { font-size:11px; line-height:17px; }
+.teacher-add-problem-list small,.teacher-class-detail-heading p,.teacher-class-details > p,.teacher-class-assignment-topline strong,.teacher-class-assignment-topline b,.teacher-class-student-name strong,.teacher-class-student-stat strong,.teacher-table-link,.teacher-class-identity small,.teacher-member-list small,.teacher-review-code-section h2,.teacher-auto-score,.teacher-attempt-label,.teacher-attempt-pill,.teacher-status-review { font-size:11px; line-height:17px; }
 .teacher-class-assignment-topline small,.teacher-class-student-name small,.teacher-class-student-stat small,.teacher-detail-eyebrow { font-size:10px; line-height:16px; }
 .teacher-student-search input { min-height:40px; padding:9px 11px; font-size:12px; }
 .teacher-list-actions a,.teacher-list-actions button,.teacher-selectable-row-title,.admin-row-link,.admin-cell-button,.admin-cell-selected,.admin-danger-link,.admin-warning-link { font-size:12px; line-height:18px; }
@@ -232,10 +233,8 @@
   .teacher-problem-footer .teacher-page-actions { width:100%; justify-content:flex-start; }
   .teacher-validation-section-heading,.teacher-validation-run-heading { align-items:stretch; flex-direction:column; }
   .teacher-validation-section-heading .button,.teacher-validation-run-heading .button { align-self:flex-start; }
-  .dialog.teacher-student-preview-dialog { width:calc(100vw - 20px); height:calc(100dvh - 20px); max-height:calc(100dvh - 20px); }
-  .teacher-student-preview-dialog > .section-heading { padding:14px 18px; }
-  .teacher-preview-tabs { padding:8px 18px; }
-  .teacher-student-preview-scroll { padding:22px 20px 26px; }
+  .teacher-preview-tabs { padding:8px 16px; }
+  .teacher-student-preview-scroll { padding:18px 16px 22px; }
   .teacher-student-preview-content h1 { font-size:25px; }
   .teacher-student-preview-hint { padding:14px 18px; }
   .teacher-student-preview-dock { padding:8px 18px; }
@@ -486,7 +485,7 @@
 @media (max-width: 800px) {
   .teacher-classes-page .teacher-class-filters,.teacher-classes-page .teacher-classes-layout { grid-template-columns:minmax(0,1fr); gap:16px; }
   .teacher-library-page .teacher-problem-filters { grid-template-columns:repeat(2,minmax(0,1fr)); }
-  .teacher-library-page .teacher-problem-new { grid-column:1/-1; justify-self:start; }
+  .teacher-library-page .teacher-problem-new,.teacher-library-page .teacher-database-library-trigger { grid-column:1/-1; justify-self:start; }
   .teacher-contest-page .teacher-contest-filters { grid-template-columns:minmax(0,1fr); }
   .teacher-contest-page .teacher-contest-new { grid-column:auto; justify-self:stretch; }
   .teacher-assignment-page .teacher-assignment-filters { grid-template-columns:repeat(2,minmax(0,1fr)); }

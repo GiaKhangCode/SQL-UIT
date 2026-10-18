@@ -1,3 +1,5 @@
+import { TranslatedText } from "../components/TranslatedText";
+import { useLanguage } from "../context/LanguageContext";
 import { AssignmentWorkPage } from "../pages/student/AssignmentWorkPage";
 import { lazy, Suspense, useEffect } from "react";
 import { APP_NAME } from "../data/models";
@@ -21,11 +23,15 @@ import {
   VerifyOtpPage,
 } from "../pages/auth/AuthPages";
 import { DashboardPage } from "../pages/student/DashboardPage";
-import { PracticePage } from "../pages/student/PracticePage";
 import { Loading } from "../components/ui";
 const WorkspacePage = lazy(() =>
-  import("../pages/student/WorkspacePage").then((module) => ({
+  import("../pages/student/workspace/WorkspacePage").then((module) => ({
     default: module.WorkspacePage,
+  })),
+);
+const ContestWorkspacePage = lazy(() =>
+  import("../pages/student/workspace/ContestWorkspacePage").then((module) => ({
+    default: module.ContestWorkspacePage,
   })),
 );
 import { AssignmentsPage } from "../pages/student/AssignmentsPage";
@@ -34,6 +40,7 @@ import { ContestDetailPage } from "../pages/student/ContestDetailPage";
 import { ContestsPage } from "../pages/student/ContestsPage";
 import { SubmissionsPage } from "../pages/student/SubmissionsPage";
 import { ProblemEditorPage } from "../pages/teacher/ProblemEditorPage";
+import { DatabaseLibraryPage } from "../pages/teacher/DatabaseLibraryPage";
 import { AssignmentBuilderPage, ContestBuilderPage } from "../pages/teacher/BuilderPages";
 import { AssignmentsListPage, ProblemLibraryPage } from "../pages/teacher/TeacherLandingPages";
 import { ContestsListPage } from "../pages/teacher/ContestListPage";
@@ -85,6 +92,7 @@ function RouteContent() {
   return <div className="route-content" key={pathname}><Outlet /></div>;
 }
 export function App() {
+  const { t } = useLanguage();
   useEffect(() => {
     document.title = APP_NAME;
   }, []);
@@ -97,7 +105,7 @@ export function App() {
   return (
     <>
       <a className="skip-link" href="#main-content">
-        Skip to content
+        <TranslatedText>{t("Skip to content")}</TranslatedText>
       </a>
       <Routes>
         <Route
@@ -115,7 +123,7 @@ export function App() {
         <Route element={<ProtectedRoute />}>
           <Route element={<Shell />}>
             <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/practice" element={<PracticePage />} />
+            <Route path="/practice" element={<Navigate replace to="/dashboard" />} />
             <Route path="/assignments" element={<AssignmentsPage />} />
             <Route
               path="/assignments/work/:assignmentId"
@@ -140,6 +148,14 @@ export function App() {
               </Suspense>
             }
           />
+          <Route
+            path="/contests/:contestId/exam"
+            element={
+              <Suspense fallback={<Loading />}>
+                <ContestWorkspacePage />
+              </Suspense>
+            }
+          />
         </Route>
         <Route element={<TeacherRoute />}>
           <Route path="/teacher" element={<TeacherShell />}>
@@ -147,6 +163,7 @@ export function App() {
             <Route path="problems" element={<ProblemLibraryPage />} />
             <Route path="problems/new" element={<ProblemEditorPage />} />
             <Route path="problems/:problemId/edit" element={<ProblemEditorPage />} />
+            <Route path="database-library" element={<DatabaseLibraryPage />} />
             <Route path="assignments" element={<AssignmentsListPage />} />
             <Route path="assignments/new" element={<AssignmentBuilderPage />} />
             <Route path="assignments/:id/edit" element={<AssignmentBuilderPage />} />

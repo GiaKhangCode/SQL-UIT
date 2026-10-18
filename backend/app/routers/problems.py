@@ -3,9 +3,11 @@ from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 from app.database import get_db
 from app.models import User, Problem, Submission
-from app.schemas import ProblemListResponse, ProblemDetailResponse, QueryRequest, ProblemCreate, TestCaseCreate, ProblemValidateRequest, TrendingProblem
+from app.schemas import WorkspaceRunRequest, ProblemListResponse, ProblemDetailResponse, QueryRequest, ProblemCreate, TestCaseCreate, ProblemValidateRequest, TrendingProblem, DataTable
 from app.routers.auth import get_current_user
 from app.services.sandbox import run_sandbox
+from app.services.sql_solutions import stored_solutions, save_solutions, solution_response
+from app.services.expected_outputs import read_expected_outputs, save_expected_outputs
 import uuid
 import datetime
 from sqlalchemy import func
@@ -45,6 +47,12 @@ def activity_problem_access(db: Session, current_user: User, problem_id: str,
             if not enrollment:
                 raise HTTPException(status_code=403, detail="You are not in an assigned class.")
     return activity, ap
+
+
+def activity_workspace_parts(problem: Problem, activity=None, assignment_problem=None):
+    if activity and assignment_problem and assignment_problem.workspace_parts:
+        return assignment_problem.workspace_parts
+    return problem.workspace_parts or ["SQL"]
 
 def check_problem_access(db: Session, current_user: User, p: Problem):
     if p.practice_listed:
@@ -187,12 +195,13 @@ def get_problem(problem_id: str, context: Optional[str] = None, db: Session = De
         raise HTTPException(status_code=404, detail="Problem not found")
         
     activity = None
+    activity_problem = None
     if context and context != "Practice":
         from app.models import Assignment
         linked = db.query(Assignment).filter(Assignment.id == context).first()
         if linked:
-            activity, _ = activity_problem_access(db, current_user, p.id, context,
-                                                  "Contests" if linked.is_contest else "Assignments")
+            activity, activity_problem = activity_problem_access(db, current_user, p.id, context,
+                                                                  "Contests" if linked.is_contest else "Assignments")
         else:
             raise HTTPException(status_code=404, detail="Activity not found.")
     elif not check_problem_access(db, current_user, p):
@@ -215,12 +224,38 @@ def get_problem(problem_id: str, context: Optional[str] = None, db: Session = De
             progress = "In progress"
             
     resp = ProblemDetailResponse.model_validate(p)
+    expected_outputs, expected_output_visible = read_expected_outputs(p.expected)
+    expected_output_tables = [DataTable.model_validate(output) for output in expected_outputs]
+    resp.expected_output_visible = expected_output_visible
+    resp.expected_outputs = expected_output_tables if current_user.role != "student" or expected_output_visible else []
+    resp.expected = expected_output_tables[0] if expected_output_tables else None
+    effective_workspace_parts = activity_workspace_parts(p, activity, activity_problem)
+    resp.workspace_parts = effective_workspace_parts
+    from app.schemas import SqlCheckInfo
+    solutions = stored_solutions(db, p.id)
+    resp.sql_checks = [SqlCheckInfo(id=row.id, name=row.name, timeLimitMs=row.time_limit_ms)
+                       for row in solutions if row.enabled and row.query.strip()]
+    if current_user.role in ["instructor", "admin"]:
+        resp.sql_solutions = [solution_response(row) for row in solutions] or None
     resp.progress = progress
     if activity and current_user.role == "student" and not activity.hints_enabled:
         resp.hint = None
     
     from app.models import TestCase, TestCaseScript
     tcs = db.query(TestCase).filter(TestCase.problem_id == p.id).order_by(TestCase.order_index).all()
+    first_visible_dataset_index = next((index for index, tc in enumerate(tcs) if not tc.is_hidden), None)
+    if current_user.role == "student":
+        if not expected_output_visible:
+            resp.expected = None
+            resp.expected_outputs = []
+        elif first_visible_dataset_index is not None and first_visible_dataset_index < len(expected_output_tables):
+            resp.expected = expected_output_tables[first_visible_dataset_index]
+        else:
+            resp.expected = None
+        # Students only need the sample output shown in the prompt. Keep the
+        # per-dataset answer set private and let the sandbox use the stored value.
+        resp.expected_outputs = []
+
     if tcs:
         mapped_tcs = []
         for idx, tc in enumerate(tcs):
@@ -242,12 +277,16 @@ def get_problem(problem_id: str, context: Optional[str] = None, db: Session = De
                         resp.reference_solution = ""
         resp.test_cases = mapped_tcs
         
+    if current_user.role == "student" and "DDL" in effective_workspace_parts:
+        resp.schema_sql = ""
+        for case in resp.test_cases or []:
+            case["schema"] = ""
     return resp
 
 @router.put("/{problem_id}", response_model=ProblemDetailResponse)
 def update_problem(problem_id: str, problem: ProblemCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role not in ["instructor", "admin"]:
-        raise HTTPException(status_code=403, detail="Chỉ Giảng viên và Admin mới có quyền sửa bài tập.")
+        raise HTTPException(status_code=403, detail="Only instructors and administrators can edit problems.")
         
     p = db.query(Problem).filter(Problem.id == problem_id).first()
     if not p:
@@ -268,6 +307,12 @@ def update_problem(problem_id: str, problem: ProblemCreate, db: Session = Depend
     p.requirements = problem.requirements
     p.hint = "\n".join(problem.hints) if problem.hints else None
     p.database_type = problem.database
+    p.schema_file_name = problem.schema_file_name
+    if problem.expected_outputs is not None:
+        p.expected = save_expected_outputs(problem.expected_outputs, problem.expected_output_visible)
+    if problem.workspace_parts is not None:
+        p.workspace_parts = problem.workspace_parts
+    save_solutions(db, problem_id, problem.sql_solutions)
     
     from app.models import Topic, ProblemTopic, TestCase, TestCaseScript
     
@@ -315,12 +360,12 @@ def update_problem(problem_id: str, problem: ProblemCreate, db: Session = Depend
         
     db.commit()
     db.refresh(p)
-    return get_problem(problem_id, db, current_user)
+    return get_problem(problem_id, db=db, current_user=current_user)
 
 @router.delete("/{problem_id}")
 def delete_problem(problem_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role not in ["instructor", "admin"]:
-        raise HTTPException(status_code=403, detail="Chỉ Giảng viên và Admin mới có quyền xóa bài tập.")
+        raise HTTPException(status_code=403, detail="Only instructors and administrators can delete problems.")
         
     p = db.query(Problem).filter(Problem.id == problem_id).first()
     if not p:
@@ -329,7 +374,7 @@ def delete_problem(problem_id: str, db: Session = Depends(get_db), current_user:
     if p.creator_id and p.creator_id != current_user.id and current_user.role != "admin":
         raise HTTPException(status_code=403, detail="You don't have permission to delete this problem.")
         
-    from app.models import ProblemTopic, TestCase, TestCaseScript, Submission, ProblemDraft, Favorite, ProblemListItem, AiChatSession, AssignmentProblem
+    from app.models import ProblemTopic, TestCase, TestCaseScript, Submission, ProblemDraft, Favorite, ProblemListItem, AiChatSession, AssignmentProblem, ProblemSqlSolution
     
     # Delete related dependencies to avoid foreign key constraints
     db.query(AssignmentProblem).filter(AssignmentProblem.problem_id == problem_id).delete()
@@ -353,6 +398,7 @@ def delete_problem(problem_id: str, db: Session = Depends(get_db), current_user:
         db.query(TestCaseScript).filter(TestCaseScript.test_case_id == tc.id).delete()
     db.query(TestCase).filter(TestCase.problem_id == problem_id).delete()
     
+    db.query(ProblemSqlSolution).filter(ProblemSqlSolution.problem_id == problem_id).delete()
     db.delete(p)
     db.commit()
     return {"message": "Deleted successfully"}
@@ -360,7 +406,7 @@ def delete_problem(problem_id: str, db: Session = Depends(get_db), current_user:
 @router.post("", response_model=ProblemDetailResponse)
 def create_problem(problem: ProblemCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role not in ["instructor", "admin"]:
-        raise HTTPException(status_code=403, detail="Chỉ Giảng viên và Admin mới có quyền tạo bài tập.")
+        raise HTTPException(status_code=403, detail="Only instructors and administrators can create problems.")
         
     prob_id = str(uuid.uuid4())
     topics_list = [t.strip() for t in problem.topics.split(",")] if problem.topics else []
@@ -378,9 +424,14 @@ def create_problem(problem: ProblemCreate, db: Session = Depends(get_db), curren
         requirements=problem.requirements,
         hint="\n".join(problem.hints) if problem.hints else None,
         database_type=problem.database,
+        schema_file_name=problem.schema_file_name,
+        workspace_parts=problem.workspace_parts or ["SQL"],
+        expected=save_expected_outputs(problem.expected_outputs, problem.expected_output_visible) if problem.expected_outputs is not None else None,
         creator_id=current_user.id
     )
     db.add(new_prob)
+    db.flush()
+    save_solutions(db, prob_id, problem.sql_solutions)
     
     from app.models import Topic, ProblemTopic, TestCase, TestCaseScript
     for t_name in topics_list:
@@ -423,14 +474,14 @@ def create_problem(problem: ProblemCreate, db: Session = Depends(get_db), curren
     db.commit()
     db.refresh(new_prob)
     
-    resp = ProblemDetailResponse.model_validate(new_prob)
+    resp = get_problem(prob_id, db=db, current_user=current_user)
     resp.progress = "Not started"
     return resp
 
 @router.post("/validate")
 def validate_problem_solution(request: ProblemValidateRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role not in ["instructor", "admin"]:
-        raise HTTPException(status_code=403, detail="Chỉ Giảng viên mới có quyền sử dụng công cụ kiểm tra Sandbox.")
+        raise HTTPException(status_code=403, detail="Only instructors can validate reference solutions.")
         
     from app.services.sandbox import run_validate_sandbox
     result = run_validate_sandbox(db, request.schema_sql, request.seed_data, request.reference_solution)
@@ -444,10 +495,17 @@ def run_query(problem_id: str, request: QueryRequest, db: Session = Depends(get_
     if not p:
         raise HTTPException(status_code=404, detail="Problem not found")
         
+    effective_workspace_parts = p.workspace_parts or ["SQL"]
     if request.source in ["Assignments", "Contests"]:
-        activity_problem_access(db, current_user, p.id, request.context, request.source)
+        activity, activity_problem = activity_problem_access(db, current_user, p.id, request.context, request.source)
+        from app.routers.activity_attempts import require_open_exam
+        require_open_exam(db, current_user, activity)
+        effective_workspace_parts = activity_workspace_parts(p, activity, activity_problem)
     elif not check_problem_access(db, current_user, p):
         raise HTTPException(status_code=403, detail="You don't have permission to run this problem.")
+
+    if effective_workspace_parts != ["SQL"]:
+        raise HTTPException(status_code=400, detail="Use the workspace to run multi-section problems. Combined submissions are not supported by the SQL-only grader.")
         
     result = run_sandbox(db, p, request.query, is_submit=False)
     return result
@@ -458,6 +516,8 @@ def submit_query(problem_id: str, request: QueryRequest, db: Session = Depends(g
     if not p:
         raise HTTPException(status_code=404, detail="Problem not found")
         
+    effective_workspace_parts = p.workspace_parts or ["SQL"]
+
     if request.source not in ["Assignments", "Contests"] and not check_problem_access(db, current_user, p):
         raise HTTPException(status_code=403, detail="You don't have permission to submit this problem.")
         
@@ -465,12 +525,20 @@ def submit_query(problem_id: str, request: QueryRequest, db: Session = Depends(g
     
     if not p.practice_listed:
         if request.source not in ["Assignments", "Contests"] or not request.context:
-            raise HTTPException(status_code=403, detail="Bài tập này không cho phép nộp tự do (Practice). Cần nộp thông qua Assignment hợp lệ.")
+            raise HTTPException(status_code=403, detail="This problem requires submission through a valid assignment.")
             
     if request.source in ["Assignments", "Contests"]:
-        _, ap = activity_problem_access(db, current_user, p.id, request.context,
-                                        request.source, for_submit=True)
+        activity, ap = activity_problem_access(db, current_user, p.id, request.context,
+                                               request.source, for_submit=True)
+        from app.routers.activity_attempts import require_open_exam
+        require_open_exam(db, current_user, activity)
+        if activity.exam_mode and current_user.role == "student":
+            raise HTTPException(403, "Use Submit & Exit to submit the complete exam.")
         max_score = ap.points
+        effective_workspace_parts = activity_workspace_parts(p, activity, ap)
+
+    if effective_workspace_parts != ["SQL"]:
+        raise HTTPException(status_code=400, detail="Use the workspace to submit multi-section problems. Combined submissions are not supported by the SQL-only grader.")
                 
     result = run_sandbox(db, p, request.query, is_submit=True)
     
@@ -514,8 +582,8 @@ def submit_query(problem_id: str, request: QueryRequest, db: Session = Depends(g
                 notif = Notification(
                     id=str(uuid.uuid4()),
                     user_id=current_user.id,
-                    title="Cột mốc chuỗi học tập!",
-                    message=f"🔥 Chúc mừng! Bạn đã duy trì chuỗi học tập {current_user.current_streak} ngày liên tiếp. Hãy tiếp tục phát huy nhé!",
+                    title="Learning streak milestone!",
+                    message=f"🔥 Congratulations! Your learning streak has reached {current_user.current_streak} days. Keep it up!",
                     type="Milestone",
                     link="/practice"
                 )
@@ -531,3 +599,57 @@ def submit_query(problem_id: str, request: QueryRequest, db: Session = Depends(g
     
     return result
 
+
+
+@router.post("/{problem_id}/workspace/run")
+def run_problem_workspace(problem_id: str, request: "WorkspaceRunRequest", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    from app.services.problem_workspace import run_workspace
+    p = db.query(Problem).filter(Problem.id == problem_id).first()
+    if not p:
+        raise HTTPException(status_code=404, detail="Problem not found")
+    effective_workspace_parts = p.workspace_parts or ["SQL"]
+    if request.source in ["Assignments", "Contests"]:
+        activity, activity_problem = activity_problem_access(db, current_user, p.id, request.context, request.source)
+        from app.routers.activity_attempts import require_open_exam
+        require_open_exam(db, current_user, activity)
+        effective_workspace_parts = activity_workspace_parts(p, activity, activity_problem)
+    elif not check_problem_access(db, current_user, p):
+        raise HTTPException(status_code=403, detail="You don't have permission to run this problem.")
+    enabled = effective_workspace_parts
+    if request.part not in enabled:
+        raise HTTPException(status_code=400, detail="This section is not enabled for this problem.")
+    from app.models import TestCase, TestCaseScript
+    tc = db.query(TestCase).filter(TestCase.problem_id == p.id, TestCase.is_hidden == False).order_by(TestCase.order_index).first()
+    script = db.query(TestCaseScript).filter(TestCaseScript.test_case_id == tc.id).first() if tc else None
+    solutions = stored_solutions(db, p.id) if request.part == "SQL" else []
+    limits = [row.time_limit_ms for row in solutions if row.enabled and row.query.strip()] if solutions else None
+    if limits == []:
+        raise HTTPException(status_code=400, detail="No enabled SQL solution has been configured for this problem.")
+    return run_workspace(db.get_bind(), enabled, request,
+                         script.create_script if script else "",
+                         script.insert_script if script else "", sql_time_limits=limits)
+
+
+@router.post("/{problem_id}/workspace/submit")
+def submit_workspace(problem_id: str, request: WorkspaceRunRequest,
+                     db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    from app.routers.activity_attempts import store_submission
+    p = db.query(Problem).filter(Problem.id == problem_id).first()
+    if not p:
+        raise HTTPException(404, "Problem not found.")
+    parts = p.workspace_parts or ["SQL"]
+    if request.source in ["Assignments", "Contests"]:
+        activity, member = activity_problem_access(db, current_user, p.id, request.context, request.source, for_submit=True)
+        if activity.exam_mode and current_user.role == "student":
+            raise HTTPException(403, "Use Submit & Exit to submit the complete exam.")
+        parts = activity_workspace_parts(p, activity, member)
+    elif not check_problem_access(db, current_user, p):
+        raise HTTPException(403, "You cannot submit this problem.")
+    if current_user.role != "student":
+        raise HTTPException(403, "Only students can submit work.")
+    if parts == ["SQL"]:
+        raise HTTPException(400, "Use the SQL submission endpoint for SQL-only work.")
+    scripts = {"ddl": request.ddl, "dml": request.dml, "query": request.query}
+    sub = store_submission(db, current_user.id, p, request.source, request.context, scripts, parts)
+    db.commit()
+    return {"status": sub.result, "message": "Your work has been submitted for teacher review."}

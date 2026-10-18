@@ -1,3 +1,5 @@
+import { TranslatedText } from "./TranslatedText";
+import { useLanguage } from "../context/LanguageContext";
 import { DailySubmission } from "../services/studentApi";
 
 export function Activity({
@@ -7,6 +9,8 @@ export function Activity({
   small?: boolean;
   submissions?: DailySubmission[];
 }) {
+  const { t: tr } = useLanguage("common");
+  const { t, locale } = useLanguage();
   const columns = small ? 5 : 26; // 6 months is approx 26 weeks
   const submissionsMap = new Map(submissions.map((s) => [s.date, s.count]));
 
@@ -25,12 +29,12 @@ export function Activity({
     
     // For month labels
     if (d.getDay() === 0) { // Sunday, start of the column
-      const monthStr = d.toLocaleString("default", { month: "short" });
+      const monthStr = d.toLocaleString(locale, { month: "short" });
       if (monthStr !== currentMonth && !small) {
         months.push(monthStr);
         currentMonth = monthStr;
       } else if (small && i === 0) {
-        months.push(d.toLocaleString("default", { month: "long" }));
+        months.push(d.toLocaleString(locale, { month: "long" }));
       } else if (months.length < Math.floor(i / 7) + 1 && !small) {
         // Keep spacing consistent if month doesn't change
         months.push("");
@@ -59,21 +63,21 @@ export function Activity({
     <div className={"activity" + (small ? " small" : "")}>
       <div className="activity-months">
         {months.map((m, i) => (
-          <span key={i}>{m}</span>
+          <span key={i}><TranslatedText>{tr(m)}</TranslatedText></span>
         ))}
       </div>
       <div className="activity-body">
         <div className="activity-days">
-          <span>Sun</span>
-          <span>Tue</span>
-          <span>Thu</span>
-          <span>Sat</span>
+          <span><TranslatedText>{t("Sun")}</TranslatedText></span>
+          <span><TranslatedText>{t("Tue")}</TranslatedText></span>
+          <span><TranslatedText>{t("Thu")}</TranslatedText></span>
+          <span><TranslatedText>{t("Sat")}</TranslatedText></span>
         </div>
         <div
           className="activity-grid"
           style={{ gridTemplateColumns: `repeat(${columns},minmax(0,1fr))` }}
           role="img"
-          aria-label="SQL activity heatmap"
+          aria-label={t("SQL activity heatmap")}
         >
           {cells.map((cell, i) => (
             <i
@@ -82,7 +86,7 @@ export function Activity({
               title={
                 cell.isFuture
                   ? ""
-                  : `${cell.count} submissions on ${cell.dateStr}`
+                  : t("{count} submissions on {date}", { count: cell.count, date: cell.dateStr })
               }
               style={{ opacity: cell.isFuture ? 0 : 1 }}
             />
@@ -90,13 +94,13 @@ export function Activity({
         </div>
       </div>
       <div className="activity-legend">
-        <span>Less</span>
+        <span><TranslatedText>{t("Less")}</TranslatedText></span>
         {[0, 1, 2, 3, 4].map((n) => (
           <i key={n} className={"level-" + n} />
         ))}
-        <span>More</span>
+        <span><TranslatedText>{t("More")}</TranslatedText></span>
         {!small && (
-          <span className="activity-caption">Submissions per day</span>
+          <span className="activity-caption"><TranslatedText>{t("Submissions per day")}</TranslatedText></span>
         )}
       </div>
     </div>

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { build } from "esbuild";
 
+globalThis.window = { location: { origin: "http://localhost" } };
 const memory = new Map();
 globalThis.localStorage = {
   getItem: key => memory.get(key) ?? null,
@@ -56,6 +57,7 @@ globalThis.fetch = async (url, options = {}) => {
     const item = catalog.find(activity => activity.id === decodeURIComponent(url.slice("/api/assignments/".length)));
     return response(item || { detail: "Not found" }, item ? 200 : 404);
   }
+  if (url === "/api/problems/P1/workspace/run") return response({ status: "Success", message: "Done", tables: [] });
   if (url === "/api/failure") return response({ detail: "Specific server error" }, 400);
   throw new Error(`Unexpected request: ${url}`);
 };
@@ -66,6 +68,7 @@ const output = await build({
     resolveDir: process.cwd(), loader: "ts",
   },
   bundle: true, write: false, format: "esm", platform: "node",
+  define: { "import.meta.env": "{}" },
 });
 const { authService, studentApi, apiFetch, readContestMarkdown, contestBannerClass, contestBannerStyle, selectFeaturedContests, TOKEN_KEY, SESSION_KEY } = await import(
   "data:text/javascript;base64," + Buffer.from(output.outputFiles[0].text).toString("base64")
@@ -87,6 +90,10 @@ assert.deepEqual(dashboard.deadlines.map(item => item.id), ["A1"]);
 assert.equal(dashboard.deadlines[0].time, new Date(`${futureUtc[0]}T${futureUtc[1]}:00Z`).toTimeString().slice(0, 5));
 assert.deepEqual((await studentApi.getProblems({ progress: "Not started" })).map(item => item.id), ["P1"]);
 assert.deepEqual((await studentApi.getProblems({ topic: "WHERE" })).map(item => item.id), ["P1"]);
+const workspaceInput = { part: "DML", ddl: "CREATE TABLE T(id INT)", dml: "INSERT INTO T VALUES(1)", query: "", source: "Assignments", context: "A1" };
+assert.equal((await studentApi.runWorkspace("P1", workspaceInput)).status, "Success");
+const workspaceCall = calls.find(call => call.url === "/api/problems/P1/workspace/run");
+assert.deepEqual(JSON.parse(workspaceCall.options.body), workspaceInput);
 const contests = await studentApi.getContests();
 assert.deepEqual(contests.map(item => item.id), ["T1", "T2"]);
 assert.deepEqual(contests[0].problemIds, []);

@@ -23,6 +23,15 @@ router = APIRouter(
 BANNER_DIR = Path(__file__).resolve().parents[2] / "uploads" / "contest-banners"
 BANNER_URL = "/api/assignments/banners/"
 BANNER_NAME = re.compile(r"^[0-9a-f]{32}\.webp$")
+DEFAULT_ASSIGNMENT_WORKSPACE_PARTS = ["DDL", "DML", "SQL"]
+
+
+def assignment_problem_payload(problem: AssignmentProblem):
+    return {
+        "id": problem.problem_id,
+        "points": problem.points,
+        "workspaceParts": DEFAULT_ASSIGNMENT_WORKSPACE_PARTS if problem.workspace_parts is None else problem.workspace_parts,
+    }
 
 
 def validate_banner_fields(assignment: AssignmentCreate):
@@ -93,12 +102,17 @@ def validate_assignment_classes(assignment: AssignmentCreate, db: Session, curre
     if assignment.published and (not assignment.problems or
                                  (assignment.audience_type == "classes" and not assignment.class_ids)):
         raise HTTPException(status_code=400, detail="Published activities need an audience and at least one problem.")
+    if assignment.published and any(not problem.workspace_parts for problem in assignment.problems):
+        raise HTTPException(status_code=400, detail="Select at least one section for each problem.")
     if assignment.published and assignment.is_contest and not all((
         assignment.short_description.strip(), assignment.description.strip(), assignment.rules.strip()
     )):
         raise HTTPException(status_code=400, detail="Published contests need a short description, description, and rules.")
-    if assignment.opens >= assignment.closes:
-        raise HTTPException(status_code=400, detail="End time must be after start time.")
+    if assignment.published:
+        if not assignment.opens or not assignment.closes:
+            raise HTTPException(status_code=400, detail="Published activities need valid start and end times.")
+        if assignment.opens >= assignment.closes:
+            raise HTTPException(status_code=400, detail="End time must be after start time.")
     if assignment.is_contest and assignment.audience_type == "all_students" and assignment.class_ids:
         raise HTTPException(status_code=400, detail="All-students contests cannot select classes.")
     if len(set(assignment.class_ids)) != len(assignment.class_ids):
@@ -165,6 +179,7 @@ def create_assignment(assignment: AssignmentCreate, db: Session = Depends(get_db
         comments_enabled=assignment.student_options.comments if not assignment.is_contest else False,
         leaderboard_enabled=assignment.student_options.leaderboard if assignment.is_contest else False,
         ai_allowed=assignment.student_options.ai_allowed,
+        exam_mode=assignment.student_options.exam_mode,
         instructor_id=current_user.id
     )
     db.add(new_assignment)
@@ -183,7 +198,8 @@ def create_assignment(assignment: AssignmentCreate, db: Session = Depends(get_db
             assignment_id=assignment_id,
             problem_id=p.id,
             points=p.points,
-            order_index=i
+            order_index=i,
+            workspace_parts=p.workspace_parts,
         )
         db.add(ap)
         
@@ -253,7 +269,7 @@ def get_assignments(db: Session = Depends(get_db), current_user: User = Depends(
         due = a.closes.strftime("%b %d") if a.closes else ""
         audience_type = a.audience_type or "classes"
         class_str = "All students" if a.is_contest and audience_type == "all_students" else ", ".join(class_ids) if class_ids else "No classes"
-        problems_list = [{"id": p.problem_id, "points": p.points} for p in problems]
+        problems_list = [assignment_problem_payload(p) for p in problems]
         
         # Calculate total students assigned
         student_ids = eligible_student_ids(db, audience_type, class_ids)
@@ -343,7 +359,8 @@ def get_assignments(db: Session = Depends(get_db), current_user: User = Depends(
                 "hints": a.hints_enabled,
                 "comments": a.comments_enabled,
                 "leaderboard": a.leaderboard_enabled,
-                "aiAllowed": a.ai_allowed
+                "aiAllowed": a.ai_allowed,
+                "examMode": bool(a.exam_mode)
             },
             "problemList": problems_list,
             "classIds": class_ids
@@ -378,7 +395,7 @@ def get_assignment(assignment_id: str, db: Session = Depends(get_db), current_us
         elif not (a.is_contest and a.audience_type == "all_students"):
             raise HTTPException(status_code=403, detail="Bài tập này chưa được giao cho bất kỳ lớp nào.")
     problems = db.query(AssignmentProblem).filter(AssignmentProblem.assignment_id == a.id).order_by(AssignmentProblem.order_index).all()
-    problems_list = [{"id": p.problem_id, "points": p.points} for p in problems]
+    problems_list = [assignment_problem_payload(p) for p in problems]
     
     now = datetime.datetime.utcnow()
     
@@ -475,7 +492,8 @@ def get_assignment(assignment_id: str, db: Session = Depends(get_db), current_us
             "hints": a.hints_enabled,
             "comments": a.comments_enabled,
             "leaderboard": a.leaderboard_enabled,
-            "aiAllowed": a.ai_allowed
+            "aiAllowed": a.ai_allowed,
+                "examMode": bool(a.exam_mode)
         },
         "problemList": problems_list,
         "classIds": class_ids
@@ -493,7 +511,11 @@ def update_assignment(assignment_id: str, assignment: AssignmentCreate, db: Sess
     if current_user.role == "instructor" and a.instructor_id != current_user.id:
         raise HTTPException(status_code=403, detail="You do not have permission to modify this assignment.")
     validate_assignment_classes(assignment, db, current_user)
-        
+    if bool(a.exam_mode) != assignment.student_options.exam_mode:
+        from app.models import ActivityAttempt
+        if db.query(ActivityAttempt).filter(ActivityAttempt.assignment_id == a.id).first():
+            raise HTTPException(status_code=409, detail="Exam mode cannot be changed after students have started.")
+
     was_published = a.published
     a.title = assignment.title
     a.is_contest = assignment.is_contest
@@ -512,6 +534,7 @@ def update_assignment(assignment_id: str, assignment: AssignmentCreate, db: Sess
     a.comments_enabled = assignment.student_options.comments if not assignment.is_contest else False
     a.leaderboard_enabled = assignment.student_options.leaderboard if assignment.is_contest else False
     a.ai_allowed = assignment.student_options.ai_allowed
+    a.exam_mode = assignment.student_options.exam_mode
     a.updated_at = datetime.datetime.utcnow()
     
     db.query(AssignmentClass).filter(AssignmentClass.assignment_id == assignment_id).delete()
@@ -530,7 +553,8 @@ def update_assignment(assignment_id: str, assignment: AssignmentCreate, db: Sess
             assignment_id=assignment_id,
             problem_id=p.id,
             points=p.points,
-            order_index=i
+            order_index=i,
+            workspace_parts=p.workspace_parts,
         )
         db.add(ap)
         
@@ -585,7 +609,8 @@ def delete_assignment(assignment_id: str, db: Session = Depends(get_db), current
     db.query(AssignmentClass).filter(AssignmentClass.assignment_id == assignment_id).delete()
     db.query(AssignmentProblem).filter(AssignmentProblem.assignment_id == assignment_id).delete()
     
-    from app.models import Submission
+    from app.models import Submission, ActivityAttempt
+    db.query(ActivityAttempt).filter(ActivityAttempt.assignment_id == assignment_id).delete()
     db.query(Submission).filter(Submission.context == assignment_id).delete()
     
     db.delete(a)

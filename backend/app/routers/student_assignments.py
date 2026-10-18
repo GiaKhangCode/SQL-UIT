@@ -143,6 +143,7 @@ def get_student_assignments(db: Session = Depends(get_db), current_user: User = 
             "contestStatus": contest_status,
             "leaderboardEnabled": bool(a.leaderboard_enabled) if a.is_contest else False,
             "aiAllowed": bool(a.ai_allowed),
+            "examMode": bool(a.exam_mode),
             "totalPoints": sum(ap.points for ap in a_problems),
             "score": score,
             "submitters": submitters,

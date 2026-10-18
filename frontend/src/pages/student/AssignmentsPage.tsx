@@ -1,3 +1,5 @@
+import { TranslatedText } from "../../components/TranslatedText";
+import { useLanguage } from "../../context/LanguageContext";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { studentApi } from "../../services/studentApi";
@@ -7,8 +9,8 @@ import { Dialog, Empty, ErrorState, Loading, Status } from "../../components/ui"
 import { Calendar } from "../../components/Calendar";
 const CLASS_PAGE_SIZE = 6;
 
-function dateLabel(date: string) {
-  return new Date(date + "T00:00:00Z").toLocaleDateString("en-US", {
+function dateLabel(date: string, locale: string) {
+  return new Date(date + "T00:00:00Z").toLocaleDateString(locale, {
     month: "short",
     day: "numeric",
     timeZone: "UTC",
@@ -21,19 +23,20 @@ function AssignmentCalendar({
   items: Deadline[];
   onOpen: () => void;
 }) {
+  const { t: tr, locale: uiLocale } = useLanguage("student");
   return (
     <div className="assignment-calendar-content">
       <Calendar items={items} />
-      <h3>Upcoming deadlines · {items.length}</h3>
+      <h3><TranslatedText>{tr("Upcoming deadlines ·")}</TranslatedText> {items.length}</h3>
       <div
         className="assignment-deadline-scroll"
         tabIndex={0}
-        aria-label="Upcoming assignment deadlines"
+        aria-label={tr("Upcoming assignment deadlines")}
       >
         {items.map((item) => (
           <Link key={item.id} to={item.to} onClick={onOpen}>
             <small>
-              {dateLabel(item.date)} · {item.time}
+              {dateLabel(item.date, uiLocale)} · {item.time}
             </small>
             <b>{item.title}</b>
             <small>{item.context}</small>
@@ -44,13 +47,14 @@ function AssignmentCalendar({
   );
 }
 export function AssignmentsPage() {
+  const { t: tr, locale: uiLocale } = useLanguage("student");
   const { data, loading, error } = useLoad(studentApi.getAssignments);
   const [search, setSearch] = useState("");
   const [classPage, setClassPage] = useState(1);
   const [params, setParams] = useSearchParams();
   const [calendarOpen, setCalendarOpen] = useState(false);
-  if (loading) return <section className="page assignments-page compact-tables-page compact-student-assignments"><Loading label="Loading assignments…" /></section>;
-  if (error || !data) return <section className="page assignments-page compact-tables-page compact-student-assignments"><ErrorState title="Assignments unavailable" message={error || "Could not load assignments."} onRetry={() => window.location.reload()} /></section>;
+  if (loading) return <section className="page assignments-page compact-tables-page compact-student-assignments"><Loading label={tr("Loading assignments…")} /></section>;
+  if (error || !data) return <section className="page assignments-page compact-tables-page compact-student-assignments"><ErrorState title={tr("Assignments unavailable")} message={tr(error) || tr("Could not load assignments.")} onRetry={() => window.location.reload()} /></section>;
   const assignmentDeadlines = data.deadlines.filter(
     (item) => item.kind === "Assignment",
   );
@@ -61,7 +65,7 @@ export function AssignmentsPage() {
     ...c,
     context: c.code,
     term: c.code.includes(" · ") ? c.code.slice(c.code.lastIndexOf(" · ") + 3) : c.code,
-    description: c.lecturer + " · Lecturer",
+    description: c.lecturer + " · " + tr("Lecturer"),
     work: data.assignments.filter((a) => a.classIds.includes(c.id)),
   }));
   const filtered = cards.filter((c) =>
@@ -74,41 +78,39 @@ export function AssignmentsPage() {
   const pageClasses = filtered.slice((currentClassPage - 1) * CLASS_PAGE_SIZE, currentClassPage * CLASS_PAGE_SIZE);
   return (
     <section className="page assignments-page compact-tables-page compact-student-assignments">
-      <h1 className="sr-only">Assignments</h1>
+      <h1 className="sr-only"><TranslatedText>{tr("Assignments")}</TranslatedText></h1>
       <div className="assignment-mobile-deadlines">
         <b>
-          Deadlines · Next:{" "}
-          {assignmentDeadlines[0]
-            ? dateLabel(assignmentDeadlines[0].date)
-            : "None"}
+          <TranslatedText>{tr("Deadlines · Next:")}</TranslatedText>{" "}
+          <TranslatedText>{assignmentDeadlines[0] ? dateLabel(assignmentDeadlines[0].date, uiLocale) : tr("None")}</TranslatedText>
         </b>
         <button className="text-button" onClick={() => setCalendarOpen(true)}>
-          Calendar ›
+          <TranslatedText>{tr("Calendar ›")}</TranslatedText>
         </button>
       </div>
       <div className="assignments-layout">
         <div className="assignment-class-panel">
           <div className="scope-toolbar">
-            <h2 className="class-list-label">Class List</h2>
+            <h2 className="class-list-label"><TranslatedText>{tr("Class List")}</TranslatedText></h2>
             <label className="sr-only" htmlFor="scope-search">
-              Search classes
+              <TranslatedText>{tr("Search classes")}</TranslatedText>
             </label>
             <input
               id="scope-search"
               value={search}
               onChange={(e) => { setSearch(e.target.value); setClassPage(1); }}
-              placeholder="⌕ Search classes…"
+              placeholder={tr("⌕ Search classes…")}
             />
-            <nav className="class-list-pagination" aria-label="Class pages">
-              <button type="button" className="button" disabled={currentClassPage === 1} onClick={() => setClassPage(currentClassPage - 1)}>← Previous</button>
-              <span aria-live="polite">Page {currentClassPage} of {classPageCount}</span>
-              <button type="button" className="button" disabled={currentClassPage === classPageCount} onClick={() => setClassPage(currentClassPage + 1)}>Next →</button>
+            <nav className="class-list-pagination" aria-label={tr("Class pages")}>
+              <button type="button" className="button" disabled={currentClassPage === 1} onClick={() => setClassPage(currentClassPage - 1)}><TranslatedText>{tr("← Previous")}</TranslatedText></button>
+              <span aria-live="polite"><TranslatedText>{tr("Page")}</TranslatedText> {currentClassPage} <TranslatedText>{tr("of")}</TranslatedText> {classPageCount}</span>
+              <button type="button" className="button" disabled={currentClassPage === classPageCount} onClick={() => setClassPage(currentClassPage + 1)}><TranslatedText>{tr("Next →")}</TranslatedText></button>
             </nav>
           </div>
           <div
             className="class-grid-scroll"
             tabIndex={0}
-            aria-label="Class list"
+            aria-label={tr("Class list")}
           >
             <div className="class-grid">
               {pageClasses.map((c) => {
@@ -129,22 +131,20 @@ export function AssignmentsPage() {
                       <h2 title={c.name}>{c.name}</h2>
                       <p>{c.description}</p>
                       <span className="class-mobile-summary">
-                        {pending.length} pending
+                        {pending.length} <TranslatedText>{tr("pending")}</TranslatedText>
                       </span>
                     </div>
                     <div className="class-card-footer">
                       <div>
                         <b>
-                          {pending.length} pending assignment
-                          {pending.length === 1 ? "" : "s"}
+                          {pending.length} <TranslatedText>{tr("pending assignment")}</TranslatedText>
+                          <TranslatedText>{pending.length === 1 ? "" : tr("s")}</TranslatedText>
                         </b>
                         <small>
-                          <span className="class-next-prefix">Next due · </span>
-                          {pending[0]
-                            ? dateLabel(pending[0].date) +
+                          <span className="class-next-prefix"><TranslatedText>{tr("Next due ·")}</TranslatedText> </span>
+                          <TranslatedText>{pending[0] ? dateLabel(pending[0].date, uiLocale) +
                               " · " +
-                              pending[0].time
-                            : "None"}
+                              pending[0].time : tr("None")}</TranslatedText>
                         </small>
                       </div>
                       <span className="class-desktop-arrow">↗</span>
@@ -155,7 +155,7 @@ export function AssignmentsPage() {
               })}
             </div>
             {!filtered.length && (
-              <Empty title="No matching classes" />
+              <Empty title={tr("No matching classes")} />
             )}
           </div>
         </div>
@@ -168,7 +168,7 @@ export function AssignmentsPage() {
       </div>
       {calendarOpen && (
         <Dialog
-          title="Calendar"
+          title={tr("Calendar")}
           className="assignment-calendar-dialog"
           onClose={() => setCalendarOpen(false)}
         >
@@ -186,7 +186,7 @@ export function AssignmentsPage() {
           <Status value={selectedWork.status} />
           <p className="tiny muted">
             {data.classes.filter((c) => selectedWork.classIds.includes(c.id)).map((c) => c.name).join(", ")}
-            {" · Due "}{dateLabel(selectedWork.date)} {selectedWork.time}
+            <TranslatedText>{tr("· Due")}</TranslatedText>{dateLabel(selectedWork.date, uiLocale)} {selectedWork.time}
           </p>
           {selectedWork.problemIds.map((id) => (
             <Link
@@ -201,8 +201,8 @@ export function AssignmentsPage() {
                 encodeURIComponent(selectedWork.title)
               }
             >
-              {data.problems?.find((p) => p.id === id)?.title || "SQL problem"}
-              <span>Open problem →</span>
+              <TranslatedText>{data.problems?.find((p) => p.id === id)?.title || tr("SQL problem")}</TranslatedText>
+              <span><TranslatedText>{tr("Open problem →")}</TranslatedText></span>
             </Link>
           ))}
         </Dialog>

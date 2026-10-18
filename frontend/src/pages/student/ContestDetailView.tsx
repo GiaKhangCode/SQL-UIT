@@ -1,6 +1,8 @@
+import { TranslatedText } from "../../components/TranslatedText";
+import { useLanguage } from "../../context/LanguageContext";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import ReactMarkdown from "react-markdown";
+import { ProblemMarkdown } from "../../components/ProblemMarkdown";
 import { Empty, Loading, Status } from "../../components/ui";
 import { useLoad } from "../../components/useLoad";
 import { studentApi } from "../../services/studentApi";
@@ -24,6 +26,9 @@ export function ContestDetailView({ contest, phase, now, preview = false }: {
   now: number;
   preview?: boolean;
 }) {
+  const { t: tr, locale: uiLocale } = useLanguage("student");
+  const isComprehensive = contest.examType === "comprehensive";
+  const examUrl = `/contests/${encodeURIComponent(contest.id)}/exam`;
   const [problemPage, setProblemPage] = useState(1);
   const problemScroll = useRef<HTMLDivElement>(null);
   const [selectedProblemId, setSelectedProblemId] = useState<string | null>(null);
@@ -43,7 +48,7 @@ export function ContestDetailView({ contest, phase, now, preview = false }: {
   const ends = parseServerDateTime(contest.closesAt).getTime();
   const topLeaderboard = [...contest.leaderboard].sort((a, b) => a.rank - b.rank).slice(0, 50);
   const workspace = (id: string) =>
-    `/workspace/${encodeURIComponent(id)}?source=Contests&context=${encodeURIComponent(contest.id)}` +
+    isComprehensive ? examUrl : `/workspace/${encodeURIComponent(id)}?source=Contests&context=${encodeURIComponent(contest.id)}` +
     `&contextTitle=${encodeURIComponent(contest.title)}&contest=${encodeURIComponent(contest.id)}` +
     (phase === "Closed" ? "&closed=1" : "") + (contest.aiAllowed ? "&aiAllowed=1" : "");
 
@@ -53,68 +58,74 @@ export function ContestDetailView({ contest, phase, now, preview = false }: {
             <header className={`contest-detail-banner ${contestBannerClass(contest.id)} contest-phase-${phase.toLowerCase()}${contest.bannerUrl ? " has-image" : ""}`}
       style={contestBannerStyle(contest.bannerUrl)}>
       <div>
-        <small>{phase.toUpperCase()} CONTEST</small>
+        <small><TranslatedText>{tr(phase).toLocaleUpperCase(uiLocale)}</TranslatedText> <TranslatedText>{tr("CONTEST")}</TranslatedText></small>
         <h1>{contest.title}</h1>
         <p className="tiny">{contest.scope}</p>
-        <p className="tiny">Starts {contest.date} {contest.time} · Ends {contest.endDate || contest.date} {contest.endTime} · {contest.problemCount} problem{contest.problemCount === 1 ? "" : "s"}</p>
+        <p className="tiny"><TranslatedText>{tr("Starts")}</TranslatedText> {contest.date} {contest.time} <TranslatedText>{tr("· Ends")}</TranslatedText> {contest.endDate || contest.date} {contest.endTime} · {contest.problemCount} <TranslatedText>{tr("problem")}</TranslatedText><TranslatedText>{contest.problemCount === 1 ? "" : tr("s")}</TranslatedText></p>
       </div>
       <div className="contest-banner-summary">
-        {phase === "Upcoming" && <p className="tiny">Starts in {Number.isFinite(starts) ? timeRemaining(starts - now) : "Not scheduled"}</p>}
-        {phase === "Live" && <p className="tiny">Ends in {Number.isFinite(ends) ? timeRemaining(ends - now) : "Not scheduled"}</p>}
-        {phase === "Closed" && <p className="tiny">Final score · {contest.score}/{contest.totalPoints}{contest.rank ? ` · Rank ${contest.rank}` : ""}</p>}
+        {phase === "Upcoming" && <p className="tiny"><TranslatedText>{tr("Starts in")}</TranslatedText> <TranslatedText>{Number.isFinite(starts) ? timeRemaining(starts - now) : tr("Not scheduled")}</TranslatedText></p>}
+        {phase === "Live" && <p className="tiny"><TranslatedText>{tr("Ends in")}</TranslatedText> <TranslatedText>{Number.isFinite(ends) ? timeRemaining(ends - now) : tr("Not scheduled")}</TranslatedText></p>}
+        {phase === "Closed" && <p className="tiny"><TranslatedText>{tr("Final score ·")}</TranslatedText> {contest.score}/{contest.totalPoints}<TranslatedText>{contest.rank ? tr("· Rank {value0}", { value0: contest.rank }) : ""}</TranslatedText></p>}
       </div>
     </header>
         <div className="contest-overview-card">
         <section className="contest-information-section">
-          <h2>About this contest</h2>
+          <h2><TranslatedText>{tr("About this contest")}</TranslatedText></h2>
           {contest.shortDescription && <p className="tiny muted">{contest.shortDescription}</p>}
-          <div className="contest-markdown"><ReactMarkdown skipHtml>{contest.description || "No description yet."}</ReactMarkdown></div>
+          <ProblemMarkdown className="contest-markdown">{contest.description || tr("No description yet.")}</ProblemMarkdown>
         </section>
-        <section className="contest-information-section"><h2>Contest rules</h2><p className="contest-rules tiny muted">{contest.rules || "No rules yet."}</p></section>
+        <section className="contest-information-section">
+          <h2><TranslatedText>{tr("Contest rules")}</TranslatedText></h2>
+          <ProblemMarkdown className="contest-rules tiny muted contest-markdown">{contest.rules || tr("No rules yet.")}</ProblemMarkdown>
+        </section>
         </div>
       </div>
-            <aside className="contest-participation"><h2>Participation</h2><dl>
-        <div><dt>Participants</dt><dd>{contest.submitters ?? 0}</dd></div>
-        {phase === "Live" && <div><dt>Your score</dt><dd>{contest.score}/{contest.totalPoints}</dd></div>}
-        <div><dt>AI assistance</dt><dd>{contest.aiAllowed ? "Allowed" : "Disabled"}</dd></div>
-        {contest.leaderboardEnabled && phase === "Live" && contest.rank && <div><dt>Your rank</dt><dd>#{contest.rank}</dd></div>}
+            <aside className="contest-participation"><h2><TranslatedText>{tr("Participation")}</TranslatedText></h2><dl>
+        <div><dt><TranslatedText>{tr("Participants")}</TranslatedText></dt><dd>{contest.submitters ?? 0}</dd></div>
+        {phase === "Live" && <div><dt><TranslatedText>{tr("Your score")}</TranslatedText></dt><dd>{contest.score}/{contest.totalPoints}</dd></div>}
+        <div><dt><TranslatedText>{tr("AI assistance")}</TranslatedText></dt><dd><TranslatedText>{contest.aiAllowed ? tr("Allowed") : tr("Disabled")}</TranslatedText></dd></div>
+        {contest.leaderboardEnabled && phase === "Live" && contest.rank && <div><dt><TranslatedText>{tr("Your rank")}</TranslatedText></dt><dd>#{contest.rank}</dd></div>}
       </dl>
-        {contest.leaderboardEnabled && phase !== "Upcoming" && <div className="contest-leaderboard"><h3>Leaderboard</h3>
-          {topLeaderboard.length ? <ol className="contest-leaderboard-scroll" tabIndex={0} aria-label="Top 50 contest participants">{topLeaderboard.map((entry, index) => <li key={`${entry.rank}-${entry.student}-${index}`}><span>#{entry.rank} {entry.student}</span><b>{entry.score}</b></li>)}</ol> : <p className="tiny muted">No submissions yet.</p>}
+        {isComprehensive && phase === "Live" && (preview
+          ? <button className="button primary" type="button" disabled><TranslatedText>{tr("Enter exam →")}</TranslatedText></button>
+          : <Link className="button primary" to={examUrl}><TranslatedText>{tr("Enter exam →")}</TranslatedText></Link>)}
+        {contest.leaderboardEnabled && phase !== "Upcoming" && <div className="contest-leaderboard"><h3><TranslatedText>{tr("Leaderboard")}</TranslatedText></h3>
+          {topLeaderboard.length ? <ol className="contest-leaderboard-scroll" tabIndex={0} aria-label={tr("Top 50 contest participants")}>{topLeaderboard.map((entry, index) => <li key={`${entry.rank}-${entry.student}-${index}`}><span>#{entry.rank} {entry.student}</span><b>{entry.score}</b></li>)}</ol> : <p className="tiny muted"><TranslatedText>{tr("No submissions yet.")}</TranslatedText></p>}
         </div>}
       </aside>
     </div>
     <div className="contest-detail-layout contest-detail-bottom">
       <section className="contest-information-section contest-problems-panel">
-          <div className="section-heading"><h2>Problems</h2>
+          <div className="section-heading"><h2><TranslatedText>{tr("Problems")}</TranslatedText></h2>
             <div className="contest-problem-controls">
-              <small className="muted">{phase === "Upcoming" || preview ? `${contest.problemCount} problems` : contest.problemIds.length ? `Showing ${firstProblemIndex + 1}–${Math.min(firstProblemIndex + 10, contest.problemIds.length)} of ${contest.problemIds.length}` : "0 problems"}</small>
-              {!preview && phase !== "Upcoming" && problemPageCount > 1 && <nav aria-label="Contest problem pages">
-                <button type="button" className="button" disabled={currentProblemPage === 1} onClick={() => setProblemPage(currentProblemPage - 1)}>← Previous</button>
-                <span>Page {currentProblemPage} of {problemPageCount}</span>
-                <button type="button" className="button" disabled={currentProblemPage === problemPageCount} onClick={() => setProblemPage(currentProblemPage + 1)}>Next →</button>
+              <small className="muted"><TranslatedText>{phase === "Upcoming" || preview ? tr("{value0} problems", { value0: contest.problemCount }) : contest.problemIds.length ? tr("Showing {value0}–{value1} of {value2}", { value0: firstProblemIndex + 1, value1: Math.min(firstProblemIndex + 10, contest.problemIds.length), value2: contest.problemIds.length }) : tr("0 problems")}</TranslatedText></small>
+              {!preview && phase !== "Upcoming" && problemPageCount > 1 && <nav aria-label={tr("Contest problem pages")}>
+                <button type="button" className="button" disabled={currentProblemPage === 1} onClick={() => setProblemPage(currentProblemPage - 1)}><TranslatedText>{tr("← Previous")}</TranslatedText></button>
+                <span><TranslatedText>{tr("Page")}</TranslatedText> {currentProblemPage} <TranslatedText>{tr("of")}</TranslatedText> {problemPageCount}</span>
+                <button type="button" className="button" disabled={currentProblemPage === problemPageCount} onClick={() => setProblemPage(currentProblemPage + 1)}><TranslatedText>{tr("Next →")}</TranslatedText></button>
               </nav>}
             </div>
           </div>
-          <div className="contest-problem-scroll" ref={problemScroll} tabIndex={0} aria-label="Contest problems">
-          {phase === "Upcoming" ? <p className="muted">Problems become available when the contest starts.</p> : visibleProblemIds.map((id, pageIndex) => {
+          <div className="contest-problem-scroll" ref={problemScroll} tabIndex={0} aria-label={tr("Contest problems")}>
+          {phase === "Upcoming" ? <p className="muted"><TranslatedText>{tr("Problems become available when the contest starts.")}</TranslatedText></p> : visibleProblemIds.map((id, pageIndex) => {
             const index = firstProblemIndex + pageIndex;
             const problem = contest.problemDetails.find((item) => item.id === id);
-            const content = <><div><b>{String.fromCharCode(65 + index)}. {problem?.title || `Problem ${index + 1}`}</b>
-              <small>{problem ? `${problem.difficulty} · ${problem.topic}${problem.points == null ? "" : ` · ${problem.points} points`}` : "SQL problem"}</small></div>
+            const content = <><div><b>{String.fromCharCode(65 + index)}. <TranslatedText>{problem?.title || tr("Problem {value0}", { value0: index + 1 })}</TranslatedText></b>
+              <small><TranslatedText>{problem ? `${tr(problem.difficulty)} · ${problem.topic}${problem.points == null ? "" : ` · ${problem.points} ${tr("points")}`}` : tr("SQL problem")}</TranslatedText></small></div>
               {!preview && <Status value={attemptsLoading ? "Loading…" : attemptsError ? "Unavailable" : problemAttemptStatus((attempts || []).filter((item) => item.problemId === id))} />}</>;
             return preview
               ? <div className="contest-problem-row" key={id} aria-disabled="true">{content}</div>
               : <button type="button" className={`contest-problem-row contest-problem-select${selectedId === id ? " selected" : ""}`} key={id} aria-pressed={selectedId === id} onClick={() => setSelectedProblemId(id)}>{content}</button>;
           })}
-          {phase !== "Upcoming" && !contest.problemIds.length && <p className="muted">No problems selected yet.</p>}
+          {phase !== "Upcoming" && !contest.problemIds.length && <p className="muted"><TranslatedText>{tr("No problems selected yet.")}</TranslatedText></p>}
           </div>
         </section>
-      {!preview && <aside className="contest-problem-details-panel" aria-label="Selected contest problem details">
-        <header><h2>Problem details</h2></header>
+      {!preview && <aside className="contest-problem-details-panel" aria-label={tr("Selected contest problem details")}>
+        <header><h2><TranslatedText>{tr("Problem details")}</TranslatedText></h2></header>
         <div className="contest-selected-problem">
-          {phase === "Upcoming" ? <p className="tiny muted">Problems become available when the contest starts.</p> : <>
-            {selectedId ? <ContestSelectedProblem key={`${contest.id}:${selectedId}`} problemId={selectedId} contestId={contest.id} summary={selectedProblem} letter={String.fromCharCode(65 + contest.problemIds.indexOf(selectedId))} attempts={(attempts || []).filter((item) => item.problemId === selectedId)} attemptsLoading={attemptsLoading} attemptsError={attemptsError} workspaceUrl={workspace(selectedId)} closed={phase === "Closed"} /> : <Empty title="No problem selected" />}
+          {phase === "Upcoming" ? <p className="tiny muted"><TranslatedText>{tr("Problems become available when the contest starts.")}</TranslatedText></p> : <>
+            {selectedId ? <ContestSelectedProblem key={`${contest.id}:${selectedId}`} problemId={selectedId} contestId={contest.id} summary={selectedProblem} letter={String.fromCharCode(65 + contest.problemIds.indexOf(selectedId))} attempts={(attempts || []).filter((item) => item.problemId === selectedId)} attemptsLoading={attemptsLoading} attemptsError={attemptsError} workspaceUrl={workspace(selectedId)} closed={phase === "Closed"} /> : <Empty title={tr("No problem selected")} />}
           </>}
         </div>
       </aside>}
@@ -129,6 +140,7 @@ function problemAttemptStatus(attempts: Submission[]) {
 function ContestSelectedProblem({ problemId, contestId, summary, letter, attempts, attemptsLoading, attemptsError, workspaceUrl, closed }: {
   problemId: string; contestId: string; summary?: Contest["problemDetails"][number]; letter: string; attempts: Submission[]; attemptsLoading: boolean; attemptsError: string; workspaceUrl: string; closed: boolean;
 }) {
+  const { t: tr } = useLanguage("student");
   const { data: problem, loading, error } = useLoad<Problem>(() => studentApi.getProblem(problemId, contestId), [problemId, contestId]);
   const maximum = summary?.points ?? 100;
   const score = Math.round(Math.max(0, ...attempts.map((item) => {
@@ -137,17 +149,17 @@ function ContestSelectedProblem({ problemId, contestId, summary, letter, attempt
   })) * 100) / 100;
   const status = problem?.draft && !attempts.length ? "In progress" : problemAttemptStatus(attempts);
   return <>
-    <h4>{letter}. {summary?.title || problem?.title || "SQL problem"}</h4>
-    <div className="contest-selected-meta"><Status value={attemptsLoading ? "Loading…" : attemptsError ? "Unavailable" : status} /><span>{summary?.difficulty || problem?.difficulty}</span></div>
-    <Link className="button primary" to={workspaceUrl}>{closed ? "Review problem" : status === "In progress" ? "Continue solving" : "Open problem"} →</Link>
+    <h4><TranslatedText>{tr(letter)}</TranslatedText>. <TranslatedText>{summary?.title || problem?.title || tr("SQL problem")}</TranslatedText></h4>
+    <div className="contest-selected-meta"><Status value={attemptsLoading ? "Loading…" : attemptsError ? "Unavailable" : status} /><span><TranslatedText>{tr(summary?.difficulty) || tr(problem?.difficulty)}</TranslatedText></span></div>
+    <Link className="button primary" to={workspaceUrl}><TranslatedText>{closed ? tr("Review problem") : status === "In progress" ? tr("Continue solving") : tr("Open problem")}</TranslatedText> →</Link>
     <dl className="contest-selected-facts">
-      <div><dt>Your best score</dt><dd>{attemptsLoading ? "Loading…" : attemptsError ? "Unavailable" : `${score}/${maximum}`}</dd></div>
-      <div><dt>Submissions</dt><dd>{attemptsLoading ? "…" : attemptsError ? "Unavailable" : attempts.length}</dd></div>
-      <div><dt>Topics</dt><dd>{summary?.topic || problem?.topic || "—"}</dd></div>
+      <div><dt><TranslatedText>{tr("Your best score")}</TranslatedText></dt><dd><TranslatedText>{attemptsLoading ? tr("Loading…") : attemptsError ? tr("Unavailable") : `${score}/${maximum}`}</TranslatedText></dd></div>
+      <div><dt><TranslatedText>{tr("Submissions")}</TranslatedText></dt><dd><TranslatedText>{attemptsLoading ? "…" : attemptsError ? tr("Unavailable") : attempts.length}</TranslatedText></dd></div>
+      <div><dt><TranslatedText>{tr("Topics")}</TranslatedText></dt><dd>{summary?.topic || problem?.topic || "—"}</dd></div>
     </dl>
-    {loading ? <Loading label="Loading problem…" /> : error ? <p className="tiny muted">Problem details could not be loaded. Use Open problem to try again.</p> : problem && <>
-      <section><h4>Problem</h4><div className="contest-markdown"><ReactMarkdown skipHtml>{problem.description || "No description available."}</ReactMarkdown></div></section>
-      {problem.requirements && <section><h4>Requirements</h4><div className="contest-markdown"><ReactMarkdown skipHtml>{problem.requirements}</ReactMarkdown></div></section>}
+    {loading ? <Loading label={tr("Loading problem…")} /> : error ? <p className="tiny muted"><TranslatedText>{tr("Problem details could not be loaded. Use Open problem to try again.")}</TranslatedText></p> : problem && <>
+      <section><h4><TranslatedText>{tr("Problem")}</TranslatedText></h4><ProblemMarkdown className="contest-markdown">{problem.description || tr("No description available.")}</ProblemMarkdown></section>
+      {problem.requirements && <section><h4><TranslatedText>{tr("Requirements")}</TranslatedText></h4><ProblemMarkdown className="contest-markdown">{problem.requirements}</ProblemMarkdown></section>}
     </>}
   </>;
 }

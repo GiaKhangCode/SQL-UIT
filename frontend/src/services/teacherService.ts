@@ -13,7 +13,55 @@ export interface ClassMemberAdd {
   student_id: string;
 }
 
+export interface TeacherDatabaseLibraryEntry {
+  id: string;
+  title: string;
+  createTableFileName?: string | null;
+  insertIntoFileName?: string | null;
+  createTableSql: string;
+  insertIntoSql: string;
+  datasets?: TeacherDatabaseLibraryDataset[] | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TeacherDatabaseLibraryDataset {
+  fileName: string;
+  sql: string;
+}
+
+export interface TeacherDatabaseLibraryEntryInput {
+  title: string;
+  createTableFileName: string;
+  createTableSql: string;
+  datasets: TeacherDatabaseLibraryDataset[];
+}
+
 export const teacherService = {
+  async getDatabaseLibrary(): Promise<TeacherDatabaseLibraryEntry[]> {
+    return apiFetch("/api/teacher/database-library");
+  },
+
+  async createDatabaseLibraryEntry(data: TeacherDatabaseLibraryEntryInput): Promise<TeacherDatabaseLibraryEntry> {
+    return apiFetch("/api/teacher/database-library", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async updateDatabaseLibraryEntry(id: string, data: TeacherDatabaseLibraryEntryInput): Promise<TeacherDatabaseLibraryEntry> {
+    return apiFetch(`/api/teacher/database-library/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async deleteDatabaseLibraryEntry(id: string): Promise<void> {
+    return apiFetch(`/api/teacher/database-library/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+  },
+
   async getClasses(): Promise<TeacherClass[]> {
     return apiFetch("/api/teacher/classes");
   },
@@ -78,6 +126,16 @@ export const teacherService = {
   async removeClassMember(classId: string, studentId: string): Promise<void> {
     return apiFetch(`/api/teacher/classes/${encodeURIComponent(classId)}/members/${encodeURIComponent(studentId)}`, {
       method: "DELETE",
+    });
+  },
+
+  async importClassMembers(classId: string, file: File): Promise<any> {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    return apiFetch(`/api/teacher/classes/${encodeURIComponent(classId)}/members/import`, {
+      method: "POST",
+      body: formData,
     });
   },
 

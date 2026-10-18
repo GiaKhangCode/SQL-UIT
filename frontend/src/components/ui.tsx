@@ -1,3 +1,5 @@
+import { TranslatedText } from "./TranslatedText";
+import { useLanguage } from "../context/LanguageContext";
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { X } from "lucide-react";
 import type { DataTable } from "../data/models";
@@ -8,6 +10,7 @@ export function Status({
   value: string;
   tone?: "neutral" | "warning";
 }) {
+  const { t } = useLanguage();
   const tone =
     explicitTone ||
     (/Accepted|Solved|Active|Live|Easy|Open/.test(value)
@@ -19,17 +22,18 @@ export function Status({
           : /In progress|Scheduled/.test(value)
             ? "accent"
             : "neutral");
-  return <span className={"status " + tone}>{value}</span>;
+  return <span className={"status " + tone}><TranslatedText>{t(value)}</TranslatedText></span>;
 }
 export function Loading({
   label = "Loading student data…",
 }: {
   label?: string;
 }) {
+  const { t } = useLanguage();
   return (
     <div role="status" className="empty-state">
       <span className="spinner" />
-      {label}
+      <TranslatedText>{t(label)}</TranslatedText>
     </div>
   );
 }
@@ -40,9 +44,10 @@ export function Empty({
   title?: string;
   children?: ReactNode;
 }) {
+  const { t } = useLanguage();
   return (
     <div className="empty-state">
-      <h3>{title}</h3>
+      <h3><TranslatedText>{t(title)}</TranslatedText></h3>
       {children && <p>{children}</p>}
     </div>
   );
@@ -56,15 +61,18 @@ export function ErrorState({
   message: string;
   onRetry?: () => void;
 }) {
+  const { t: tr } = useLanguage("common");
+  const { t } = useLanguage();
   return (
     <div className="empty-state" role="alert">
-      <h2>{title}</h2>
-      <p>{message}</p>
-      {onRetry && <button className="button" type="button" onClick={onRetry}>Try again</button>}
+      <h2><TranslatedText>{title}</TranslatedText></h2>
+      <p><TranslatedText>{tr(message)}</TranslatedText></p>
+      {onRetry && <button className="button" type="button" onClick={onRetry}><TranslatedText>{t("Try again")}</TranslatedText></button>}
     </div>
   );
 }
 export function DataGrid({ table }: { table: DataTable }) {
+  const { t: tr } = useLanguage("common");
   return (
     <div className="table-scroll" tabIndex={0} aria-label={table.name}>
       <table className="data-table">
@@ -72,7 +80,7 @@ export function DataGrid({ table }: { table: DataTable }) {
         <thead>
           <tr>
             {table.columns.map((c) => (
-              <th key={c}>{c}</th>
+              <th key={c}><TranslatedText>{tr(c)}</TranslatedText></th>
             ))}
           </tr>
         </thead>
@@ -80,7 +88,7 @@ export function DataGrid({ table }: { table: DataTable }) {
           {table.rows.map((r, i) => (
             <tr key={i}>
               {r.map((v, j) => (
-                <td key={j}>{v}</td>
+                <td key={j}><TranslatedText>{tr(v)}</TranslatedText></td>
               ))}
             </tr>
           ))}
@@ -108,6 +116,7 @@ export function Dialog({
   headerActions?: ReactNode;
   hideClose?: boolean;
 }) {
+  const { t: tr } = useLanguage("common");
   const dialog = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   useEffect(() => {
@@ -142,12 +151,12 @@ export function Dialog({
       }}
     >
       <div className="section-heading">
-        <h2 id={titleId}>{title}</h2>
-        {headerActions}
+        <h2 id={titleId}><TranslatedText>{title}</TranslatedText></h2>
+        <TranslatedText>{tr(headerActions)}</TranslatedText>
         {!hideClose && <button
           className="icon-button"
           onClick={onClose}
-          aria-label="Close dialog"
+          aria-label={tr("Close dialog")}
         >
           <X size={18} />
         </button>}
@@ -157,10 +166,11 @@ export function Dialog({
   );
 }
 export function PageHeading({ title, sub }: { title: string; sub: string }) {
+  const { t: tr } = useLanguage("common");
   return (
     <div className="page-heading">
-      <h1>{title}</h1>
-      <p>{sub}</p>
+      <h1><TranslatedText>{title}</TranslatedText></h1>
+      <p><TranslatedText>{tr(sub)}</TranslatedText></p>
     </div>
   );
 }

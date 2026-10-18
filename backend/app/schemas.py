@@ -2,6 +2,8 @@ from pydantic import BaseModel, EmailStr, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
 from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime
+import re
+import unicodedata
 
 # ========================
 # Pydantic models cho User
@@ -58,7 +60,19 @@ class DataTable(CamelModel):
     columns: List[str]
     rows: List[List[Any]]
 
-class ProblemBase(CamelModel):
+WorkspaceParts = List[Literal["DDL", "DML", "SQL"]]
+
+class WorkspaceConfig(CamelModel):
+    workspace_parts: WorkspaceParts = Field(default_factory=lambda: ["SQL"])
+
+    @model_validator(mode="after")
+    def validate_workspace_parts(self):
+        if not self.workspace_parts:
+            raise ValueError("Select at least one workspace part.")
+        self.workspace_parts = [part for part in ("DDL", "DML", "SQL") if part in self.workspace_parts]
+        return self
+
+class ProblemBase(WorkspaceConfig):
     id: str
     number: str
     title: str
@@ -79,13 +93,40 @@ class TestCaseSchema(CamelModel):
     expected: DataTable
     is_hidden: bool = False
 
+class SqlSolutionConfig(CamelModel):
+    id: str = Field(min_length=1, max_length=50)
+    name: str = Field(min_length=1, max_length=120)
+    query: str = Field(default="", max_length=100000)
+    enabled: bool = True
+    time_limit_ms: int = Field(default=5000, ge=100, le=60000, alias="timeLimitMs")
+
+    @model_validator(mode="after")
+    def validate_name(self):
+        self.name = self.name.strip()
+        if not self.name:
+            raise ValueError("Solution name cannot be empty.")
+        return self
+
+
+class SqlCheckInfo(CamelModel):
+    id: str
+    name: str
+    time_limit_ms: int = Field(alias="timeLimitMs")
+
+
 class ProblemDetailResponse(ProblemBase):
     description: str
     requirements: str
     hint: Optional[str] = None
+    schema_file_name: Optional[str] = Field(default="database.sql", alias="schemaFileName")
     schema_sql: Optional[str] = Field(default="", alias="schema")
     seed_data: Optional[str] = Field(default="", alias="seedData")
     reference_solution: Optional[str] = Field(default="", alias="referenceSolution")
+    expected: Optional[DataTable] = None
+    expected_outputs: List[DataTable] = Field(default_factory=list, alias="expectedOutputs")
+    expected_output_visible: bool = Field(default=True, alias="expectedOutputVisible")
+    sql_solutions: Optional[List[SqlSolutionConfig]] = Field(default=None, alias="sqlSolutions")
+    sql_checks: List[SqlCheckInfo] = Field(default_factory=list, alias="sqlChecks")
     test_cases: Optional[List[Any]] = Field(default=None, alias="testCases")
     progress: Optional[str] = None
 
@@ -95,6 +136,7 @@ class TestCaseCreate(CamelModel):
     is_hidden: bool = False
 
 class ProblemCreate(CamelModel):
+    workspace_parts: Optional[WorkspaceParts] = None
     number: str
     title: str
     difficulty: str
@@ -104,10 +146,98 @@ class ProblemCreate(CamelModel):
     requirements: str
     hints: List[str] = Field(default_factory=list)
     database: str = "SQL Server"
+    schema_file_name: Optional[str] = Field(default="database.sql", alias="schemaFileName", max_length=255)
     schema_sql: str = Field(default="", alias="schema")
     seed_data: str = Field(default="", alias="seedData")
     reference_solution: str = Field(..., alias="referenceSolution")
+    expected_outputs: Optional[List[DataTable]] = Field(default=None, alias="expectedOutputs", max_length=30)
+    expected_output_visible: bool = Field(default=True, alias="expectedOutputVisible")
+    sql_solutions: Optional[List[SqlSolutionConfig]] = Field(default=None, alias="sqlSolutions", max_length=1)
     test_cases: Optional[List[TestCaseCreate]] = Field(default=None, alias="testCases")
+
+    @model_validator(mode="after")
+    def validate_solution_ids(self):
+        if self.workspace_parts is not None:
+            self.workspace_parts = [part for part in ("DDL", "DML", "SQL") if part in self.workspace_parts]
+            if not self.workspace_parts:
+                raise ValueError("Select at least one workspace part.")
+        if self.sql_solutions is not None:
+            ids = [solution.id for solution in self.sql_solutions]
+            if len(ids) != len(set(ids)):
+                raise ValueError("Solution IDs must be unique.")
+        self.schema_file_name = _normalize_sql_file_name(self.schema_file_name, "database")
+        return self
+
+class DatabaseLibraryDatasetCreate(CamelModel):
+    file_name: Optional[str] = Field(default=None, max_length=255)
+    sql: str = Field(default="", max_length=100000)
+
+
+class DatabaseLibraryDatasetResponse(CamelModel):
+    file_name: str
+    sql: str = ""
+
+
+class DatabaseLibraryEntryCreate(CamelModel):
+    title: str = Field(..., min_length=1, max_length=255)
+    database_file_name: Optional[str] = Field(default=None, max_length=255)
+    create_table_file_name: Optional[str] = Field(default=None, max_length=255)
+    insert_into_file_name: Optional[str] = Field(default=None, max_length=255)
+    create_table_sql: str = Field(default="", max_length=100000)
+    insert_into_sql: str = Field(default="", max_length=100000)
+    datasets: Optional[List[DatabaseLibraryDatasetCreate]] = Field(default=None, max_length=20)
+
+    @model_validator(mode="after")
+    def validate_title(self):
+        self.title = self.title.strip()
+        if not self.title:
+            raise ValueError("Entry name cannot be empty.")
+        default_base = _database_file_base(self.title)
+        self.database_file_name = _normalize_sql_file_name(self.database_file_name, default_base)
+        self.create_table_file_name = _normalize_sql_file_name(self.create_table_file_name, f"{default_base}_createtable")
+        datasets = self.datasets
+        if datasets is None:
+            datasets = [DatabaseLibraryDatasetCreate(file_name=self.insert_into_file_name, sql=self.insert_into_sql)]
+        if not datasets:
+            datasets = [DatabaseLibraryDatasetCreate()]
+        for index, dataset in enumerate(datasets):
+            fallback = f"{default_base}_insertdata" if index == 0 else f"{default_base}_dataset_{index + 1}"
+            dataset.file_name = _normalize_sql_file_name(dataset.file_name, fallback)
+        self.datasets = datasets
+        self.insert_into_file_name = datasets[0].file_name
+        self.insert_into_sql = datasets[0].sql
+        return self
+
+class DatabaseLibraryEntryResponse(CamelModel):
+    id: str
+    title: str
+    database_file_name: Optional[str] = None
+    create_table_file_name: Optional[str] = None
+    insert_into_file_name: Optional[str] = None
+    create_table_sql: str
+    insert_into_sql: str
+    datasets: List[DatabaseLibraryDatasetResponse] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+
+
+def _database_file_base(title: str) -> str:
+    value = title.lower().replace("đ", "d")
+    value = unicodedata.normalize("NFKD", value)
+    value = "".join(char for char in value if not unicodedata.combining(char))
+    return re.sub(r"[^a-z0-9]", "", value) or "database"
+
+
+def _normalize_sql_file_name(value: Optional[str], fallback: str) -> str:
+    name = (value or "").strip()
+    if name.lower().endswith(".sql"):
+        name = name[:-4].rstrip()
+    if not name:
+        name = fallback
+    if re.search(r'[<>:"/\\|?*\x00-\x1f]', name) or name in {".", ".."}:
+        raise ValueError("SQL file names cannot contain path separators or reserved characters.")
+    name = name[:251].rstrip(" .") or fallback[:251]
+    return f"{name}.sql"
 
 class ProblemValidateRequest(CamelModel):
     database: str = "SQL Server"
@@ -120,6 +250,15 @@ class QueryRequest(CamelModel):
     database: Optional[str] = "SQL Server"
     source: Optional[str] = "Practice"
     context: Optional[str] = "Practice"
+
+class WorkspaceRunRequest(CamelModel):
+    part: Literal["DDL", "DML", "SQL"]
+    ddl: str = Field(default="", max_length=100000)
+    dml: str = Field(default="", max_length=100000)
+    query: str = Field(default="", max_length=100000)
+    source: Literal["Practice", "Assignments", "Contests"] = "Practice"
+    context: str = "Practice"
+
 
 class SubmissionResponse(CamelModel):
     id: str
@@ -342,12 +481,20 @@ class ClassMemberAdd(CamelModel):
 class BuilderProblem(CamelModel):
     id: str
     points: int
+    workspace_parts: Optional[WorkspaceParts] = None
+
+    @model_validator(mode="after")
+    def normalize_workspace_parts(self):
+        if self.workspace_parts is not None:
+            self.workspace_parts = [part for part in ("DDL", "DML", "SQL") if part in self.workspace_parts]
+        return self
 
 class StudentOptions(CamelModel):
     hints: bool = True
     comments: bool = True
     leaderboard: bool = False
     ai_allowed: bool = Field(default=True, alias="aiAllowed")
+    exam_mode: bool = Field(default=False, alias="examMode")
 
 class AssignmentCreate(CamelModel):
     model_config = ConfigDict(extra="forbid")
@@ -362,8 +509,8 @@ class AssignmentCreate(CamelModel):
     banner_source_url: Optional[str] = Field(default=None, alias="bannerSourceUrl")
     banner_crop: Optional[str] = Field(default=None, alias="bannerCrop")
     instructions: str = ""
-    opens: datetime
-    closes: datetime
+    opens: Optional[datetime] = None
+    closes: Optional[datetime] = None
     problems: List[BuilderProblem]
     student_options: StudentOptions = Field(..., alias="studentOptions")
     published: bool
@@ -375,6 +522,9 @@ class AssignmentCreate(CamelModel):
                 raise ValueError("All-students contests cannot select classes.")
         elif self.audience_type != "classes":
             raise ValueError("Assignments must be assigned to classes.")
+        for problem in self.problems:
+            if problem.workspace_parts is None:
+                problem.workspace_parts = ["DDL", "DML", "SQL"]
         return self
 
 class AssignmentResponse(CamelModel):
@@ -398,8 +548,8 @@ class AssignmentResponse(CamelModel):
     review_id: Optional[str] = Field(default=None, alias="reviewId")
     status: str # For list view
     instructions: str
-    opens: datetime
-    closes: datetime
+    opens: Optional[datetime] = None
+    closes: Optional[datetime] = None
     published: bool
     student_options: StudentOptions = Field(..., alias="studentOptions")
     problem_list: List[BuilderProblem] = Field(..., alias="problemList")

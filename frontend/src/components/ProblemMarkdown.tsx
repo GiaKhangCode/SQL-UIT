@@ -14,7 +14,7 @@ type FontSizeMarkdownNode = {
 function parseFontSizeChildren(children: FontSizeMarkdownNode[]): FontSizeMarkdownNode[] {
   const output: FontSizeMarkdownNode[] = [];
   const stack: Array<{ parent: FontSizeMarkdownNode[] }> = [];
-  const tokenPattern = /\[font-size=(\d{2})\]|\[\/font-size\]/g;
+  const tokenPattern = /\[font-size=\s*(\d+)(?:px)?\s*\]|\[\/font-size\]/gi;
   let current = output;
 
   const pushText = (text: string) => {
@@ -48,8 +48,6 @@ function parseFontSizeChildren(children: FontSizeMarkdownNode[]): FontSizeMarkdo
         current = spanNode.children as FontSizeMarkdownNode[];
       } else if (stack.length) {
         current = stack.pop()?.parent || output;
-      } else {
-        pushText(match[0]);
       }
       cursor = match.index + match[0].length;
       match = tokenPattern.exec(child.value);

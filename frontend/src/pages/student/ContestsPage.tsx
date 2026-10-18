@@ -1,3 +1,6 @@
+import { TranslatedText } from "../../components/TranslatedText";
+import type { Translator } from "../../i18n";
+import { useLanguage } from "../../context/LanguageContext";
 import { useEffect, useLayoutEffect, useRef, useState, type TransitionEvent } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
@@ -11,6 +14,7 @@ import { selectFeaturedContests } from "../../utils/featuredContests";
 const CONTEST_PAGE_SIZE = 10;
 
 function ContestCountdown({ contest }: { contest: Contest }) {
+  const { t: tr } = useLanguage("student");
   const [now, setNow] = useState(Date.now);
   const active = contest.status === "Live" || contest.status === "Upcoming";
   const value = contest.status === "Live" ? contest.closesAt : contest.opensAt;
@@ -30,9 +34,9 @@ function ContestCountdown({ contest }: { contest: Contest }) {
   const seconds = remaining % 60;
   const duration = `${days ? days + "d " : ""}${hours}h ${minutes}m ${seconds}s`;
   const label = remaining === 0
-    ? contest.status === "Live" ? "Ended" : "Starting now"
-    : `${contest.status === "Live" ? "Ends in" : "Starts in"} ${duration}`;
-  return <span className={`contest-countdown ${contest.status.toLowerCase()}`} role="timer" aria-live="off">{label}</span>;
+    ? contest.status === "Live" ? tr("Ended") : tr("Starting now")
+    : `${tr(contest.status === "Live" ? "Ends in" : "Starts in")} ${duration}`;
+  return <span className={`contest-countdown ${contest.status.toLowerCase()}`} role="timer" aria-live="off"><TranslatedText>{tr(label)}</TranslatedText></span>;
 }
 
 function contestTimestamp(contest: Contest) {
@@ -40,12 +44,12 @@ function contestTimestamp(contest: Contest) {
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
-function featureMeta(contest: Contest) {
-  const problemLabel = `${contest.problemCount} problem${contest.problemCount === 1 ? "" : "s"}`;
+function featureMeta(contest: Contest, tr: Translator) {
+  const problemLabel = tr("{count} problems", { count: contest.problemCount });
   const participants = contest.submitters
-    ? ` · ${contest.submitters} participant${contest.submitters === 1 ? "" : "s"}`
+    ? ` · ${tr("{count} participants", { count: contest.submitters })}`
     : "";
-  if (contest.status === "Live") return `Live now · ${problemLabel}${participants}`;
+  if (contest.status === "Live") return `${tr("Live now")} · ${problemLabel}${participants}`;
   return `${contest.date} ${contest.time} · ${problemLabel}${participants}`;
 }
 
@@ -54,10 +58,10 @@ function ordinal(value: number) {
   return `${value}${["th", "st", "nd", "rd"][value % 10] || "th"}`;
 }
 
-function completionMonth(contest: Contest) {
+function completionMonth(contest: Contest, locale: string) {
   const date = new Date(contest.closesAt);
   return Number.isFinite(date.getTime())
-    ? date.toLocaleDateString(undefined, { month: "short", year: "numeric" })
+    ? date.toLocaleDateString(locale, { month: "short", year: "numeric" })
     : contest.endDate || contest.date;
 }
 
@@ -98,23 +102,25 @@ function FeaturedContestCard({ contest, onOpen, sentinel = false }: {
   onOpen: (contest: Contest) => void;
   sentinel?: boolean;
 }) {
+  const { t: tr, locale: uiLocale } = useLanguage("student");
   return <button
     className={`featured-contest ${contestBannerClass(contest.id)}${contest.bannerUrl ? " has-image" : ""}`}
     type="button"
     onClick={() => onOpen(contest)}
     tabIndex={sentinel ? -1 : undefined}
     aria-hidden={sentinel || undefined}
-    aria-label={`Open ${contest.title} contest details`}
+    aria-label={tr("Open {value0} contest details", { value0: contest.title })}
     style={contestBannerStyle(contest.bannerUrl)}
   >
-    <span>{contest.status.toUpperCase()} · SQL</span>
+    <span><TranslatedText>{tr(contest.status).toLocaleUpperCase(uiLocale)}</TranslatedText> · SQL</span>
     <h3>{contest.title}</h3>
-    <p>{contest.shortDescription || `SQL challenges for ${contest.scope.toLowerCase()}.`}</p>
-    <small className="featured-contest-meta"><ContestCountdown contest={contest} /><span>{featureMeta(contest)}</span></small>
+    <p><TranslatedText>{contest.shortDescription || tr("SQL challenges for {value0}.", { value0: contest.scope.toLowerCase() })}</TranslatedText></p>
+    <small className="featured-contest-meta"><ContestCountdown contest={contest} /><span>{featureMeta(contest, tr)}</span></small>
   </button>;
 }
 
 function FeaturedContests({ contests, onOpen }: { contests: Contest[]; onOpen: (contest: Contest) => void }) {
+  const { t: tr } = useLanguage("student");
   const viewport = useRef<HTMLDivElement>(null);
   const resumeTimer = useRef<number>();
   const gestureStartX = useRef<number | null>(null);
@@ -220,10 +226,10 @@ function FeaturedContests({ contests, onOpen }: { contests: Contest[]; onOpen: (
   if (!contests.length) return null;
   return <section className="featured-contest-section" aria-labelledby="featured-contests-heading">
     <div className="featured-contest-heading-row">
-      <h2 id="featured-contests-heading" className="featured-heading">Featured contests</h2>
-      {canNavigate && <div className="featured-carousel-controls" aria-label="Featured contest navigation">
-        <button className="featured-carousel-control" type="button" onClick={() => move(-1, true)} aria-label="Previous featured contests"><ChevronLeft size={16} aria-hidden="true" /></button>
-        <button className="featured-carousel-control" type="button" onClick={() => move(1, true)} aria-label="Next featured contests"><ChevronRight size={16} aria-hidden="true" /></button>
+      <h2 id="featured-contests-heading" className="featured-heading"><TranslatedText>{tr("Featured contests")}</TranslatedText></h2>
+      {canNavigate && <div className="featured-carousel-controls" aria-label={tr("Featured contest navigation")}>
+        <button className="featured-carousel-control" type="button" onClick={() => move(-1, true)} aria-label={tr("Previous featured contests")}><ChevronLeft size={16} aria-hidden="true" /></button>
+        <button className="featured-carousel-control" type="button" onClick={() => move(1, true)} aria-label={tr("Next featured contests")}><ChevronRight size={16} aria-hidden="true" /></button>
       </div>}
     </div>
     <div
@@ -268,6 +274,7 @@ function FeaturedContests({ contests, onOpen }: { contests: Contest[]; onOpen: (
 }
 
 export function ContestsPage() {
+  const { t: tr, locale: uiLocale } = useLanguage("student");
   const navigate = useNavigate();
   const { data, loading, error } = useLoad(studentApi.getContests);
   const [tab, setTab] = useState("All");
@@ -275,8 +282,8 @@ export function ContestsPage() {
   const [page, setPage] = useState(1);
   const feedRef = useRef<HTMLDivElement>(null);
   const [params] = useSearchParams();
-  if (loading) return <section className="page contests-page"><Loading label="Loading contests…" /></section>;
-  if (error || !data) return <section className="page contests-page"><ErrorState title="Contests unavailable" message={error || "Could not load contests."} onRetry={() => window.location.reload()} /></section>;
+  if (loading) return <section className="page contests-page"><Loading label={tr("Loading contests…")} /></section>;
+  if (error || !data) return <section className="page contests-page"><ErrorState title={tr("Contests unavailable")} message={tr(error) || tr("Could not load contests.")} onRetry={() => window.location.reload()} /></section>;
   const selected = data.find((contest) => contest.id === params.get("contest"));
   const filtered = data.filter(
     (contest) =>
@@ -304,55 +311,55 @@ export function ContestsPage() {
   }
   if (selected) return <Navigate replace to={`/contests/${selected.id}`} />;
   return <section className="page contests-page">
-    <h1 className="sr-only">Contests</h1>
+    <h1 className="sr-only"><TranslatedText>{tr("Contests")}</TranslatedText></h1>
     <FeaturedContests contests={featured} onOpen={details} />
     <div className="contest-list-region">
     <div className="contest-toolbar">
-      <div className="underline-tabs contest-status-tabs" role="tablist" aria-label="Contest status">
+      <div className="underline-tabs contest-status-tabs" role="tablist" aria-label={tr("Contest status")}>
         {["All", "Upcoming", "Live", "Past"].map((currentTab) => <button role="tab" aria-selected={currentTab === tab} className={currentTab === tab ? "active" : ""} onClick={() => { setTab(currentTab); setPage(1); feedRef.current?.scrollTo({ top: 0 }); }} key={currentTab}>
-          {currentTab} <span className="contest-tab-count">{contestCounts[currentTab as keyof typeof contestCounts]}</span>
+          <TranslatedText>{tr(currentTab)}</TranslatedText> <span className="contest-tab-count">{contestCounts[currentTab as keyof typeof contestCounts]}</span>
         </button>)}
       </div>
-      <label className="sr-only" htmlFor="contest-search">Search contests</label>
-      <input id="contest-search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); feedRef.current?.scrollTo({ top: 0 }); }} placeholder="⌕ Search contests" />
+      <label className="sr-only" htmlFor="contest-search"><TranslatedText>{tr("Search contests")}</TranslatedText></label>
+      <input id="contest-search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); feedRef.current?.scrollTo({ top: 0 }); }} placeholder={tr("⌕ Search contests")} />
     </div>
     <div className="contest-columns">
       <div id="contest-feed" className="contest-feed-panel">
-        <div className="section-heading"><h2>{tab === "All" ? "All contests" : `${tab} contests`}</h2><div className="contest-list-controls">
-          <span className="tiny muted" aria-live="polite">Showing {filtered.length ? firstIndex + 1 : 0}–{Math.min(firstIndex + CONTEST_PAGE_SIZE, filtered.length)} of {filtered.length}</span>
-          <nav className="contest-list-pagination" aria-label="Contest pages">
-            <button type="button" className="button" disabled={currentPage === 1} onClick={() => changePage(currentPage - 1)}>← Previous</button>
-            <span>Page {currentPage} of {pageCount}</span>
-            <button type="button" className="button" disabled={currentPage === pageCount} onClick={() => changePage(currentPage + 1)}>Next →</button>
+        <div className="section-heading"><h2><TranslatedText>{tab === "All" ? tr("All contests") : tr("{value0} contests", { value0: tab })}</TranslatedText></h2><div className="contest-list-controls">
+          <span className="tiny muted" aria-live="polite"><TranslatedText>{tr("Showing")}</TranslatedText> {filtered.length ? firstIndex + 1 : 0}–{Math.min(firstIndex + CONTEST_PAGE_SIZE, filtered.length)} <TranslatedText>{tr("of")}</TranslatedText> {filtered.length}</span>
+          <nav className="contest-list-pagination" aria-label={tr("Contest pages")}>
+            <button type="button" className="button" disabled={currentPage === 1} onClick={() => changePage(currentPage - 1)}><TranslatedText>{tr("← Previous")}</TranslatedText></button>
+            <span><TranslatedText>{tr("Page")}</TranslatedText> {currentPage} <TranslatedText>{tr("of")}</TranslatedText> {pageCount}</span>
+            <button type="button" className="button" disabled={currentPage === pageCount} onClick={() => changePage(currentPage + 1)}><TranslatedText>{tr("Next →")}</TranslatedText></button>
           </nav>
         </div></div>
-        <div className="contest-feed-scroll" ref={feedRef} tabIndex={0} aria-label="Contest list">
+        <div className="contest-feed-scroll" ref={feedRef} tabIndex={0} aria-label={tr("Contest list")}>
         {pageContests.map((contest) => <article className="contest-item" key={contest.id} id={`student-contest-${contest.id}`}>
           <div>
             <div className="contest-title"><h3>{contest.title}</h3><Status value={contest.status} /><ContestCountdown contest={contest} /></div>
             <small>{contest.scope}</small>
             <p>{contest.shortDescription}</p>
-            <span className="tiny">{contest.date} {contest.time} → {contest.endDate || contest.date} {contest.endTime} · {contest.problemCount} problem{contest.problemCount === 1 ? "" : "s"} · {contest.submitters ?? 0} student{contest.submitters === 1 ? "" : "s"} participated</span>
+            <span className="tiny">{contest.date} {contest.time} → {contest.endDate || contest.date} {contest.endTime} · {contest.problemCount} <TranslatedText>{tr("problem")}</TranslatedText><TranslatedText>{contest.problemCount === 1 ? "" : tr("s")}</TranslatedText> · {contest.submitters ?? 0} <TranslatedText>{tr("student")}</TranslatedText><TranslatedText>{contest.submitters === 1 ? "" : tr("s")}</TranslatedText> <TranslatedText>{tr("participated")}</TranslatedText></span>
           </div>
-          <button className="text-button" onClick={() => details(contest)}>View details →</button>
+          <button className="text-button" onClick={() => details(contest)}><TranslatedText>{tr("View details →")}</TranslatedText></button>
         </article>)}
-        {!filtered.length && <Empty title="No matching contests" />}
+        {!filtered.length && <Empty title={tr("No matching contests")} />}
         </div>
       </div>
-      <aside className="hall-of-fame" aria-label="Hall of Fame">
-        <h2>Hall of Fame</h2>
-        <p className="fame-description">Recent public achievements</p>
+      <aside className="hall-of-fame" aria-label={tr("Hall of Fame")}>
+        <h2><TranslatedText>{tr("Hall of Fame")}</TranslatedText></h2>
+        <p className="fame-description"><TranslatedText>{tr("Recent public achievements")}</TranslatedText></p>
         {hallOfFame.length > 0 ? <ol className="fame-list">
           {hallOfFame.map((entry, index) => <li className="fame-row" key={`${entry.contest.id}-${entry.rank}-${entry.student}`}>
             <b>{String(index + 1).padStart(2, "0")}</b>
             <div>
               <strong>{entry.student}</strong>
-              <small className="fame-place">{ordinal(entry.rank)} place</small>
+              <small className="fame-place"><TranslatedText>{uiLocale === "vi-VN" ? tr("Rank {rank}", { rank: entry.rank }) : `${ordinal(entry.rank)} place`}</TranslatedText></small>
               <small className="fame-contest">{entry.contest.title}</small>
-              <time className="fame-date">{completionMonth(entry.contest)}</time>
+              <time className="fame-date">{completionMonth(entry.contest, uiLocale)}</time>
             </div>
           </li>)}
-        </ol> : <p className="fame-empty">Published results will appear here after a leaderboard contest closes.</p>}
+        </ol> : <p className="fame-empty"><TranslatedText>{tr("Published results will appear here after a leaderboard contest closes.")}</TranslatedText></p>}
       </aside>
     </div>
     </div>
