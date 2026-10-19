@@ -5,6 +5,7 @@ from app.database import get_db
 from app.models import User, Submission, Problem
 from app.schemas import SubmissionResponse, TeacherSubmissionResponse
 from app.routers.auth import get_current_user
+from app.services.submission_policy import scores_visible
 
 import uuid
 
@@ -40,11 +41,15 @@ def get_submissions(
         if sub.source in ["Assignment", "Contest", "Assignments", "Contests"] and sub.context:
             if sub.context not in assignment_cache:
                 assignment = db.query(Assignment).filter(Assignment.id == sub.context).first()
-                if assignment:
-                    assignment_cache[sub.context] = assignment.title
-                else:
-                    assignment_cache[sub.context] = sub.context
-            sub_schema.context_title = assignment_cache.get(sub.context, sub.context)
+                assignment_cache[sub.context] = assignment
+            activity = assignment_cache.get(sub.context)
+            if not scores_visible(activity):
+                sub_schema.score = None
+                sub_schema.evaluated_score = None
+                sub_schema.feedback = None
+                sub_schema.score_visible = False
+                sub_schema.result = "Submitted"
+            sub_schema.context_title = activity.title if activity else sub.context
             
             cache_key = f"{sub.context}_{sub.problem_id}"
             if cache_key not in points_cache:
@@ -86,10 +91,13 @@ def get_submission(submission_id: str, db: Session = Depends(get_db), current_us
     
     attempts = db.query(Submission).filter(
         Submission.user_id == sub.user_id,
-        Submission.problem_id == sub.problem_id
+        Submission.problem_id == sub.problem_id,
+        Submission.source == sub.source,
+        Submission.context == sub.context,
     ).count()
     
     max_score = 100
+    assignment = None
     if sub.source in ["Assignment", "Contest", "Assignments", "Contests"] and sub.context:
         from app.models import Assignment, AssignmentProblem
         assignment = db.query(Assignment).filter(Assignment.id == sub.context).first()
@@ -107,19 +115,20 @@ def get_submission(submission_id: str, db: Session = Depends(get_db), current_us
     if current_user.role in ["instructor", "admin"] and ref_tc:
         ref_sol = ref_tc.expected_query or ""
     
+    visible = current_user.role != "student" or scores_visible(assignment)
     return TeacherSubmissionResponse(
         id=sub.id,
         student=user.name if user else "Unknown",
         problem=problem.title if problem else "Unknown",
-        autoScore=sub.score,
+        autoScore=sub.score if visible else None,
         maxScore=max_score,
-        finalScore=sub.evaluated_score,
-        status="Needs review" if sub.evaluated_score is None else sub.result,
+        finalScore=sub.evaluated_score if visible else None,
+        status=("Needs review" if sub.evaluated_score is None else sub.result) if visible else "Submitted",
         attempts=str(attempts),
         query=sub.query_text or "",
         referenceSolution=ref_sol,
         submittedAt=sub.submitted_at.strftime("%b %d, %H:%M"),
-        feedback=sub.feedback
+        feedback=sub.feedback if visible else None
     )
 
 @router.put("/{submission_id}/review", response_model=TeacherSubmissionResponse)
@@ -165,13 +174,16 @@ def review_submission(submission_id: str, review: ReviewRequest, db: Session = D
     db.commit()
     db.refresh(sub)
     
+    # Respect the score policy in notifications as well as response bodies.
+    from app.models import Assignment
+    activity = db.query(Assignment).filter(Assignment.id == sub.context).first() if sub.source in ["Assignment", "Contest", "Assignments", "Contests"] else None
     # Notify student
     from app.models import Notification
     notif = Notification(
         id=str(uuid.uuid4()),
         user_id=sub.user_id,
         title="Bài nộp của bạn đã được chấm",
-        message=f"Điểm số: {review.finalScore} / {max_score}. Phản hồi: {review.feedback if review.feedback else 'Không có'}",
+        message=(f"Điểm số: {review.finalScore} / {max_score}. Phản hồi: {review.feedback if review.feedback else 'Không có'}" if scores_visible(activity) else "Bài nộp đã được chấm. Giáo viên đang ẩn điểm của hoạt động này."),
         type="Grading",
         link="/submissions"
     )

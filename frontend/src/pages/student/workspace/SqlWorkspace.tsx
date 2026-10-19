@@ -14,6 +14,7 @@ import { clamp as clampPaneSize, defaults, readLayouts, workspaceKey, type Layou
 import "../../../styles/workspace.css";
 import { AppHeader } from "../../../components/AppHeader";
 import { DataGrid, Dialog, Loading, Status } from "../../../components/ui";
+import { ProblemExpectedOutput } from "../../../components/ProblemExpectedOutput";
 import { ProblemMarkdown } from "../../../components/ProblemMarkdown";
 import { studentApi, type QueryResult } from "../../../services/studentApi";
 import { storage } from "../../../services/storage";
@@ -30,6 +31,7 @@ import { WorkspaceDatabasePanel, type WorkspaceDatabaseState } from "./component
 import { WorkspaceSubmissionPanel, type WorkspaceAttempt } from "./components/WorkspaceSubmissionPanel";
 import { WorkspaceProblemSwitcher } from "./components/WorkspaceProblemSwitcher";
 
+import { WorkspaceEditorStatus } from "./components/WorkspaceEditorStatus";
 import { useWorkspaceExam, WorkspaceExamFinishButton } from "./components/WorkspaceExamContext";
 
 const DEFAULT_EDITOR_HEIGHT = 58;
@@ -43,8 +45,10 @@ const MIN_EDITOR_HEIGHT = 30;
 const MAX_EDITOR_HEIGHT = 75;
 
 
-export function SqlWorkspace({ problem, embedded = false, setupScripts, database }: {
+export function SqlWorkspace({ problem, embedded = false, setupScripts, database, readOnly: parentReadOnly = false, onUserEdit, submissionAttempts: externalAttempts, submissionBusy = false, submissionNotice = "", submissionSignal = 0, submissionsUsed: parentSubmissionsUsed, maxSubmissions: parentMaxSubmissions }: {
   problem: Problem; database?: WorkspaceDatabaseState; embedded?: boolean; setupScripts?: { ddl: string; dml: string };
+  readOnly?: boolean; onUserEdit?: () => void; submissionAttempts?: WorkspaceAttempt[]; submissionBusy?: boolean; submissionNotice?: string;
+  submissionSignal?: number; submissionsUsed?: number; maxSubmissions?: number | null;
 }) {
   const { t: tr } = useLanguage("workspace");
   const { session } = useAuth();
@@ -56,7 +60,9 @@ export function SqlWorkspace({ problem, embedded = false, setupScripts, database
   const preferences = sharedLayout?.preferences ?? localPreferences;
   const setPreferences = sharedLayout?.setPreferences ?? setLocalPreferences;
   const layout = preferences.layout;
-  const [focus, setFocus] = useState(false);
+  const [localFocus, setLocalFocus] = useState(false);
+  const focus = sharedLayout?.focus ?? localFocus;
+  const setFocus = sharedLayout?.setFocus ?? setLocalFocus;
   const [focusHeight, setFocusHeight] = useState(DEFAULT_EDITOR_HEIGHT);
   const [notes, setNotes] = useState(() => storage.get(notesKey) || "");
   const { problemWidth, secondBoundary } = preferences.sizes[layout];
@@ -118,8 +124,10 @@ export function SqlWorkspace({ problem, embedded = false, setupScripts, database
   const activeResize = useRef<"vertical" | "horizontal" | "secondary" | null>(null);
   const expandTrigger = useRef<HTMLButtonElement>(null);
   const [code, setCode] = useState(
-    () => (exam?.enabled ? exam.draft(problem.id)?.query || "" : undefined) ?? (setupScripts || source !== "Practice" ? storage.get(sqlDraftKey) : studentApi.getDraft(problem.id)) ?? (problem.draft || ""),
+    () => (exam?.draft(problem.id)?.query ?? (exam?.enabled ? "" : undefined)) ?? (setupScripts || source !== "Practice" ? storage.get(sqlDraftKey) : studentApi.getDraft(problem.id)) ?? (problem.draft || ""),
   );
+  const syncDraft = exam?.update;
+  useEffect(() => { syncDraft?.(problem.id, { query: code }); }, [syncDraft, problem.id]);
   const [selected, setSelected] = useState("");
   const [problemTab, setProblemTab] = useState(layout === "Debug" ? "Database" : "Description");
   const [resultTab, setResultTab] = useState("Run result");
@@ -132,8 +140,23 @@ export function SqlWorkspace({ problem, embedded = false, setupScripts, database
   const attemptCounter = useRef(0);
   const [result, setResult] = useState<QueryResult | null>(null);
   const [lastSubmit, setLastSubmit] = useState<QueryResult | null>(null);
+  const [reviewMode, setReviewMode] = useState(false);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [editedSinceSubmission, setEditedSinceSubmission] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(Boolean(embedded || exam?.enabled));
+  const [historySubmissionsUsed, setHistorySubmissionsUsed] = useState(0);
+  const [confirmExit, setConfirmExit] = useState(false);
+  const submissionsUsed = parentSubmissionsUsed ?? lastSubmit?.submissionsUsed ?? exam?.submissionCounts[problem.id] ?? historySubmissionsUsed;
+  const maxSubmissions = parentMaxSubmissions ?? lastSubmit?.maxSubmissions ?? exam?.maxSubmissions ?? null;
+  const submissionLimitReached = maxSubmissions != null && submissionsUsed >= maxSubmissions;
+  const isReadOnly = parentReadOnly || reviewMode || (!embedded && !historyLoaded && !exam?.enabled);
+  const exitDestination = source === "Contests" ? `/contests/${encodeURIComponent(context)}` : source === "Assignments" ? `/assignments/work/${encodeURIComponent(context)}` : "/dashboard";
   const [confirmResetQuery, setConfirmResetQuery] = useState(false);
   const [notice, setNotice] = useState("");
+  useEffect(() => {
+    if (focus) { setExpanded(false); setMobileTab("SQL"); }
+  }, [focus]);
+  useEffect(() => { if (layout === "Debug") setProblemTab("Database"); }, [layout]);
   const helpTrigger = useRef<HTMLButtonElement | null>(null);
   const helpClose = useRef<HTMLButtonElement>(null);
   const aiTrigger = useRef<HTMLButtonElement | null>(null);
@@ -164,6 +187,56 @@ export function SqlWorkspace({ problem, embedded = false, setupScripts, database
     }).catch(() => { if (active) setNotice("Could not load saved problems."); });
     return () => { active = false; };
   }, [problem.id]);
+  useEffect(() => {
+    if (embedded || exam?.enabled) return;
+    let active = true;
+    if (typeof studentApi.getSubmissions !== "function") {
+      setHistoryLoaded(true);
+      return () => { active = false; };
+    }
+    studentApi.getSubmissions({ source }).then((response) => {
+      if (!active || !Array.isArray(response)) return;
+      const matching = (response as Submission[])
+        .filter(item => item.problemId === problem.id && item.context === context && [source, source === "Assignments" ? "Assignment" : source === "Contests" ? "Contest" : "Practice"].includes(item.source))
+        .sort((a, b) => Date.parse(b.submittedAt) - Date.parse(a.submittedAt));
+      setHistorySubmissionsUsed(matching.length);
+      if (matching.length) {
+        const latest = matching[0];
+        setReviewMode(true);
+        setHasSubmitted(true);
+        setEditedSinceSubmission(false);
+        setProblemTab("Submission");
+        setLastSubmit({
+          status: latest.result,
+          message: latest.feedback || (latest.result === "Pending review" ? "Your work has been submitted for teacher review." : "Previously submitted work."),
+          score: latest.score,
+          scoreVisible: latest.scoreVisible,
+          maxScore: latest.maxScore,
+        });
+        setAttempts(matching.slice(0, 20).map((item, index) => ({
+          id: matching.length - index,
+          kind: "submit" as const,
+          result: {
+            status: item.result,
+            message: item.feedback || (item.result === "Pending review" ? "Your work has been submitted for teacher review." : "Previously submitted work."),
+            score: item.score,
+            scoreVisible: item.scoreVisible,
+            maxScore: item.maxScore,
+          },
+        })));
+        if (typeof latest.query === "string") setCode(latest.query);
+      }
+    }).catch(() => {}).finally(() => { if (active) setHistoryLoaded(true); });
+    return () => { active = false; };
+  }, [embedded, exam?.enabled, problem.id, source, context]);
+  useEffect(() => {
+    if (!submissionSignal) return;
+    setProblemTab("Submission");
+    if (embedded) {
+      const submittedQuery = storage.get(sqlDraftKey);
+      if (submittedQuery !== null) setCode(submittedQuery);
+    }
+  }, [submissionSignal, embedded, sqlDraftKey]);
   async function toggleSaved() {
     if (favoriteBusy) return;
     setFavoriteBusy(true);
@@ -217,7 +290,7 @@ export function SqlWorkspace({ problem, embedded = false, setupScripts, database
     };
   }, [help, expanded]);
   async function run(kind: "selected" | "all" | "submit") {
-    if (busy || (kind === "submit" && (setupScripts || exam?.enabled))) return;
+    if (busy || isReadOnly || (!historyLoaded && !embedded) || (kind === "submit" && (setupScripts || exam?.enabled))) return;
     setBusy(true);
     setExpanded(false);
     setNotice("");
@@ -239,16 +312,16 @@ export function SqlWorkspace({ problem, embedded = false, setupScripts, database
             ? await studentApi.runWorkspace(problem.id, { part: "SQL", query: kind === "selected" ? selected : code, ...setupScripts, source, context })
             : await studentApi.runQuery(problem.id, kind === "selected" ? selected : code, "SQL Server", source, context);
       if (alive.current) {
-        if (kind === "submit") setLastSubmit(value);
+        if (kind === "submit") { setLastSubmit(value); setReviewMode(true); setHasSubmitted(true); setEditedSinceSubmission(false); }
         else setResult(value);
-        const attempt: WorkspaceAttempt = { id: ++attemptCounter.current, kind: kind === "submit" ? "submit" : "run", result: value };
+        const attempt: WorkspaceAttempt = { id: Date.now() + ++attemptCounter.current, kind: kind === "submit" ? "submit" : "run", result: value };
         setAttempts(previous => [attempt, ...previous].slice(0, 20));
         setMobileTab("Problem");
       }
     } catch (error) {
       if (alive.current) {
         const message = error instanceof Error ? error.message : "The SQL runner is unavailable. Try again.";
-        const attempt: WorkspaceAttempt = { id: ++attemptCounter.current, kind: kind === "submit" ? "submit" : "run", result: { status: "Error", message } };
+        const attempt: WorkspaceAttempt = { id: Date.now() + ++attemptCounter.current, kind: kind === "submit" ? "submit" : "run", result: { status: "Error", message } };
         setAttempts(previous => [attempt, ...previous].slice(0, 20));
       }
     } finally {
@@ -342,7 +415,7 @@ export function SqlWorkspace({ problem, embedded = false, setupScripts, database
     <div className={"workspace unified-output" + (expanded ? " editor-expanded" : "") + (focus ? " focus-mode" : "") + (resizing ? ` is-resizing resizing-${resizing === "secondary" ? "vertical" : resizing}` : "")}>
       {!embedded && (
       <AppHeader
-        workspaceActions={<><WorkspaceTools layout={layout} onLayout={chooseLayout} focus={focus} onFocus={toggleFocus} timerKey={workspaceKey(session?.id || "anonymous", problem.id, "timer")} /><WorkspaceExamFinishButton /></>}
+        workspaceActions={<><WorkspaceTools layout={layout} onLayout={chooseLayout} focus={focus} onFocus={toggleFocus} timerKey={workspaceKey(session?.id || "anonymous", source === "Practice" ? problem.id : `${source}:${context}`, "timer")} /><WorkspaceExamFinishButton />{!exam?.enabled && <button type="button" className="button workspace-submit-exit" disabled={!historyLoaded} onClick={() => setConfirmExit(true)}>{tr("Exit")}</button>}</>}
         workspaceProblemNavigation={source !== "Practice" && params.get("context") ? <WorkspaceProblemSwitcher source={source} context={context} problemId={problem.id} problemTitle={problem.title} /> : undefined}
         workspace={{
           title: problem.title,
@@ -410,7 +483,7 @@ export function SqlWorkspace({ problem, embedded = false, setupScripts, database
             <div className="problem-scroll">
               {problemTab === "Description" ? (
                 <>
-                  <p className="tiny"><TranslatedText>{tr("PROBLEM")}</TranslatedText> {problem.number}</p>
+
                   <h1>{problem.title}</h1>
                   <div className="problem-meta">
                     <Status value={problem.difficulty || "Unknown"} />
@@ -426,12 +499,12 @@ export function SqlWorkspace({ problem, embedded = false, setupScripts, database
                   <ProblemMarkdown>{problem.description || ""}</ProblemMarkdown>
                   <h3><TranslatedText>{tr("Requirements")}</TranslatedText></h3>
                   <ProblemMarkdown>{problem.requirements || ""}</ProblemMarkdown>
-                  {problem.expected && <><h3><TranslatedText>{tr("Expected output")}</TranslatedText></h3><DataGrid table={problem.expected} /><p className="tiny muted"><TranslatedText>{tr("Output shown for the sample dataset.")}</TranslatedText></p></>}
+                  <ProblemExpectedOutput table={problem.expected} samples={problem.expectedSamples} />
                   <hr />
                 </>
               ) : problemTab === "Database" ? (
                 <WorkspaceDatabasePanel database={database || { schemaTables, tables: seedTables.length ? seedTables : problem.tables || [] }} />
-              ) : <WorkspaceSubmissionPanel attempts={attempts} busy={busy} notice={notice} />}
+              ) : <WorkspaceSubmissionPanel submissionsUsed={source !== "Practice" ? submissionsUsed : undefined} maxSubmissions={maxSubmissions} attempts={externalAttempts ? [...externalAttempts, ...attempts].sort((a, b) => b.id - a.id) : attempts} busy={busy || submissionBusy} notice={submissionNotice || notice} />}
             </div>
             <div
               id="workspace-hint-panel"
@@ -540,12 +613,12 @@ export function SqlWorkspace({ problem, embedded = false, setupScripts, database
             >
               <div className="editor-toolbar">
                 <span className="editor-dialect">SQL Server</span>
-                <button className="icon-button" type="button" aria-label={tr("Reset SQL query")} title={tr("Reset SQL query")} onClick={() => setConfirmResetQuery(true)}><RotateCcw size={16} /></button>
+                <button className="icon-button" type="button" aria-label={tr("Reset SQL query")} title={isReadOnly ? tr("Submitted work is read-only") : tr("Reset SQL query")} disabled={isReadOnly} onClick={() => setConfirmResetQuery(true)}><RotateCcw size={16} /></button>
                 <b>query.sql</b>
-                {embedded && <WorkspaceTools layout={layout} onLayout={chooseLayout} focus={focus} onFocus={toggleFocus} timerKey={workspaceKey(session?.id || "anonymous", problem.id, "timer")} />}
+                {isReadOnly && <small className="muted"><TranslatedText>{tr("View only")}</TranslatedText></small>}
                 <button
                   className="icon-button format-query"
-                  disabled={busy}
+                  disabled={busy || isReadOnly}
                   aria-label={tr("Format SQL indentation")}
                   title={tr("Format SQL indentation")}
                   onClick={() => {
@@ -587,8 +660,10 @@ export function SqlWorkspace({ problem, embedded = false, setupScripts, database
                 <CodeMirror
                   value={code}
                   height="100%"
+                  readOnly={isReadOnly}
+                  editable={!isReadOnly}
                   extensions={sqlEditorExtensions}
-                  onChange={value => { setCode(value); exam?.update(problem.id, { query: value }); }}
+                  onChange={value => { if (!isReadOnly) { setCode(value); setEditedSinceSubmission(true); onUserEdit?.(); exam?.update(problem.id, { query: value }); } }}
                   onCreateEditor={(view) => {
                     editor.current = view;
                   }}
@@ -606,12 +681,10 @@ export function SqlWorkspace({ problem, embedded = false, setupScripts, database
                 />
               </div>
               <div className="editor-actions">
-                <span className="cursor-position muted">
-                  <TranslatedText>{tr("Ln")}</TranslatedText> {cursor.line}<TranslatedText>{tr(", Col")}</TranslatedText> {cursor.column}
-                </span>
+                <WorkspaceEditorStatus {...cursor} executionTimeMs={result?.executionTimeMs} />
                 <button
                   className="button"
-                  disabled={busy || !selected.trim()}
+                  disabled={isReadOnly || busy || !selected.trim()}
                   title={
                     !selected.trim() ? tr("Select SQL text in the editor first") : undefined
                   }
@@ -621,18 +694,18 @@ export function SqlWorkspace({ problem, embedded = false, setupScripts, database
                 </button>
                 <button
                   className="button"
-                  disabled={busy}
+                  disabled={isReadOnly || busy}
                   onClick={() => void run("all")}
                 >
-                  <TranslatedText>{tr("Run all")}</TranslatedText>
+                  <TranslatedText>{tr("Run query")}</TranslatedText>
                 </button>
                 {!setupScripts && !exam?.enabled && (<button
                   className="button primary"
-                  disabled={busy || contestClosed}
-                  title={contestClosed ? tr("Contest submissions are closed") : undefined}
-                  onClick={() => void run("submit")}
+                  disabled={busy || !historyLoaded || contestClosed || (!reviewMode && submissionLimitReached)}
+                  title={submissionLimitReached && !reviewMode ? tr("Submission limit reached") : contestClosed ? tr("Contest submissions are closed") : undefined}
+                  onClick={() => reviewMode ? setReviewMode(false) : void run("submit")}
                 >
-                  <TranslatedText>{busy && resultTab === "Submissions" ? tr("Submitting…") : contestClosed ? tr("Submissions closed") : tr("Submit")}</TranslatedText>
+                  <TranslatedText>{reviewMode ? tr("Edit again") : busy && resultTab === "Submissions" ? tr("Submitting…") : contestClosed ? tr("Submissions closed") : tr("Submit")}</TranslatedText>
                 </button>)}
               </div>
             </section>
@@ -657,7 +730,8 @@ export function SqlWorkspace({ problem, embedded = false, setupScripts, database
           </div>
         </div>
       </div>
-      {confirmResetQuery && <Dialog title={tr("Reset SQL query?")} onClose={() => setConfirmResetQuery(false)}><p><TranslatedText>{tr("Your current SQL draft will be cleared from this browser.")}</TranslatedText></p><div className="dialog-actions"><button className="button" type="button" onClick={() => setConfirmResetQuery(false)}><TranslatedText>{tr("Cancel")}</TranslatedText></button><button className="button primary" type="button" onClick={() => { setCode(""); exam?.update(problem.id, { query: "" }); setResult(null); setLastSubmit(null); setAttempts([]); setConfirmResetQuery(false); }}><TranslatedText>{tr("Clear query")}</TranslatedText></button></div></Dialog>}
+      {confirmResetQuery && !isReadOnly && <Dialog title={tr("Reset SQL query?")} onClose={() => setConfirmResetQuery(false)}><p><TranslatedText>{tr("Your current SQL draft will be cleared from this browser.")}</TranslatedText></p><div className="dialog-actions"><button className="button" type="button" onClick={() => setConfirmResetQuery(false)}><TranslatedText>{tr("Cancel")}</TranslatedText></button><button className="button primary" type="button" onClick={() => { setCode(""); setEditedSinceSubmission(true); onUserEdit?.(); exam?.update(problem.id, { query: "" }); setResult(null); setAttempts(previous => previous.filter(attempt => attempt.kind === "submit")); setConfirmResetQuery(false); }}><TranslatedText>{tr("Clear query")}</TranslatedText></button></div></Dialog>}
+      {!embedded && !exam?.enabled && confirmExit && <Dialog title={tr("Exit workspace?")} onClose={() => setConfirmExit(false)}><p><TranslatedText>{tr(editedSinceSubmission ? "You have unsubmitted changes. Exit without submitting them?" : hasSubmitted ? "Your submission is saved. Are you sure you want to exit?" : "You have not submitted your work. Are you sure you want to exit without submitting?")}</TranslatedText></p><div className="dialog-actions"><button className="button" type="button" onClick={() => setConfirmExit(false)}><TranslatedText>{tr("Stay here")}</TranslatedText></button><button className="button primary" type="button" onClick={() => navigate(exitDestination)}><TranslatedText>{tr("Exit")}</TranslatedText></button></div></Dialog>}
     </div>
   );
 }

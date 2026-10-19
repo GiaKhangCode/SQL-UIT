@@ -25,7 +25,9 @@ export function SubmissionDetails({
   const maximumScore = submission.maxScore ?? 100;
   const manuallyGraded = submission.evaluatedScore != null;
   const finalScore = submission.evaluatedScore ?? submission.score;
-  const scoreLabel = (score: number) => {
+  const scoreLabel = (score: number | null) => {
+    if (submission.scoreVisible === false || score == null) return tr("Score hidden by instructor");
+    if (submission.result === "Pending review" || submission.result === "Not answered") return tr("Awaiting grading");
     const normalized = maximumScore > 0 ? (score / maximumScore) * 10 : 0;
     return `${Math.round(normalized * 100) / 100}/10`;
   };
@@ -60,9 +62,9 @@ export function SubmissionDetails({
             <div>
               <small><TranslatedText>{tr("Final score")}</TranslatedText></small>
               <strong>{scoreLabel(finalScore)}</strong>
-              <small className="submission-grading-source">
+              {submission.scoreVisible !== false && submission.result !== "Pending review" && <small className="submission-grading-source">
                 <TranslatedText>{manuallyGraded ? tr("Manually graded by instructor") : tr("Automatically graded")}</TranslatedText>
-              </small>
+              </small>}
             </div>
           </div>
         </section>

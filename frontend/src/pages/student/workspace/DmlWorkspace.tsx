@@ -9,7 +9,7 @@ import type { Contest } from "../../../data/models";
 
 export function DmlWorkspace(props: StageEditorProps) {
   const { t: tr } = useLanguage("workspace");
-  return <StageEditor {...props} part="DML" description={tr("Write INSERT, UPDATE and DELETE statements. Use tables from the DDL section or the provided schema.")} placeholder="-- Write INSERT, UPDATE and DELETE statements here" />;
+  return <StageEditor {...props} part="DML" description={tr("Write INSERT statements to recreate the target dataset. The instructor's table structure is already set up.")} placeholder="-- Write INSERT statements here" />;
 }
 
 

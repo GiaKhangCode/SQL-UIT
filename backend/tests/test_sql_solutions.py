@@ -77,6 +77,31 @@ class SqlSolutionPersistenceTests(unittest.TestCase):
         self.assertEqual(result["status"], "Accepted")
         self.assertEqual(execute.call_count, 1, "a saved output should replace rerunning the reference query")
 
+    def test_hidden_datasets_hide_seed_data_and_outputs_but_keep_grading_answers(self):
+        outputs = [{"name": "Result", "columns": ["n"], "rows": [[value]]} for value in (99, 2, 3)]
+        cases = [dict(seedData=f"INSERT INTO T VALUES ({value})", isHidden=index == 0)
+                 for index, value in enumerate((99, 2, 3))]
+        created = create_problem(self.payload(schema="CREATE TABLE T (n INT)", expectedOutputs=outputs,
+                                               testCases=cases), self.db, self.teacher)
+        student_view = get_problem(created.id, db=self.db, current_user=self.student)
+        self.assertEqual([sample.dataset for sample in student_view.expected_samples], [2, 3])
+        self.assertEqual([sample.table.rows for sample in student_view.expected_samples], [[[2]], [[3]]])
+        self.assertEqual(student_view.expected.rows, [[2]])
+        self.assertEqual(student_view.seed_data, "INSERT INTO T VALUES (2)")
+        self.assertIn("CREATE TABLE T", student_view.schema_sql)
+        self.assertNotIn("99", str(student_view.test_cases))
+        teacher_view = get_problem(created.id, db=self.db, current_user=self.teacher)
+        self.assertEqual(len(teacher_view.expected_outputs), 3, "Hidden answers must remain available for grading")
+        self.assertTrue(teacher_view.test_cases[0]["isHidden"])
+
+        changed = update_problem(created.id, self.payload(schema="CREATE TABLE T (n INT)", expectedOutputs=outputs,
+            testCases=[dict(seedData=case["seedData"], isHidden=True) for case in cases]), self.db, self.teacher)
+        hidden_view = get_problem(changed.id, db=self.db, current_user=self.student)
+        self.assertEqual(hidden_view.expected_samples, [])
+        self.assertIsNone(hidden_view.expected)
+        self.assertEqual(hidden_view.test_cases, [])
+        self.assertEqual(hidden_view.seed_data, "")
+
     def test_older_clients_preserve_existing_solutions(self):
         created = create_problem(self.payload(), self.db, self.teacher)
         loaded = update_problem(created.id, self.payload(sqlSolutions=None), self.db, self.teacher)

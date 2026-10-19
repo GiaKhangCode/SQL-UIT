@@ -82,6 +82,7 @@ class ProblemBase(WorkspaceConfig):
     database_type: Optional[str] = "SQL Server"
 
 class ProblemListResponse(ProblemBase):
+    created_at: Optional[datetime] = None
     progress: Optional[str] = None
     solved_by: int = Field(default=0, alias="solvedBy")
     attempted: int = 0
@@ -114,6 +115,11 @@ class SqlCheckInfo(CamelModel):
     time_limit_ms: int = Field(alias="timeLimitMs")
 
 
+class ExpectedOutputSample(CamelModel):
+    dataset: int
+    table: DataTable
+
+
 class ProblemDetailResponse(ProblemBase):
     description: str
     requirements: str
@@ -124,6 +130,7 @@ class ProblemDetailResponse(ProblemBase):
     reference_solution: Optional[str] = Field(default="", alias="referenceSolution")
     expected: Optional[DataTable] = None
     expected_outputs: List[DataTable] = Field(default_factory=list, alias="expectedOutputs")
+    expected_samples: List[ExpectedOutputSample] = Field(default_factory=list, alias="expectedSamples")
     expected_output_visible: bool = Field(default=True, alias="expectedOutputVisible")
     sql_solutions: Optional[List[SqlSolutionConfig]] = Field(default=None, alias="sqlSolutions")
     sql_checks: List[SqlCheckInfo] = Field(default_factory=list, alias="sqlChecks")
@@ -268,7 +275,8 @@ class SubmissionResponse(CamelModel):
     context: str
     context_title: Optional[str] = None
     result: str
-    score: int
+    score: Optional[int]
+    score_visible: bool = True
     max_score: int = Field(default=100, alias="maxScore")
     submitted_at: datetime
     query_text: Optional[str] = Field(default=None, alias="query")
@@ -280,7 +288,7 @@ class TeacherSubmissionResponse(CamelModel):
     id: str
     student: str
     problem: str
-    auto_score: int = Field(alias="autoScore")
+    auto_score: Optional[int] = Field(alias="autoScore")
     max_score: int = Field(alias="maxScore")
     final_score: Optional[int] = Field(alias="finalScore")
     status: str
@@ -495,6 +503,8 @@ class StudentOptions(CamelModel):
     leaderboard: bool = False
     ai_allowed: bool = Field(default=True, alias="aiAllowed")
     exam_mode: bool = Field(default=False, alias="examMode")
+    show_scores_after_submit: bool = Field(default=True, alias="showScoresAfterSubmit")
+    max_submissions: Optional[int] = Field(default=None, ge=1, le=100, alias="maxSubmissions")
 
 class AssignmentCreate(CamelModel):
     model_config = ConfigDict(extra="forbid")

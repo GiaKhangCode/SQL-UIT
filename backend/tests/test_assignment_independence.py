@@ -54,7 +54,7 @@ class AssignmentIndependenceTests(unittest.TestCase):
                                    opens=now - datetime.timedelta(days=1),
                                    closes=now + datetime.timedelta(days=1)))
             self.db.add(AssignmentProblem(id=f"{activity_id}-P1", assignment_id=activity_id,
-                                          problem_id="P1", points=20))
+                                          problem_id="P1", points=20, workspace_parts=["SQL"]))
             self.db.add_all(AssignmentClass(id=f"{activity_id}-{class_id}",
                                             assignment_id=activity_id, class_id=class_id)
                             for class_id in class_ids)

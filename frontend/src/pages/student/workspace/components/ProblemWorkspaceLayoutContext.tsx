@@ -5,6 +5,8 @@ export type ProblemWorkspacePreferences = ReturnType<typeof readLayouts>;
 type ProblemWorkspaceLayoutValue = {
   preferences: ProblemWorkspacePreferences;
   setPreferences: Dispatch<SetStateAction<ProblemWorkspacePreferences>>;
+  focus?: boolean;
+  setFocus?: Dispatch<SetStateAction<boolean>>;
 };
 
 const ProblemWorkspaceLayoutContext = createContext<ProblemWorkspaceLayoutValue | null>(null);

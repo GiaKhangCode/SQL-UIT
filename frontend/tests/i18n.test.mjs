@@ -18,7 +18,7 @@ const output = await build({
     import { AppearanceSettings } from "./src/components/AppearanceSettings";
     import { Status } from "./src/components/ui";
     import { AdminRolesPage } from "./src/pages/admin/AdminPages";
-    import { WorkspaceTypeSelector } from "./src/pages/teacher/problem-editor/WorkspaceTypeSelector";
+    import { WorkspaceNavigation } from "./src/pages/student/workspace/components/WorkspaceNavigation";
     import { WORKSPACE_PART_DETAILS } from "./src/utils/workspaceParts";
     import { adminCapabilities } from "./src/data/adminPolicy";
     export * from "./src/i18n";
@@ -26,7 +26,7 @@ const output = await build({
     export { WORKSPACE_PART_DETAILS, adminCapabilities };
     export function renderSample(kind) {
       const child = kind === "settings" ? <AppearanceSettings /> : kind === "admin" ? <AdminRolesPage /> : kind === "teacher" ?
-        <WorkspaceTypeSelector value={['DDL', 'SQL']} onChange={() => {}} /> : <Status value="Wrong Answer" />;
+        <WorkspaceNavigation parts={['DDL', 'DML', 'SQL']} active="DDL" onChange={() => {}} /> : <Status value="Wrong Answer" />;
       return renderToStaticMarkup(<ThemeProvider><LanguageProvider><MemoryRouter>{child}</MemoryRouter></LanguageProvider></ThemeProvider>);
     }
   `, resolveDir: process.cwd(), loader: "tsx" },
@@ -70,8 +70,10 @@ try {
     const admin = renderSample("admin"), teacher = renderSample("teacher"), student = renderSample("student");
     assert.ok(admin.includes(language === "vi" ? "Quyền giảng dạy" : "Teaching access"));
     assert.ok(admin.includes(language === "vi" ? "Quản lý tài khoản và vai trò" : "Manage accounts &amp; roles"));
-    assert.ok(teacher.includes(language === "vi" ? "Thiết kế lược đồ" : "Schema design"));
-    assert.equal((teacher.match(/checked=""/g) ?? []).length, 2);
+    assert.ok(teacher.includes(language === "vi" ? "Thiết kế bảng" : "Table Design"));
+    assert.ok(teacher.includes(language === "vi" ? "Nhập dữ liệu" : "Data Import"));
+    assert.ok(teacher.includes(language === "vi" ? "Truy vấn" : "Query"));
+    assert.equal((teacher.match(/type="checkbox"/g) ?? []).length, 0);
     assert.ok(student.includes(language === "vi" ? "Sai kết quả" : "Wrong Answer"));
     assert.ok(student.includes('class="status danger"'));
     assert.ok(student.includes('<i18n-text class="i18n-motion-text">'), "Student status participates in the shared text transition");

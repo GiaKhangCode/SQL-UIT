@@ -1,10 +1,11 @@
 import datetime
 import unittest
+from unittest.mock import patch
 from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from app.models import Base, User, Problem, Assignment, AssignmentProblem, Submission
-from app.routers.activity_attempts import AttemptUpdate, get_attempt, start_attempt, update_attempt, require_open_exam
+from app.routers.activity_attempts import AttemptUpdate, get_attempt, start_attempt, update_attempt, require_open_exam, expire_due_attempts
 from app.routers.problems import run_problem_workspace, submit_workspace
 from app.schemas import WorkspaceRunRequest
 from app.schemas import AssignmentCreate
@@ -84,9 +85,12 @@ class ExamModeTests(unittest.TestCase):
     def test_regular_multipart_submission_preserves_all_sections(self):
         self.activity.exam_mode = False
         self.db.commit()
-        result = submit_workspace("P", WorkspaceRunRequest(part="SQL", source="Contests", context="A",
-            ddl="CREATE TABLE T(id INT)", dml="INSERT INTO T VALUES(1)", query="SELECT * FROM T"), db=self.db, current_user=self.user)
-        self.assertEqual(result["status"], "Pending review")
+        grade = {"status": "Accepted", "score": 10, "feedback": "All selected sections passed."}
+        with patch("app.services.workspace_grading.grade_workspace_submission", return_value=grade):
+            result = submit_workspace("P", WorkspaceRunRequest(part="SQL", source="Contests", context="A",
+                ddl="CREATE TABLE T(id INT)", dml="INSERT INTO T VALUES(1)", query="SELECT * FROM T"), db=self.db, current_user=self.user)
+        self.assertEqual(result["status"], "Accepted")
+        self.assertEqual(result["score"], 10)
         query = self.db.query(Submission).one().query_text
         self.assertIn("-- DDL", query); self.assertIn("-- DML", query); self.assertIn("-- SQL", query)
 
@@ -107,6 +111,65 @@ class ExamModeTests(unittest.TestCase):
         with self.assertRaises(HTTPException) as caught:
             update_assignment(activity_id, request, db=self.db, current_user=teacher)
         self.assertEqual(caught.exception.status_code, 409)
+
+    def test_deadline_submits_saved_work_in_normal_activity_once(self):
+        self.activity.exam_mode = False
+        self.activity.closes = datetime.datetime.utcnow() + datetime.timedelta(minutes=1)
+        self.db.commit()
+        state = get_attempt("A", "Contests", db=self.db, current_user=self.user)
+        self.assertEqual(state["status"], "active")
+        self.assertTrue(state["closesAt"].endswith("Z"))
+        self.assertTrue(state["serverNow"].endswith("Z"))
+        self.update("save", problemId="P", ddl="CREATE TABLE T(id INT)", dml="INSERT INTO T VALUES(1)", revision=1)
+        self.update("save", problemId="Q", query="SELECT 1", revision=1)
+        with self.assertRaises(HTTPException): self.update("timeout")
+        self.activity.closes = datetime.datetime.utcnow() - datetime.timedelta(milliseconds=100)
+        self.db.commit()
+        final = self.update("timeout", problemId="Q", query="SELECT 2", revision=2)
+        self.assertEqual(final["finishReason"], "deadline")
+        self.assertEqual(self.db.query(Submission).count(), 2)
+        self.assertIn("SELECT 2", self.db.query(Submission).filter(Submission.problem_id == "Q").one().query_text)
+        self.update("timeout")
+        expire_due_attempts(self.db)
+        self.assertEqual(self.db.query(Submission).count(), 2)
+        with self.assertRaises(HTTPException): require_open_exam(self.db, self.user, self.activity)
+
+    def test_server_deadline_worker_finishes_exam_without_browser(self):
+        self.start()
+        self.update("save", problemId="P", ddl="CREATE TABLE T(id INT)", revision=1)
+        self.activity.closes = datetime.datetime.utcnow() - datetime.timedelta(seconds=10)
+        self.db.commit()
+        expire_due_attempts(self.db)
+        expire_due_attempts(self.db)
+        self.assertEqual(self.db.query(Submission).count(), 2)
+        state = get_attempt("A", "Contests", db=self.db, current_user=self.user)
+        self.assertEqual((state["status"], state["finishReason"]), ("submitted", "deadline"))
+
+    def test_deadline_keeps_existing_submission_when_limit_is_used(self):
+        self.activity.exam_mode = False
+        self.activity.max_submissions = 1
+        self.db.commit()
+        get_attempt("A", "Contests", db=self.db, current_user=self.user)
+        self.update("save", problemId="P", ddl="CREATE TABLE T(id INT)", revision=1)
+        submit_workspace("P", WorkspaceRunRequest(part="DDL", source="Contests", context="A", ddl="CREATE TABLE T(id INT)"), db=self.db, current_user=self.user)
+        self.update("save", problemId="P", ddl="CREATE TABLE Different(id INT)", revision=2)
+        self.activity.closes = datetime.datetime.utcnow() - datetime.timedelta(seconds=10)
+        self.db.commit()
+        expire_due_attempts(self.db)
+        saved = self.db.query(Submission).filter(Submission.problem_id == "P").all()
+        self.assertEqual(len(saved), 1)
+        self.assertNotIn("Different", saved[0].query_text)
+
+    def test_deadline_does_not_duplicate_identical_manually_submitted_work(self):
+        self.activity.exam_mode = False
+        self.db.commit()
+        get_attempt("A", "Contests", db=self.db, current_user=self.user)
+        self.update("save", problemId="P", ddl="CREATE TABLE T(id INT)", revision=1)
+        submit_workspace("P", WorkspaceRunRequest(part="DDL", source="Contests", context="A", ddl="CREATE TABLE T(id INT)"), db=self.db, current_user=self.user)
+        self.activity.closes = datetime.datetime.utcnow() - datetime.timedelta(seconds=10)
+        self.db.commit()
+        expire_due_attempts(self.db)
+        self.assertEqual(self.db.query(Submission).filter(Submission.problem_id == "P").count(), 1)
 
 
 if __name__ == "__main__": unittest.main()

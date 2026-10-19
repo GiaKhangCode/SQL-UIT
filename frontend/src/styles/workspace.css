@@ -128,3 +128,17 @@
 .workspace-sql-error { min-width:0; overflow-wrap:anywhere; }
 .workspace-sql-error > strong { display:block; font-size:12px; line-height:1.6; }
 .workspace-sql-error > p,.workspace-execution-feedback .workspace-sql-error > p { margin:6px 0 0; color:var(--muted); font-size:11px; line-height:1.7; white-space:pre-wrap; }
+
+/* Shared editor status for table design, data import and queries. */
+.workspace-editor-status { display:flex; align-items:center; flex-wrap:wrap; gap:8px 16px; min-width:0; margin-right:auto; font-size:11px; }
+.workspace-editor-status .cursor-position { margin:0; white-space:nowrap; }
+.workspace-editor-status .workspace-execution-time { margin:0; font-size:10px; }
+.workspace-deadline { display:inline-flex; align-items:center; gap:6px; color:var(--muted); white-space:nowrap; font-size:11px; }
+.workspace-deadline b { color:var(--accent); font-variant-numeric:tabular-nums; }
+.workspace-deadline.is-urgent,.workspace-deadline.is-urgent b { color:var(--danger,#dc2626); }
+.problem-workspace .workspace-header .workspace-tools { margin-left:auto; }
+.problem-workspace .workspace-header .problem-workspace-tabs { margin-left:0; }
+.stage-workspace.focus-mode { grid-template-columns:minmax(0,1fr); }
+.stage-workspace.focus-mode > .stage-problem,.stage-workspace.focus-mode > .workspace-splitter { display:none; }
+.stage-editor-actions { flex-wrap:wrap; gap:10px; }
+@media (max-width:700px) { .workspace-editor-status { flex-basis:100%; } }

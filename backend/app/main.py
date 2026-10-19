@@ -12,7 +12,10 @@ app = FastAPI(title="UIT-SQL API", version="1.0.0")
 # Cho phép Frontend Vite gọi API (CORS)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5174", "http://127.0.0.1:5174"],
+    allow_origins=[
+        "http://localhost:5173", "http://127.0.0.1:5173",
+        "http://localhost:5174", "http://127.0.0.1:5174",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -43,3 +46,31 @@ app.include_router(ai.router, prefix="/api/ai", tags=["AI"])
 
 from app.routers import activity_attempts
 app.include_router(activity_attempts.router, prefix="/api/student/activity-attempts", tags=["Exam attempts"])
+
+# The server also closes attempts when their browser is suspended or disconnected.
+import asyncio
+import logging
+from contextlib import suppress
+from app.database import SessionLocal
+
+def _expire_workspace_drafts():
+    with SessionLocal() as db:
+        activity_attempts.expire_due_attempts(db)
+
+async def _deadline_worker():
+    while True:
+        try:
+            await asyncio.to_thread(_expire_workspace_drafts)
+        except Exception:
+            logging.getLogger(__name__).exception("Could not finalize expired workspace drafts")
+        await asyncio.sleep(2)
+
+@app.on_event("startup")
+async def start_deadline_worker():
+    app.state.deadline_worker = asyncio.create_task(_deadline_worker())
+
+@app.on_event("shutdown")
+async def stop_deadline_worker():
+    app.state.deadline_worker.cancel()
+    with suppress(asyncio.CancelledError):
+        await app.state.deadline_worker

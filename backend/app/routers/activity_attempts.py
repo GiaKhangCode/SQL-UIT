@@ -43,12 +43,24 @@ def locked_attempt(db, activity_id, user_id):
     ).filter(ActivityAttempt.assignment_id == activity_id, ActivityAttempt.user_id == user_id).first()
 
 
-def payload(db, activity, attempt):
+def payload(db, activity, attempt, user_id=None):
+    from app.services.submission_policy import submission_limit, scores_visible
+    from sqlalchemy import func
+    counts = dict(db.query(Submission.problem_id, func.count(Submission.id)).filter(
+        Submission.user_id == (user_id or (attempt.user_id if attempt else "")),
+        Submission.context == activity.id,
+        Submission.source.in_(["Assignments", "Contests", "Assignment", "Contest"])
+    ).group_by(Submission.problem_id).all())
     problem_ids = [row.problem_id for row in db.query(AssignmentProblem).filter(
         AssignmentProblem.assignment_id == activity.id
     ).order_by(AssignmentProblem.order_index).all()]
+    now = datetime.datetime.utcnow()
     return {"examMode": bool(activity.exam_mode), "problemIds": problem_ids,
-            "status": attempt.status if attempt else "not_started",
+            "closesAt": activity.closes.isoformat() + "Z" if activity.closes else None,
+            "serverNow": now.isoformat() + "Z",
+            "showScoresAfterSubmit": scores_visible(activity), "maxSubmissions": submission_limit(activity),
+            "submissionCounts": counts,
+            "status": attempt.status if attempt else "closed" if activity.closes and now >= activity.closes else "not_started",
             "violationCount": len(attempt.violations or []) if attempt else 0,
             "drafts": attempt.drafts or {} if attempt else {},
             "finishReason": attempt.finish_reason if attempt else None}
@@ -71,16 +83,25 @@ def save_snapshot(db, activity, attempt, request):
         attempt.drafts = drafts
 
 
-def store_submission(db, user_id, problem, source, context, scripts, parts, reason=None):
-    # Mixed DDL/DML/SQL work must be reviewed together; the SQL-only grader cannot
-    # grade a student's schema/data. Preserve all enabled sections for the teacher.
+def store_submission(db, user_id, problem, source, context, scripts, parts, reason=None,
+                     maximum=100):
     text = "\n\n".join(f"-- {part}\n{scripts.get({'DDL': 'ddl', 'DML': 'dml', 'SQL': 'query'}[part], '')}"
                        for part in parts)
     answered = any(scripts.get(key, "").strip() for key in ("ddl", "dml", "query"))
+    if answered:
+        from app.services.workspace_grading import grade_workspace_submission
+        grade = grade_workspace_submission(db, problem, scripts, parts, maximum)
+        result = grade["status"]
+        score = grade["score"]
+        feedback = grade.get("feedback")
+    else:
+        result = "Not answered"
+        score = 0
+        feedback = "Automatically submitted after two exam violations." if reason == "violations" else None
     submission = Submission(id=str(uuid.uuid4()), user_id=user_id, problem_id=problem.id,
         source=source, context=context, query_text=text, database_type="SQL Server",
-        result="Pending review" if answered else "Not answered", score=0,
-        feedback="Automatically submitted after two exam violations." if reason == "violations" else None)
+        result=result, score=score, evaluated_score=score if answered else None,
+        feedback=feedback)
     db.add(submission)
     return submission
 
@@ -88,12 +109,27 @@ def store_submission(db, user_id, problem, source, context, scripts, parts, reas
 def finish(db, activity, attempt, source, reason):
     if attempt.status != "active":
         return
+    from app.services.submission_policy import submission_limit, submissions_used
+    db.query(User).with_hint(User, "WITH (UPDLOCK, HOLDLOCK, ROWLOCK)", dialect_name="mssql").filter(User.id == attempt.user_id).first()
     for member in db.query(AssignmentProblem).filter(AssignmentProblem.assignment_id == activity.id).all():
         problem = db.query(Problem).filter(Problem.id == member.problem_id).first()
         if problem:
+            limit = submission_limit(activity)
+            if limit is not None and submissions_used(db, attempt.user_id, activity.id, problem.id) >= limit:
+                continue
+            scripts = (attempt.drafts or {}).get(problem.id, {})
+            parts = activity_workspace_parts(problem, activity, member)
+            maximum = member.points
+            if reason == "deadline":
+                latest = db.query(Submission).filter(Submission.user_id == attempt.user_id,
+                    Submission.context == activity.id, Submission.problem_id == problem.id,
+                    Submission.source.in_(["Assignments", "Contests", "Assignment", "Contest"])
+                ).order_by(Submission.submitted_at.desc()).first()
+                text = "\n\n".join(f"-- {part}\n{scripts.get({'DDL': 'ddl', 'DML': 'dml', 'SQL': 'query'}[part], '')}" for part in parts)
+                if latest and (latest.query_text or "").strip() in (text.strip(), scripts.get("query", "").strip() if parts == ["SQL"] else text.strip()):
+                    continue
             store_submission(db, attempt.user_id, problem, source, activity.id,
-                             (attempt.drafts or {}).get(problem.id, {}),
-                             activity_workspace_parts(problem, activity, member), reason)
+                             scripts, parts, reason, maximum)
     attempt.status = "submitted"
     attempt.finish_reason = reason
     attempt.submitted_at = datetime.datetime.utcnow()
@@ -101,7 +137,11 @@ def finish(db, activity, attempt, source, reason):
 
 def require_open_exam(db, user, activity):
     """Used by every execution/submission route; URL flags cannot bypass exam policy."""
-    if user.role != "student" or not activity.exam_mode:
+    if user.role != "student":
+        return
+    if activity.closes and datetime.datetime.utcnow() >= activity.closes:
+        raise HTTPException(403, "This activity has ended. Your saved work will be submitted automatically.")
+    if not activity.exam_mode:
         return
     attempt = db.query(ActivityAttempt).filter(ActivityAttempt.assignment_id == activity.id,
                                               ActivityAttempt.user_id == user.id).first()
@@ -114,7 +154,24 @@ def get_attempt(activity_id: str, source: Literal["Assignments", "Contests"],
                 db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     activity = access(db, current_user, activity_id, source)
     attempt = locked_attempt(db, activity_id, current_user.id)
-    return payload(db, activity, attempt)
+    now = datetime.datetime.utcnow()
+    if not attempt and not activity.exam_mode and (not activity.closes or now < activity.closes):
+        attempt = create_attempt(db, activity_id, current_user.id)
+    if attempt and attempt.status == "active" and activity.closes and now >= activity.closes + datetime.timedelta(seconds=3):
+        finish(db, activity, attempt, source, "deadline")
+        db.commit()
+    return payload(db, activity, attempt, current_user.id)
+
+
+def create_attempt(db, activity_id, user_id):
+    attempt = ActivityAttempt(assignment_id=activity_id, user_id=user_id, status="active", drafts={}, violations=[])
+    db.add(attempt)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        attempt = locked_attempt(db, activity_id, user_id)
+    return attempt
 
 
 @router.post("/{activity_id}/start")
@@ -127,27 +184,34 @@ def start_attempt(activity_id: str, request: AttemptUpdate,
         raise HTTPException(403, "This activity has closed.")
     attempt = locked_attempt(db, activity_id, current_user.id)
     if not attempt:
-        attempt = ActivityAttempt(assignment_id=activity_id, user_id=current_user.id,
-                                  status="active", drafts={}, violations=[])
-        db.add(attempt)
-        try:
-            db.commit()
-        except IntegrityError:
-            db.rollback()
-            attempt = locked_attempt(db, activity_id, current_user.id)
-    return payload(db, activity, attempt)
+        attempt = create_attempt(db, activity_id, current_user.id)
+    return payload(db, activity, attempt, current_user.id)
 
 
 @router.post("/{activity_id}/{action}")
-def update_attempt(activity_id: str, action: Literal["save", "violation", "submit"], request: AttemptUpdate,
+def update_attempt(activity_id: str, action: Literal["save", "violation", "submit", "timeout"], request: AttemptUpdate,
                    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     activity = access(db, current_user, activity_id, request.source)
     attempt = locked_attempt(db, activity_id, current_user.id)
+    now = datetime.datetime.utcnow()
+    expired = bool(activity.closes and now >= activity.closes)
+    if action == "timeout" and not expired:
+        raise HTTPException(400, "This activity has not ended yet.")
+    if not attempt and not activity.exam_mode and not expired:
+        attempt = create_attempt(db, activity_id, current_user.id)
     if not attempt:
         raise HTTPException(403, "Start the exam before working.")
     if attempt.status == "active":
+        if expired and now >= activity.closes + datetime.timedelta(seconds=3):
+            finish(db, activity, attempt, request.source, "deadline")
+            db.commit()
+            return payload(db, activity, attempt, current_user.id)
         save_snapshot(db, activity, attempt, request)
-        if action == "violation":
+        if expired and action != "save":
+            finish(db, activity, attempt, request.source, "deadline")
+        elif action == "violation":
+            if not activity.exam_mode:
+                raise HTTPException(400, "Exam mode is not enabled for this activity.")
             if not request.event_id or not request.kind:
                 raise HTTPException(400, "A violation needs an event ID and kind.")
             events = list(attempt.violations or [])
@@ -158,6 +222,22 @@ def update_attempt(activity_id: str, action: Literal["save", "violation", "submi
             if len(events) >= 2:
                 finish(db, activity, attempt, request.source, "violations")
         elif action == "submit":
+            if not activity.exam_mode:
+                raise HTTPException(400, "Use the problem submission action before the deadline.")
             finish(db, activity, attempt, request.source, "student")
         db.commit()
-    return payload(db, activity, attempt)
+    return payload(db, activity, attempt, current_user.id)
+
+
+def expire_due_attempts(db):
+    """Finalize persisted drafts independently of the browser, once per activity/student."""
+    due = db.query(ActivityAttempt.assignment_id, ActivityAttempt.user_id).join(
+        Assignment, Assignment.id == ActivityAttempt.assignment_id
+    ).filter(ActivityAttempt.status == "active", Assignment.closes != None,
+             Assignment.closes <= datetime.datetime.utcnow() - datetime.timedelta(seconds=3)).all()
+    for activity_id, user_id in due:
+        attempt = locked_attempt(db, activity_id, user_id)
+        activity = db.query(Assignment).filter(Assignment.id == activity_id).first()
+        if attempt and activity:
+            finish(db, activity, attempt, "Contests" if activity.is_contest else "Assignments", "deadline")
+            db.commit()

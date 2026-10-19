@@ -5,7 +5,12 @@ export type Verdict =
   | "Accepted"
   | "Wrong Answer"
   | "Runtime Error"
-  | "Time Limit Exceeded";
+  | "Time Limit Exceeded"
+  | "Partial"
+  | "Rejected"
+  | "Submitted"
+  | "Pending review"
+  | "Not answered";
 
 export type DataTable = {
   name: string;
@@ -13,11 +18,16 @@ export type DataTable = {
   rows: (string | number)[][];
 };
 
+export type ExpectedOutputSample = { dataset: number; table: DataTable };
+
 export type WorkspacePart = "DDL" | "DML" | "SQL";
 
 export type Problem = {
   sqlChecks?: { id: string; name: string; timeLimitMs: number }[];
   workspaceParts?: WorkspacePart[];
+  testCases?: { schema?: string; seedData?: string; isHidden?: boolean }[];
+  schema?: string;
+  seedData?: string;
   practiceListed?: boolean;
   id: string;
   number: string;
@@ -30,11 +40,15 @@ export type Problem = {
   draft: string;
   tables: DataTable[];
   expected?: DataTable;
+  expectedSamples?: ExpectedOutputSample[];
   hint: string;
 };
 
 export type Assignment = {
   examMode?: boolean;
+  showScoresAfterSubmit?: boolean;
+  maxSubmissions?: number | null;
+  submissionCounts?: Record<string, number>;
   id: string;
   title: string;
   instructions: string;
@@ -48,6 +62,9 @@ export type Assignment = {
 
 export type Contest = {
   examMode?: boolean;
+  showScoresAfterSubmit?: boolean;
+  maxSubmissions?: number | null;
+  submissionCounts?: Record<string, number>;
   id: string;
   title: string;
   status: "Live" | "Upcoming" | "Closed";
@@ -66,7 +83,7 @@ export type Contest = {
   problemCount: number;
   problemDetails: { id: string; title: string; difficulty: string; topic: string; points?: number; description?: string; requirements?: string }[];
   totalPoints: number;
-  score: number;
+  score: number | null;
   rank: number | null;
   leaderboardEnabled: boolean;
   aiAllowed: boolean;
@@ -89,7 +106,8 @@ export type Submission = {
   context: string;
   contextTitle?: string;
   result: Verdict;
-  score: number;
+  score: number | null;
+  scoreVisible?: boolean;
   submittedAt: string;
   query?: string;
   database?: string;

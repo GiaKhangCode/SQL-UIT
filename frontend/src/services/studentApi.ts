@@ -21,6 +21,11 @@ export type ProblemFilters = {
 };
 
 export type QueryResult = {
+  score?: number | null;
+  scoreVisible?: boolean;
+  maxScore?: number;
+  submissionsUsed?: number | null;
+  maxSubmissions?: number | null;
   executionTimeMs?: number;
   schemaTables?: import("../utils/parseDatabaseSchema").SchemaTable[];
   tables?: import("../data/models").DataTable[];
@@ -133,6 +138,9 @@ export const studentApi = {
         leaderboardEnabled: item.leaderboardEnabled,
         aiAllowed: item.aiAllowed,
         examMode: item.examMode,
+        showScoresAfterSubmit: item.showScoresAfterSubmit,
+        maxSubmissions: item.maxSubmissions,
+        submissionCounts: item.submissionCounts,
         leaderboard: item.leaderboard,
         examType: item.examType || item.exam_type || "classic",
         ddlPoints: item.ddlPoints ?? item.ddl_points ?? 30,

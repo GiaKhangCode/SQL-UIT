@@ -1,6 +1,20 @@
 import type { Dictionary } from "../../types";
 
 export const student: Dictionary = {
+  "Table Design": "Thiết kế bảng",
+  "Data Import": "Nhập dữ liệu",
+  "Query": "Truy vấn",
+  "Show scores after submission": "Hiện điểm sau khi nộp",
+  "Students can see their scores once their work has been graded.": "Sinh viên có thể xem điểm khi bài làm đã được chấm.",
+  "Submission limit": "Số lần được nộp bài",
+  "Exam mode allows one final submission for the entire activity.": "Chế độ thi cho phép một lần nộp cuối cho toàn bộ bài thi.",
+  "Per problem. Leave blank for unlimited submissions.": "Áp dụng cho từng bài. Để trống nếu không giới hạn số lần nộp.",
+  "Unlimited": "Không giới hạn",
+  "Submission limit reached": "Đã hết số lần nộp bài",
+  "Score hidden by instructor": "Giáo viên đang ẩn điểm",
+  "Awaiting grading": "Đang chờ chấm điểm",
+  "You have reached the submission limit for this problem.": "Bạn đã hết số lần được nộp cho bài này.",
+
   "Loading problem details…": "Đang tải chi tiết bài toán…",
   "Could not load problem details": "Không tải được chi tiết bài toán",
   "Continue solving →": "Tiếp tục giải →",

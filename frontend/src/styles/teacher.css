@@ -738,3 +738,6 @@
   .teacher-contest-schedule-fields { grid-template-columns:minmax(0,1fr); gap:12px; }
   .teacher-contest-page-nav button { font-size:9px; }
 }
+
+.teacher-submission-limit input { width:140px; min-width:100px; padding:9px 12px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); color:var(--text); font:inherit; font-size:12px; }
+.teacher-submission-limit input:disabled { background:var(--subtle); color:var(--muted); }

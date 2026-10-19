@@ -50,8 +50,12 @@ def activity_problem_access(db: Session, current_user: User, problem_id: str,
 
 
 def activity_workspace_parts(problem: Problem, activity=None, assignment_problem=None):
-    if activity and assignment_problem and assignment_problem.workspace_parts:
-        return assignment_problem.workspace_parts
+    if activity is not None and assignment_problem is not None:
+        if assignment_problem.workspace_parts is not None:
+            return assignment_problem.workspace_parts
+        # Older activity rows may predate per-activity workspace settings. Keep
+        # their runtime behavior consistent with the builder's displayed default.
+        return ["DDL", "DML", "SQL"]
     return problem.workspace_parts or ["SQL"]
 
 def check_problem_access(db: Session, current_user: User, p: Problem):
@@ -243,17 +247,16 @@ def get_problem(problem_id: str, context: Optional[str] = None, db: Session = De
     
     from app.models import TestCase, TestCaseScript
     tcs = db.query(TestCase).filter(TestCase.problem_id == p.id).order_by(TestCase.order_index).all()
-    first_visible_dataset_index = next((index for index, tc in enumerate(tcs) if not tc.is_hidden), None)
     if current_user.role == "student":
-        if not expected_output_visible:
-            resp.expected = None
-            resp.expected_outputs = []
-        elif first_visible_dataset_index is not None and first_visible_dataset_index < len(expected_output_tables):
-            resp.expected = expected_output_tables[first_visible_dataset_index]
-        else:
-            resp.expected = None
-        # Students only need the sample output shown in the prompt. Keep the
-        # per-dataset answer set private and let the sandbox use the stored value.
+        from app.schemas import ExpectedOutputSample
+        resp.expected_samples = [
+            ExpectedOutputSample(dataset=index + 1, table=expected_output_tables[index])
+            for index, tc in enumerate(tcs)
+            if expected_output_visible and not tc.is_hidden and index < len(expected_output_tables)
+        ]
+        resp.expected = resp.expected_samples[0].table if resp.expected_samples else None
+        # Only visible sample outputs reach the student. Hidden answers remain
+        # stored on the problem for grading.
         resp.expected_outputs = []
 
     if tcs:
@@ -268,7 +271,7 @@ def get_problem(problem_id: str, context: Optional[str] = None, db: Session = De
                     "seedData": script.insert_script,
                     "isHidden": tc.is_hidden
                 })
-                if idx == 0:
+                if len(mapped_tcs) == 1:
                     resp.schema_sql = script.create_script
                     resp.seed_data = script.insert_script
                     if current_user.role in ["instructor", "admin"]:
@@ -512,6 +515,9 @@ def run_query(problem_id: str, request: QueryRequest, db: Session = Depends(get_
 
 @router.post("/{problem_id}/submit")
 def submit_query(problem_id: str, request: QueryRequest, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    from app.services.submission_policy import check_submission_limit, submission_receipt
+    activity = None
+    used = None
     p = db.query(Problem).filter(Problem.id == problem_id).first()
     if not p:
         raise HTTPException(status_code=404, detail="Problem not found")
@@ -539,6 +545,8 @@ def submit_query(problem_id: str, request: QueryRequest, db: Session = Depends(g
 
     if effective_workspace_parts != ["SQL"]:
         raise HTTPException(status_code=400, detail="Use the workspace to submit multi-section problems. Combined submissions are not supported by the SQL-only grader.")
+    if activity:
+        used = check_submission_limit(db, current_user, activity, p.id)
                 
     result = run_sandbox(db, p, request.query, is_submit=True)
     
@@ -597,6 +605,9 @@ def submit_query(problem_id: str, request: QueryRequest, db: Session = Depends(g
             
     db.commit()
     
+    if activity and not activity.show_scores_after_submit:
+        result = {"status": "Submitted", "message": "Your submission was saved. Scores are hidden by your instructor."}
+    result.update(submission_receipt(activity, used, score, max_score))
     return result
 
 
@@ -634,6 +645,10 @@ def run_problem_workspace(problem_id: str, request: "WorkspaceRunRequest", db: S
 def submit_workspace(problem_id: str, request: WorkspaceRunRequest,
                      db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     from app.routers.activity_attempts import store_submission
+    from app.services.submission_policy import check_submission_limit, submission_receipt, scores_visible
+    activity = None
+    used = None
+    maximum = 100
     p = db.query(Problem).filter(Problem.id == problem_id).first()
     if not p:
         raise HTTPException(404, "Problem not found.")
@@ -649,7 +664,15 @@ def submit_workspace(problem_id: str, request: WorkspaceRunRequest,
         raise HTTPException(403, "Only students can submit work.")
     if parts == ["SQL"]:
         raise HTTPException(400, "Use the SQL submission endpoint for SQL-only work.")
+    if activity:
+        used = check_submission_limit(db, current_user, activity, p.id)
+        maximum = member.points
     scripts = {"ddl": request.ddl, "dml": request.dml, "query": request.query}
-    sub = store_submission(db, current_user.id, p, request.source, request.context, scripts, parts)
+    sub = store_submission(db, current_user.id, p, request.source, request.context,
+                           scripts, parts, maximum=maximum)
     db.commit()
-    return {"status": sub.result, "message": "Your work has been submitted for teacher review."}
+    visible = scores_visible(activity)
+    return {"status": sub.result if visible else "Submitted",
+            "message": (sub.feedback or "Your submission has been saved.") if visible
+                        else "Your submission has been saved. Scores are hidden by your instructor.",
+            **submission_receipt(activity, used, score=sub.score, maximum=maximum)}

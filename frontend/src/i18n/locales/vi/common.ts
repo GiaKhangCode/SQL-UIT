@@ -1,6 +1,20 @@
 import type { Dictionary } from "../../types";
 
 export const common: Dictionary = {
+  "Table Design": "Thiết kế bảng",
+  "Data Import": "Nhập dữ liệu",
+  "Query": "Truy vấn",
+  "Show scores after submission": "Hiện điểm sau khi nộp",
+  "Students can see their scores once their work has been graded.": "Sinh viên có thể xem điểm khi bài làm đã được chấm.",
+  "Submission limit": "Số lần được nộp bài",
+  "Exam mode allows one final submission for the entire activity.": "Chế độ thi cho phép một lần nộp cuối cho toàn bộ bài thi.",
+  "Per problem. Leave blank for unlimited submissions.": "Áp dụng cho từng bài. Để trống nếu không giới hạn số lần nộp.",
+  "Unlimited": "Không giới hạn",
+  "Submission limit reached": "Đã hết số lần nộp bài",
+  "Score hidden by instructor": "Giáo viên đang ẩn điểm",
+  "Awaiting grading": "Đang chờ chấm điểm",
+  "You have reached the submission limit for this problem.": "Bạn đã hết số lần được nộp cho bài này.",
+
   "ms": "ms",
   "Dashboard": "Tổng quan",
   "Practice": "Luyện tập",
@@ -258,7 +272,10 @@ export const common: Dictionary = {
   "Could not load contests": "Không tải được cuộc thi",
   "Enable": "Bật",
   "Disable": "Tắt",
-  "Expected output": "Kết quả mong đợi",
+  "Expected output": "Kết quả đầu ra mong đợi",
+  "Output shown for the sample dataset.": "Kết quả tương ứng với bộ dữ liệu mẫu.",
+  "No rows returned.": "Không có dòng kết quả.",
+  "Dataset {value0}": "Bộ dữ liệu {value0}",
   "Uncategorized": "Chưa phân loại",
   "Database setup": "Thiết lập cơ sở dữ liệu",
   "SQL Server · read-only schema and seed data used for evaluation": "SQL Server · lược đồ và dữ liệu khởi tạo chỉ đọc dùng để chấm bài",

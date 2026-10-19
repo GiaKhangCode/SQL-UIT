@@ -14,6 +14,7 @@ export function WorkspaceTools({ layout, onLayout, focus, onFocus, timerKey }: {
   const anchor = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const firstChoice = useRef<HTMLButtonElement>(null);
+  useEffect(() => { setTimer(readTimer(timerKey)); setNow(Date.now()); }, [timerKey]);
   useEffect(() => {
     if (timer.startedAt === null) return;
     const tick = () => setNow(Date.now());

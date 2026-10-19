@@ -6,11 +6,13 @@ import { useState, useEffect, useLayoutEffect, useRef, type CSSProperties } from
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { Dialog, ErrorState, Loading, Status } from "../../components/ui";
 import { ProblemMarkdown } from "../../components/ProblemMarkdown";
+import { ProblemExpectedOutput } from "../../components/ProblemExpectedOutput";
 import { teacherService, type TeacherDatabaseLibraryEntry } from "../../services/teacherService";
 import { type TeacherProblem } from "../../data/teacherTypes";
 import { TeacherField, TeacherSectionTitle } from "./TeacherPageParts";
 import { parseDatabaseSchema } from "../../utils/parseDatabaseSchema";
 import { parseSeedData } from "../../utils/parseSeedData";
+import { WORKSPACE_PART_LABELS } from "../../utils/workspaceParts";
 import { Database, Download, Eye, Play, Plus, Table2, X } from "lucide-react";
 
 import "../../styles/problem-workspace.css";
@@ -602,17 +604,20 @@ export function ProblemEditorPage() {
   }
 
   const schemaText = problem.schema || "";
-  const databaseSetupComplete = Boolean(schemaText.trim());
   const schemaDiagramIsCurrent = schemaDiagram?.source === problem.schema;
   const schemaTables = parseDatabaseSchema(schemaText);
   const previewLibraryEntry = libraryEntries.find((entry) => entry.id === libraryPreviewEntryId) ?? null;
   const previewLibraryDatasets = previewLibraryEntry ? databaseLibraryDatasets(previewLibraryEntry) : [];
   const previewLibraryDataset = previewLibraryDatasets[libraryPreviewDatasetIndex] ?? previewLibraryDatasets[0] ?? null;
   const previewLibraryTables = previewLibraryEntry ? parseDatabaseSchema(previewLibraryEntry.createTableSql || "") : [];
-  const seedDataText = problem.testCases?.[0]?.seedData || problem.seedData || "";
+  const seedDataText = problem.testCases?.length
+    ? problem.testCases.find((dataset) => !dataset.isHidden)?.seedData || ""
+    : problem.seedData || "";
   const seedTables = parseSeedData(seedDataText);
-  const visibleDatasetIndex = (problem.testCases || []).findIndex((dataset) => !dataset.isHidden);
-  const expectedOutputSample = (problem.expectedOutputs || [])[visibleDatasetIndex >= 0 ? visibleDatasetIndex : 0] || null;
+  const expectedOutputSamples = (problem.testCases || []).flatMap((dataset, index) => {
+    const table = problem.expectedOutputs?.[index];
+    return !dataset.isHidden && table ? [{ dataset: index + 1, table }] : [];
+  });
 
   function update<K extends keyof TeacherProblem>(
     field: K,
@@ -1025,6 +1030,10 @@ export function ProblemEditorPage() {
               )}
           </div>
           </div>
+          {expectedOutputSamples.length > 0 && <div className="teacher-problem-expected-output">
+            <ProblemExpectedOutput samples={expectedOutputSamples} />
+            {problem.expectedOutputVisible === false && <p className="muted"><TranslatedText>{tr("Hidden from students")}</TranslatedText></p>}
+          </div>}
           </section>
         <section id="database" className="teacher-problem-database-section">
           <div className="teacher-problem-database-heading">
@@ -1033,9 +1042,9 @@ export function ProblemEditorPage() {
           </div>
           <div className="teacher-problem-database-tabs" role="tablist" aria-label={tr("Database configuration")}>
             {([
-              ["schema", "Database structure"],
-              ["datasets", "Test datasets"],
-              ["solution", "SQL Solution"],
+              ["schema", WORKSPACE_PART_LABELS.DDL],
+              ["datasets", WORKSPACE_PART_LABELS.DML],
+              ["solution", WORKSPACE_PART_LABELS.SQL],
             ] as const).map(([tab, label]) => (
               <button
                 key={tab}
@@ -1043,7 +1052,6 @@ export function ProblemEditorPage() {
                 role="tab"
                 aria-selected={databaseTab === tab}
                 aria-controls={`database-panel-${tab}`}
-                disabled={(tab === "datasets" || tab === "solution") && !databaseSetupComplete}
                 className={databaseTab === tab ? "is-active" : ""}
                 onClick={() => setDatabaseTab(tab)}
               ><TranslatedText>{tr(label)}</TranslatedText></button>
@@ -1083,17 +1091,17 @@ export function ProblemEditorPage() {
               <p><TranslatedText>{tr("Preview tables, keys, and relationships from this database script.")}</TranslatedText></p>
               <button className="button primary" type="button" onClick={runSchemaDdl} disabled={!problem.schema.trim()}>
                 <Play size={14} aria-hidden="true" />
-                <TranslatedText>{tr("Run DDL")}</TranslatedText>
+                <TranslatedText>{tr("Run table")}</TranslatedText>
               </button>
             </div>
             <div className="teacher-schema-diagram-result" aria-live="polite">
-              {!schemaDiagram && <p className="teacher-schema-diagram-message"><TranslatedText>{tr("Run DDL to preview tables and key relationships.")}</TranslatedText></p>}
-              {schemaDiagram && !schemaDiagramIsCurrent && <p className="teacher-schema-diagram-message is-stale"><TranslatedText>{tr("Database structure changed since the last preview. Run DDL to refresh the diagram.")}</TranslatedText></p>}
-              {schemaDiagramIsCurrent && schemaDiagram.tables.length === 0 && <p className="teacher-schema-diagram-message is-error"><TranslatedText>{tr("No CREATE TABLE statements found. Add at least one table, then run DDL again.")}</TranslatedText></p>}
+              {!schemaDiagram && <p className="teacher-schema-diagram-message"><TranslatedText>{tr("Run table to preview tables and key relationships.")}</TranslatedText></p>}
+              {schemaDiagram && !schemaDiagramIsCurrent && <p className="teacher-schema-diagram-message is-stale"><TranslatedText>{tr("Database structure changed since the last preview. Run table to refresh the diagram.")}</TranslatedText></p>}
+              {schemaDiagramIsCurrent && schemaDiagram.tables.length === 0 && <p className="teacher-schema-diagram-message is-error"><TranslatedText>{tr("No CREATE TABLE statements found. Add at least one table, then run table again.")}</TranslatedText></p>}
               {schemaDiagramIsCurrent && schemaDiagram.tables.length > 0 && <TeacherSchemaDiagram tables={schemaDiagram.tables} />}
             </div>
           </section>}
-          {databaseSetupComplete && databaseTab === "datasets" && <section id="database-panel-datasets" role="tabpanel" className="teacher-validation-section teacher-test-cases-section">
+          {databaseTab === "datasets" && <section id="database-panel-datasets" role="tabpanel" className="teacher-validation-section teacher-test-cases-section">
             <div className="teacher-dataset-list">
           {(problem.testCases || [{seedData: problem.seedData, isHidden: false}]).map((tc, index) => (
             <div className="teacher-dataset-card" key={index}>
@@ -1175,7 +1183,7 @@ export function ProblemEditorPage() {
             </div>
             <p className="teacher-seed-summary"><TranslatedText>{tr("Each dataset contains seed SQL loaded before checking a solution. Hidden datasets are not shown to students.")}</TranslatedText></p>
           </section>}
-          {databaseSetupComplete && databaseTab === "solution" && <div id="database-panel-solution" role="tabpanel">
+          {databaseTab === "solution" && <div id="database-panel-solution" role="tabpanel">
             <TeacherSqlSolutions
               solutions={initialSqlSolutions(problem.sqlSolutions, problem.referenceSolution, `legacy-${problem.id}`)}
               schema={problem.schema}
@@ -1188,9 +1196,11 @@ export function ProblemEditorPage() {
               expectedOutputVisible={problem.expectedOutputVisible !== false}
               onExpectedOutputsChange={(outputs) => {
                 update("expectedOutputs", outputs);
-                update("expectedOutputVisible", true);
               }}
               onExpectedOutputVisibilityChange={(visible) => update("expectedOutputVisible", visible)}
+              onDatasetVisibilityChange={(index, hidden) => update("testCases",
+                (problem.testCases || [{ seedData: problem.seedData, isHidden: false }])
+                  .map((dataset, datasetIndex) => datasetIndex === index ? { ...dataset, isHidden: hidden } : dataset))}
               onRunningChange={setValidating}
             />
           </div>}
@@ -1271,13 +1281,8 @@ export function ProblemEditorPage() {
                   <ProblemMarkdown>{problem.statement || tr("No statement yet.")}</ProblemMarkdown>
                   <h3><TranslatedText>{tr("Requirements")}</TranslatedText></h3>
                   <ProblemMarkdown>{problem.requirements || tr("No requirements yet.")}</ProblemMarkdown>
-                  {problem.expectedOutputVisible !== false && expectedOutputSample && <section className="teacher-student-preview-expected-output">
-                    <h3><TranslatedText>{tr("Expected output")}</TranslatedText></h3>
-                    <div className="teacher-dataset-preview-scroll"><table className="teacher-table">
-                      <thead><tr>{expectedOutputSample.columns.map((column, index) => <th key={`${column}-${index}`}>{column}</th>)}</tr></thead>
-                      <tbody>{expectedOutputSample.rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((value, columnIndex) => <td key={`${expectedOutputSample.columns[columnIndex] || columnIndex}-${columnIndex}`}>{String(value ?? "NULL")}</td>)}</tr>)}</tbody>
-                    </table></div>
-                  </section>}
+                  {problem.expectedOutputVisible !== false && <ProblemExpectedOutput
+                    samples={expectedOutputSamples} className="teacher-student-preview-expected-output" />}
                 </div>
               ) : (
                 <div className="teacher-student-preview-content teacher-student-preview-database">

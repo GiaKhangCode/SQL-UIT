@@ -149,8 +149,30 @@ Before starting an existing SQL Server database, run `python scripts/add_exam_mo
 
 Teachers enable **Exam mode** when creating/editing an assignment or contest. Students accept the rules before starting. One server-owned attempt covers every problem in the activity. Drafts, violation IDs and final status survive reloads. Two focus-loss, navigation or external-paste reports finalize all problems; duplicate event IDs do not count twice. Execution and ordinary submission endpoints reject attempts that have not started or are already submitted. The mode cannot be changed after an attempt has started.
 
-`/api/student/activity-attempts/{id}` returns policy/state; `/start`, `/save`, `/violation`, `/submit` update the attempt. Finalization writes each problem's enabled DDL/DML/SQL sections to a submission for **teacher review**; it does not claim that the existing SQL-only grader has evaluated the student's schema or data. Non-exam multi-section work uses `/api/problems/{id}/workspace/submit`.
+`/api/student/activity-attempts/{id}` returns policy/state; `/start`, `/save`, `/violation`, `/submit` update the attempt. Finalization submits and automatically grades each problem's enabled DDL/DML/SQL sections. Non-exam multi-section work uses `/api/problems/{id}/workspace/submit` and returns the same automatic grade.
 
 Browser enforcement is best effort: focus/visibility events cannot identify an application, distinguish intent or guarantee delivery when a browser is killed or offline. Browser-close/reload prompts are native browser dialogs. External paste is approximated by allowing only text copied in the current workspace; it cannot prove clipboard provenance. Pending events and drafts are kept locally and retried after reconnect/reload. This is not a locked-down operating-system exam client.
 
 Checks: `python -m unittest discover -s tests -p test_exam_mode.py`; frontend `npm run test:exam-mode` and `npm run test:workspace-flow`.
+
+
+## Submission settings
+
+Run `python scripts/add_submission_policy.py` on an existing SQL Server database before starting the updated backend. Existing activities retain visible scores and unlimited submissions.
+
+Run `python scripts/add_problem_created_at.py` to add problem creation dates to an existing database. New problems receive their creation timestamp automatically; historical problems retain an unknown date rather than the migration date.
+
+Teachers configure `studentOptions.showScoresAfterSubmit` (default true) and `studentOptions.maxSubmissions` (null for unlimited, otherwise 1–100 submissions **per problem**). Exam mode still permits one final submission for the activity. Ordinary query runs do not consume an allowance. SQL-only and multi-section final submissions enforce the limit on the server; concurrent submissions from one student are serialized with SQL Server row locks.
+
+When score visibility is off, student receipts, submission history/details, activity totals and grading notifications omit grades; staff views retain the saved scores. Student leaderboards are suppressed for hidden-score activities. SQL-only and multi-section submissions receive an automatic grade.
+
+Check the policy with `python -m unittest discover -s tests -p test_submission_policy.py`.
+
+
+## Workspace deadline submission
+
+Every open student activity workspace now creates/resumes an activity draft session, including activities with Exam mode off. Scripts are saved per problem, while the stopwatch uses an activity key so changing problems does not reset it. The UI countdown uses `closesAt` and `serverNow` from the server; activities without an end time and practice work have no countdown.
+
+At the deadline, the browser freezes editing and sends the current snapshots to the idempotent `/timeout` action. A background worker also checks persisted sessions every two seconds and finalizes those past the deadline, allowing a three-second delivery window for the browser's final snapshot. If the browser is closed or disconnected, the worker submits the most recent **server-saved** drafts. Already identical submissions are preserved and configured per-problem submission limits are respected. Server execution routes reject further work after the end time.
+
+Workspace checks cover selected DDL/DML execution without replacing drafts, shared cursor status, stopwatch continuity across problems, countdown expiry, browser-independent finalization, duplicate suppression and submission limits.

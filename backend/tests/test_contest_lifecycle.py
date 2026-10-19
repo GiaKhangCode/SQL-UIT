@@ -63,6 +63,27 @@ class ContestLifecycleTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             AssignmentCreate.model_validate({**self.payload("all_students").model_dump(by_alias=True), "isContest": False})
 
+    def test_publish_and_update_contest_without_rules(self):
+        payload = self.payload()
+        payload.rules = ""
+        activity = create_assignment(payload, db=self.db, current_user=self.teacher)
+        self.assertTrue(activity["published"])
+        payload.title = "Updated contest without rules"
+        updated = update_assignment(activity["id"], payload, db=self.db, current_user=self.teacher)
+        self.assertTrue(updated["published"])
+        self.assertEqual(updated["title"], payload.title)
+
+    def test_publish_still_requires_contest_descriptions(self):
+        for field in ("short_description", "description"):
+            with self.subTest(field=field):
+                payload = self.payload()
+                payload.rules = ""
+                setattr(payload, field, "   ")
+                with self.assertRaises(HTTPException) as error:
+                    create_assignment(payload, db=self.db, current_user=self.teacher)
+                self.assertEqual(error.exception.status_code, 400)
+                self.assertEqual(error.exception.detail, "Published contests need a short description and description.")
+
     def test_banner_upload_and_student_contract(self):
         webp = b"RIFF" + (16).to_bytes(4, "little") + b"WEBPVP8 " + (4).to_bytes(4, "little") + b"\0\0\0\0"
         def upload(data, content_type="image/webp"):
@@ -130,6 +151,28 @@ class ContestLifecycleTests(unittest.TestCase):
             ["DML", "SQL"],
         )
 
+    def test_legacy_activity_parts_default_does_not_inherit_problem_mode(self):
+        contest = create_assignment(self.payload(), db=self.db, current_user=self.teacher)
+        stored_problem = self.db.get(Problem, "P")
+        stored_problem.workspace_parts = ["SQL"]
+        activity_problem = self.db.query(AssignmentProblem).filter_by(
+            assignment_id=contest["id"], problem_id="P"
+        ).one()
+        activity_problem.workspace_parts = None
+        self.db.commit()
+
+        # The builder already presents all parts for a legacy NULL setting.
+        self.assertEqual(
+            get_assignment(contest["id"], db=self.db, current_user=self.teacher)["problemList"][0]["workspaceParts"],
+            ["DDL", "DML", "SQL"],
+        )
+        # Runtime must use that activity default rather than the reusable
+        # problem's SQL-only practice configuration.
+        self.assertEqual(
+            get_problem("P", context=contest["id"], db=self.db, current_user=self.enrolled).workspace_parts,
+            ["DDL", "DML", "SQL"],
+        )
+
     def test_upcoming_hides_problems_and_rejects_access(self):
         activity = create_assignment(self.payload("all_students", start_hours=2, end_hours=3),
                                      db=self.db, current_user=self.teacher)
@@ -151,7 +194,9 @@ class ContestLifecycleTests(unittest.TestCase):
             self.assertEqual(caught.exception.status_code, 403)
 
     def test_live_submission_and_closed_review(self):
-        activity = create_assignment(self.payload("all_students"), db=self.db, current_user=self.teacher)
+        payload = self.payload("all_students")
+        payload.problems[0].workspace_parts = ["SQL"]
+        activity = create_assignment(payload, db=self.db, current_user=self.teacher)
         context = activity["id"]
         detail = get_problem("P", context=context, db=self.db, current_user=self.other)
         self.assertIsNone(detail.hint)

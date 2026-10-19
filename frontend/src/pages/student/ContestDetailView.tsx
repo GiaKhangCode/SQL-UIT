@@ -66,7 +66,7 @@ export function ContestDetailView({ contest, phase, now, preview = false }: {
       <div className="contest-banner-summary">
         {phase === "Upcoming" && <p className="tiny"><TranslatedText>{tr("Starts in")}</TranslatedText> <TranslatedText>{Number.isFinite(starts) ? timeRemaining(starts - now) : tr("Not scheduled")}</TranslatedText></p>}
         {phase === "Live" && <p className="tiny"><TranslatedText>{tr("Ends in")}</TranslatedText> <TranslatedText>{Number.isFinite(ends) ? timeRemaining(ends - now) : tr("Not scheduled")}</TranslatedText></p>}
-        {phase === "Closed" && <p className="tiny"><TranslatedText>{tr("Final score ·")}</TranslatedText> {contest.score}/{contest.totalPoints}<TranslatedText>{contest.rank ? tr("· Rank {value0}", { value0: contest.rank }) : ""}</TranslatedText></p>}
+        {phase === "Closed" && <p className="tiny"><TranslatedText>{tr("Final score ·")}</TranslatedText> {contest.score == null ? tr("Score hidden by instructor") : `${contest.score}/${contest.totalPoints}`}<TranslatedText>{contest.rank ? tr("· Rank {value0}", { value0: contest.rank }) : ""}</TranslatedText></p>}
       </div>
     </header>
         <div className="contest-overview-card">
@@ -83,7 +83,7 @@ export function ContestDetailView({ contest, phase, now, preview = false }: {
       </div>
             <aside className="contest-participation"><h2><TranslatedText>{tr("Participation")}</TranslatedText></h2><dl>
         <div><dt><TranslatedText>{tr("Participants")}</TranslatedText></dt><dd>{contest.submitters ?? 0}</dd></div>
-        {phase === "Live" && <div><dt><TranslatedText>{tr("Your score")}</TranslatedText></dt><dd>{contest.score}/{contest.totalPoints}</dd></div>}
+        {phase === "Live" && <div><dt><TranslatedText>{tr("Your score")}</TranslatedText></dt><dd>{contest.score == null ? tr("Score hidden by instructor") : `${contest.score}/${contest.totalPoints}`}</dd></div>}
         <div><dt><TranslatedText>{tr("AI assistance")}</TranslatedText></dt><dd><TranslatedText>{contest.aiAllowed ? tr("Allowed") : tr("Disabled")}</TranslatedText></dd></div>
         {contest.leaderboardEnabled && phase === "Live" && contest.rank && <div><dt><TranslatedText>{tr("Your rank")}</TranslatedText></dt><dd>#{contest.rank}</dd></div>}
       </dl>
@@ -125,7 +125,7 @@ export function ContestDetailView({ contest, phase, now, preview = false }: {
         <header><h2><TranslatedText>{tr("Problem details")}</TranslatedText></h2></header>
         <div className="contest-selected-problem">
           {phase === "Upcoming" ? <p className="tiny muted"><TranslatedText>{tr("Problems become available when the contest starts.")}</TranslatedText></p> : <>
-            {selectedId ? <ContestSelectedProblem key={`${contest.id}:${selectedId}`} problemId={selectedId} contestId={contest.id} summary={selectedProblem} letter={String.fromCharCode(65 + contest.problemIds.indexOf(selectedId))} attempts={(attempts || []).filter((item) => item.problemId === selectedId)} attemptsLoading={attemptsLoading} attemptsError={attemptsError} workspaceUrl={workspace(selectedId)} closed={phase === "Closed"} /> : <Empty title={tr("No problem selected")} />}
+            {selectedId ? <ContestSelectedProblem key={`${contest.id}:${selectedId}`} problemId={selectedId} contestId={contest.id} summary={selectedProblem} letter={String.fromCharCode(65 + contest.problemIds.indexOf(selectedId))} attempts={(attempts || []).filter((item) => item.problemId === selectedId)} attemptsLoading={attemptsLoading} attemptsError={attemptsError} workspaceUrl={workspace(selectedId)} closed={phase === "Closed"} showScores={contest.showScoresAfterSubmit !== false} /> : <Empty title={tr("No problem selected")} />}
           </>}
         </div>
       </aside>}
@@ -137,15 +137,15 @@ function problemAttemptStatus(attempts: Submission[]) {
   return attempts.some((item) => item.result === "Accepted") ? "Solved" : attempts.length ? "In progress" : "Not submitted";
 }
 
-function ContestSelectedProblem({ problemId, contestId, summary, letter, attempts, attemptsLoading, attemptsError, workspaceUrl, closed }: {
-  problemId: string; contestId: string; summary?: Contest["problemDetails"][number]; letter: string; attempts: Submission[]; attemptsLoading: boolean; attemptsError: string; workspaceUrl: string; closed: boolean;
+function ContestSelectedProblem({ problemId, contestId, summary, letter, attempts, attemptsLoading, attemptsError, workspaceUrl, closed, showScores }: {
+  problemId: string; contestId: string; summary?: Contest["problemDetails"][number]; letter: string; attempts: Submission[]; attemptsLoading: boolean; attemptsError: string; workspaceUrl: string; closed: boolean; showScores: boolean;
 }) {
   const { t: tr } = useLanguage("student");
   const { data: problem, loading, error } = useLoad<Problem>(() => studentApi.getProblem(problemId, contestId), [problemId, contestId]);
   const maximum = summary?.points ?? 100;
   const score = Math.round(Math.max(0, ...attempts.map((item) => {
     const max = item.maxScore ?? 100;
-    return max > 0 ? ((item.evaluatedScore ?? item.score) / max) * maximum : 0;
+    return max > 0 ? ((item.evaluatedScore ?? item.score ?? 0) / max) * maximum : 0;
   })) * 100) / 100;
   const status = problem?.draft && !attempts.length ? "In progress" : problemAttemptStatus(attempts);
   return <>
@@ -153,7 +153,7 @@ function ContestSelectedProblem({ problemId, contestId, summary, letter, attempt
     <div className="contest-selected-meta"><Status value={attemptsLoading ? "Loading…" : attemptsError ? "Unavailable" : status} /><span><TranslatedText>{tr(summary?.difficulty) || tr(problem?.difficulty)}</TranslatedText></span></div>
     <Link className="button primary" to={workspaceUrl}><TranslatedText>{closed ? tr("Review problem") : status === "In progress" ? tr("Continue solving") : tr("Open problem")}</TranslatedText> →</Link>
     <dl className="contest-selected-facts">
-      <div><dt><TranslatedText>{tr("Your best score")}</TranslatedText></dt><dd><TranslatedText>{attemptsLoading ? tr("Loading…") : attemptsError ? tr("Unavailable") : `${score}/${maximum}`}</TranslatedText></dd></div>
+      <div><dt><TranslatedText>{tr("Your best score")}</TranslatedText></dt><dd><TranslatedText>{attemptsLoading ? tr("Loading…") : attemptsError ? tr("Unavailable") : !showScores ? tr("Score hidden by instructor") : `${score}/${maximum}`}</TranslatedText></dd></div>
       <div><dt><TranslatedText>{tr("Submissions")}</TranslatedText></dt><dd><TranslatedText>{attemptsLoading ? "…" : attemptsError ? tr("Unavailable") : attempts.length}</TranslatedText></dd></div>
       <div><dt><TranslatedText>{tr("Topics")}</TranslatedText></dt><dd>{summary?.topic || problem?.topic || "—"}</dd></div>
     </dl>

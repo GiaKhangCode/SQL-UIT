@@ -1,9 +1,10 @@
 import type { WorkspacePart } from "../data/models";
 
 export const WORKSPACE_PARTS: WorkspacePart[] = ["DDL", "DML", "SQL"];
+export const WORKSPACE_PART_LABELS: Record<WorkspacePart, string> = { DDL: "Table Design", DML: "Data Import", SQL: "Query" };
 export const WORKSPACE_PART_DETAILS: Record<WorkspacePart, { title: string; description: string }> = {
   DDL: { title: "Schema design", description: "CREATE TABLE, ALTER TABLE, primary keys and foreign keys" },
-  DML: { title: "Data manipulation", description: "Write INSERT, UPDATE and DELETE statements on the problem tables" },
+  DML: { title: "Data import", description: "Write INSERT statements to recreate the target dataset" },
   SQL: { title: "Data queries", description: "SELECT, JOIN, aggregation and result checking" },
 };
 

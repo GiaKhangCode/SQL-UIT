@@ -26,7 +26,7 @@ const output = await build({
     import { createRoot } from 'react-dom/client';
     import { LanguageProvider, useLanguage } from './src/context/LanguageContext';
     import { AppearanceSettings } from './src/components/AppearanceSettings';
-    import { WorkspaceTypeSelector } from './src/pages/teacher/problem-editor/WorkspaceTypeSelector';
+    import { WorkspaceNavigation } from './src/pages/student/workspace/components/WorkspaceNavigation';
     import { LanguageText } from './src/components/LanguageSwitch';
     import { TranslatedText } from './src/components/TranslatedText';
     import { createStableContext } from './src/context/stableContext';
@@ -44,7 +44,7 @@ const output = await build({
     export function refreshContext(factory) { return factory('sqluit.language', null) === originalContext; }
     export function mount(node) {
       const root = createRoot(node);
-      root.render(<LanguageProvider><AppearanceSettings /><LanguageText text="Problems" /><WorkspaceTypeSelector value={['SQL']} onChange={() => {}} /><Probe /><CachedConsumer /><input id="draft" defaultValue="SELECT * FROM Customers" /></LanguageProvider>);
+      root.render(<LanguageProvider><AppearanceSettings /><LanguageText text="Problems" /><WorkspaceNavigation parts={['DDL','DML','SQL']} active="DDL" onChange={() => {}} /><Probe /><CachedConsumer /><input id="draft" defaultValue="SELECT * FROM Customers" /></LanguageProvider>);
       return root;
     }
   `, resolveDir: process.cwd(), loader: "tsx" },
@@ -83,7 +83,7 @@ try {
     await new Promise(resolve => setTimeout(resolve, 400));
   });
   assert.equal(document.getElementById("probe").textContent, "Practice sectionsLog out");
-  assert.equal(document.querySelector("#workspace-type-title").textContent, "Practice sections");
+  assert.equal(document.querySelector(".problem-workspace-tabs").textContent, "Table DesignData ImportQuery");
   assert.equal(document.getElementById("cached-language").textContent, "en");
   assert.equal(document.documentElement.lang, "en");
   assert.equal(localStorage.getItem("sql-practice:language"), "en");
@@ -95,6 +95,7 @@ try {
     await new Promise(resolve => setTimeout(resolve, 400));
   });
   assert.equal(document.getElementById("probe").textContent, "Các phần luyện tậpĐăng xuất");
+  assert.equal(document.querySelector(".problem-workspace-tabs").textContent, "Thiết kế bảngNhập dữ liệuTruy vấn");
   assert.equal(document.getElementById("cached-language").textContent, "vi");
   assert.equal(document.documentElement.lang, "vi");
   await api.act(async () => { await new Promise(resolve => setTimeout(resolve, 500)); });

@@ -1,0 +1,34 @@
+.teacher-library-page.compact-teacher-library .teacher-problem-filters.teacher-problem-column-toolbar { grid-template-columns:minmax(220px,1fr) auto auto; gap:12px; }
+.teacher-library-page .teacher-library-column-table { min-width:600px; }
+.teacher-library-page .teacher-library-column-table th:nth-child(1) { width:12%; }
+.teacher-library-page .teacher-library-column-table th:nth-child(2) { width:48%; }
+.teacher-library-page .teacher-library-column-table th:nth-child(3),.teacher-library-page .teacher-library-column-table th:nth-child(4) { width:20%; }
+.teacher-column-filter-trigger { display:inline-flex; align-items:center; gap:7px; padding:4px 0; border:0; background:transparent; color:inherit; font:inherit; letter-spacing:inherit; text-transform:inherit; cursor:pointer; }
+.teacher-column-filter-trigger:hover,.teacher-column-filter-trigger.is-active,.teacher-column-filter-trigger[aria-expanded="true"] { color:var(--accent); }
+.teacher-column-filter-trigger:focus-visible { outline:2px solid var(--accent); outline-offset:4px; border-radius:3px; }
+.teacher-column-filter-popover { position:fixed; z-index:200; box-sizing:border-box; width:260px; max-width:calc(100vw - 16px); max-height:calc(100dvh - 16px); overflow:auto; padding:16px; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--surface); color:var(--text); box-shadow:0 10px 30px #17194220; font-size:12px; }
+.teacher-column-filter-popover h3 { margin:0 0 12px; font-size:13px; }
+.teacher-column-filter-popover .teacher-column-sort { display:flex; align-items:center; gap:8px; width:100%; margin:0 0 16px; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font:inherit; text-align:left; }
+.teacher-column-filter-popover .teacher-column-sort[aria-pressed="true"] { color:var(--accent); border-color:var(--accent); background:var(--accent-subtle); }
+.teacher-column-filter-popover .teacher-column-input { display:grid; gap:7px; margin:0 0 12px; color:var(--muted); }
+.teacher-column-filter-popover .teacher-column-input input { width:100%; box-sizing:border-box; padding:9px 10px; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:var(--text); font:inherit; }
+.teacher-column-filter-popover fieldset { display:grid; gap:6px; margin:0 0 12px; padding:0; border:0; }
+.teacher-column-filter-popover legend { margin-bottom:10px; font-weight:600; }
+.teacher-column-filter-popover .teacher-column-checkbox { display:flex; align-items:center; gap:10px; padding:7px 4px; cursor:pointer; }
+.teacher-column-filter-popover .teacher-column-checkbox input { width:15px; height:15px; margin:0; accent-color:var(--accent); }
+.teacher-column-filter-popover .teacher-column-reset { padding:0; border:0; color:var(--accent); font:inherit; cursor:pointer; }
+.teacher-column-filter-popover .teacher-column-reset:disabled { opacity:.5; cursor:default; }
+.teacher-column-filter-popover .teacher-column-hint { margin:0 0 12px; color:var(--muted); font-size:11px; line-height:1.6; }
+.teacher-problem-created { white-space:nowrap; color:var(--muted); font-variant-numeric:tabular-nums; }
+@media (max-width:760px) {
+ .teacher-library-page .teacher-list-table-scroll { overflow:auto; }
+ .teacher-library-page .teacher-library-column-table { display:table; min-width:600px; }
+ .teacher-library-page .teacher-library-column-table thead { display:table-header-group; }
+ .teacher-library-page .teacher-library-column-table tbody { display:table-row-group; }
+ .teacher-library-page .teacher-library-column-table tr { display:table-row; }
+ .teacher-library-page .teacher-library-column-table td { display:table-cell; padding:12px; }
+ .teacher-library-page .teacher-library-column-table td:first-child::before,.teacher-library-page .teacher-library-column-table td:not(:first-child)::before { content:none; }
+ .teacher-library-page.compact-teacher-library .teacher-problem-filters.teacher-problem-column-toolbar { grid-template-columns:1fr 1fr; }
+ .teacher-problem-column-toolbar > .teacher-field { grid-column:1 / -1; }
+ .teacher-problem-column-toolbar .button { justify-content:center; }
+}

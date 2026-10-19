@@ -9,6 +9,7 @@
     "build": "tsc -b && vite build",
     "test:workspace-flow": "node tests/workspace-flow.test.mjs",
     "test:exam-mode": "node tests/exam-mode.test.mjs",
+    "test:problem-library": "node tests/problem-library.test.mjs",
     "test:workspace": "node tests/workspace.test.mjs && node tests/workspace-parts.test.mjs",
     "test:sql-solution": "node tests/sql-solution.test.mjs",
     "test:i18n": "node tests/i18n.test.mjs",

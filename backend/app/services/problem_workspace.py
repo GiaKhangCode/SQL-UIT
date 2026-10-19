@@ -30,7 +30,7 @@ def rewrite_stage(script: str, part: str, schema: str) -> list[str]:
             continue
         valid = ((part == "DDL" and isinstance(statement, (exp.Create, exp.Alter, exp.Drop))
                   and str(statement.args.get("kind", "")).upper() == "TABLE")
-                 or (part == "DML" and isinstance(statement, (exp.Insert, exp.Update, exp.Delete)))
+                 or (part == "DML" and isinstance(statement, exp.Insert))
                  or (part == "SQL" and isinstance(statement, exp.Query)))
         if not valid:
             raise SandboxError(f"This statement is not supported in the {part} section.")
@@ -65,13 +65,16 @@ def execution_plan(enabled, request, schema_sql, seed_sql, schema):
     if request.part not in enabled:
         raise SandboxError("This section is not enabled for this problem.")
     ddl = request.ddl if "DDL" in enabled else schema_sql
-    if "DDL" in enabled and request.part != "DDL" and not ddl.strip():
-        raise SandboxError("Complete the table structure in the DDL section first.")
     plan = rewrite_stage(ddl, "DDL", schema)
     if request.part != "DDL":
-        plan += rewrite_stage(seed_sql, "DML", schema)
         if "DML" in enabled:
+            # DML exercises start with the teacher's schema but an empty database;
+            # the student's INSERT statements are responsible for creating the rows.
             plan += rewrite_stage(request.dml, "DML", schema)
+        else:
+            # When students are not responsible for data import, load the
+            # instructor dataset before running a later stage.
+            plan += rewrite_stage(seed_sql, "DML", schema)
         if request.part == "SQL":
             if not request.query.strip():
                 raise SandboxError("Enter a SQL query.")
@@ -110,7 +113,9 @@ def read_workspace_schema(cursor, schema):
     return list(tables.values()), [row[:4] for row in columns]
 
 
-def run_workspace(engine, enabled, request, schema_sql, seed_sql, sql_time_limits=None):
+def run_workspace(engine, enabled, request, schema_sql, seed_sql, sql_time_limits=None,
+                  table_row_limit=100, strict_table_row_limit=False,
+                  query_row_limit=1000, strict_query_row_limit=False):
     schema = "w_" + uuid.uuid4().hex
     execution_ms = 0
     try:
@@ -150,7 +155,10 @@ def run_workspace(engine, enabled, request, schema_sql, seed_sql, sql_time_limit
                         while True:
                             if cursor.description:
                                 columns = [column[0] for column in cursor.description]
-                                table = {"name": "Result", "columns": columns, "rows": [list(row) for row in cursor.fetchmany(1000)]}
+                                rows = [list(row) for row in cursor.fetchmany(query_row_limit + 1)]
+                                if strict_query_row_limit and len(rows) > query_row_limit:
+                                    raise SandboxError(f"Query result has more than {query_row_limit} rows; it is too large to compare.")
+                                table = {"name": "Result", "columns": columns, "rows": rows[:query_row_limit]}
                             if not cursor.nextset():
                                 break
                     finally:
@@ -166,8 +174,11 @@ def run_workspace(engine, enabled, request, schema_sql, seed_sql, sql_time_limit
                 elif request.part == "DML":
                     for name in dict.fromkeys(row[0] for row in columns):
                         quoted = name.replace("]", "]]")
-                        cursor.execute(f"SELECT TOP (100) * FROM [{schema}].[{quoted}]")
-                        tables.append({"name": name, "columns": [c[0] for c in cursor.description], "rows": [list(row) for row in cursor.fetchall()]})
+                        cursor.execute(f"SELECT TOP ({int(table_row_limit) + 1}) * FROM [{schema}].[{quoted}]")
+                        rows = [list(row) for row in cursor.fetchall()]
+                        if strict_table_row_limit and len(rows) > table_row_limit:
+                            raise SandboxError(f"Table {name} has more than {table_row_limit} rows; it is too large to preview or compare.")
+                        tables.append({"name": name, "columns": [c[0] for c in cursor.description], "rows": rows[:table_row_limit]})
                 return {"status": "Success", "message": f"{request.part} executed successfully.", "table": table, "tables": tables, "schemaTables": schema_tables, "executionTimeMs": round(execution_ms, 3)}
             finally:
                 try:

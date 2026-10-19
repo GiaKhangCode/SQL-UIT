@@ -2,11 +2,15 @@ import { TranslatedText } from "../../components/TranslatedText";
 import { useLanguage } from "../../context/LanguageContext";
 import { LanguageText } from "../../components/LanguageSwitch";
 import { useMemo, useState, useEffect, useRef } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Database } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { ArrowUp, Database } from "lucide-react";
 import { Dialog, ErrorState, Loading } from "../../components/ui";
 import { teacherService } from "../../services/teacherService";
 import { TeacherField, TeacherPageIntro } from "./TeacherPageParts";
+
+import { TableColumnFilter } from "./problem-editor/TableColumnFilter";
+import { parseServerDateTime } from "../../utils/serverDateTime";
+import "../../styles/problem-library-filters.css";
 
 type ProblemRow = {
   id: string;
@@ -16,13 +20,12 @@ type ProblemRow = {
   topics: string;
   visibility: "Public" | "Private" | string;
   database: string;
+  createdAt: string | null;
 };
 
 export function ProblemLibraryPage() {
-  const { t: tr } = useLanguage("teacher");
-  const { t } = useLanguage();
+  const { t, locale: uiLocale } = useLanguage("teacher");
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const [problems, setProblemState] = useState<ProblemRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -39,6 +42,7 @@ export function ProblemLibraryPage() {
           topics: (p.topics && p.topics.length > 0) ? p.topics.join(" · ") : (p.topic || ""),
           visibility: p.practiceListed ? "Public" : "Private",
           database: p.databaseType || "SQL Server",
+          createdAt: p.createdAt || null,
         }));
         setProblemState(mapped);
       } catch (e) {
@@ -50,18 +54,26 @@ export function ProblemLibraryPage() {
     load();
   }, []);
   const [search, setSearch] = useState("");
-  const [difficulty, setDifficulty] = useState("All levels");
-  const [topic, setTopic] = useState("All topics");
-  const [visibility, setVisibility] = useState(() => searchParams.get("visibility") || "All");
+  const [difficulties, setDifficulties] = useState<string[]>([]);
+  const [idFilter, setIdFilter] = useState("");
+  const [sortById, setSortById] = useState(false);
   const [selectedProblemId, setSelectedProblemId] = useState("");
   const [page, setPage] = useState(1);
   const tableScrollRef = useRef<HTMLDivElement>(null);
-  const filtered = useMemo(() => problems.filter((problem) =>
-    `${problem.title} ${problem.topics}`.toLowerCase().includes(search.toLowerCase()) &&
-    (difficulty === "All levels" || problem.difficulty === difficulty) &&
-    (topic === "All topics" || problem.topics.toLowerCase().includes(topic.toLowerCase())) &&
-    (visibility === "All" || problem.visibility === visibility),
-  ), [problems, search, difficulty, topic, visibility]);
+  const filtered = useMemo(() => {
+    const normalizeId = (value: string) => value.replace(/^0+(?=\d)/, "");
+    const rows = problems.filter(problem =>
+      `${problem.number} ${problem.title}`.toLowerCase().includes(search.trim().toLowerCase()) &&
+      (!difficulties.length || difficulties.includes(problem.difficulty)) &&
+      (!idFilter || normalizeId(problem.number) === normalizeId(idFilter)),
+    );
+    return sortById ? rows.sort((a, b) => a.number.localeCompare(b.number, undefined, { numeric: true }) || a.id.localeCompare(b.id)) : rows;
+  }, [problems, search, difficulties, idFilter, sortById]);
+  const createdDate = (value: string | null) => {
+    if (!value) return "—";
+    const date = parseServerDateTime(value);
+    return Number.isFinite(date.getTime()) ? date.toLocaleDateString(uiLocale, { day: "2-digit", month: "2-digit", year: "numeric" }) : "—";
+  };
   const pageCount = Math.max(1, Math.ceil(filtered.length / 15));
   const currentPage = Math.min(page, pageCount);
   const firstIndex = (currentPage - 1) * 15;
@@ -71,11 +83,10 @@ export function ProblemLibraryPage() {
   useEffect(() => {
     setPage(1);
     setSelectedProblemId("");
-  }, [search, difficulty, topic, visibility]);
+  }, [search, difficulties, idFilter, sortById]);
   useEffect(() => {
     tableScrollRef.current?.scrollTo({ top: 0 });
-  }, [currentPage, search, difficulty, topic, visibility]);
-  const topicOptions = [...new Set(problems.flatMap((problem) => problem.topics.split(" · ").map((topic) => topic.trim()).filter(Boolean)))].sort();
+  }, [currentPage, search, difficulties, idFilter, sortById]);
 
   return (
     <section className="teacher-page teacher-library-page compact-teacher-library">
@@ -88,23 +99,38 @@ export function ProblemLibraryPage() {
           description={t("Create your first SQL problem with a schema, seed data and a reference solution. You can reuse it in any assignment or contest.")}
           primaryLabel={t("New problem")}
           primaryTo="/teacher/problems/new"
-          secondaryLabel={t("Browse public problems")}
-          secondaryTo="/teacher/problems?visibility=Public"
+          secondaryLabel={t("Database library")}
+          secondaryTo="/teacher/database-library"
         />
       ) : <>
-        <div className="teacher-list-filters teacher-problem-filters">
-          <TeacherField label={t("Search")}><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("Search title or topic…")} /></TeacherField>
-          <TeacherField label={t("Difficulty")}><select value={difficulty} onChange={(event) => setDifficulty(event.target.value)}><option value="All levels">{t("All levels")}</option><option value="Easy">{t("Easy")}</option><option value="Medium">{t("Medium")}</option><option value="Hard">{t("Hard")}</option></select></TeacherField>
-          <TeacherField label={t("Topic")}><select value={topic} onChange={(event) => setTopic(event.target.value)}><option value="All topics">{t("All topics")}</option>{topicOptions.map((item) => <option key={item} value={item}>{tr(item)}</option>)}</select></TeacherField>
-          <TeacherField label={t("Visibility")}><select value={visibility} onChange={(event) => setVisibility(event.target.value)}><option value="All">{t("All")}</option><option value="Public">{t("Public")}</option><option value="Private">{t("Private")}</option></select></TeacherField>
+        <div className="teacher-list-filters teacher-problem-filters teacher-problem-column-toolbar">
+          <TeacherField label={t("Search")}><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t("Search problems…")} /></TeacherField>
           <Link className="button teacher-database-library-trigger" to="/teacher/database-library"><Database size={15} aria-hidden="true" /><LanguageText text="Database library" order={2} /></Link>
           <button className="button primary teacher-problem-new" type="button" onClick={() => navigate("/teacher/problems/new")}><LanguageText text="New problem" order={2} /></button>
         </div>
         <div className="teacher-list-detail-layout">
           <div className="teacher-list-detail-main">
             <div ref={tableScrollRef} className="teacher-table-scroll teacher-list-table-scroll sticky-list-table-wrap">
-              <table className="teacher-table teacher-library-table sticky-list-table">
-                <thead><tr><th>ID</th><th><TranslatedText>{t("Problem")}</TranslatedText></th><th><TranslatedText>{t("Difficulty")}</TranslatedText></th><th><TranslatedText>{t("Topics")}</TranslatedText></th><th><TranslatedText>{t("Visibility")}</TranslatedText></th></tr></thead>
+              <table className="teacher-table teacher-library-table teacher-library-column-table sticky-list-table">
+                <thead><tr>
+                  <th aria-sort={sortById ? "ascending" : "none"}>
+                    <TableColumnFilter label="ID" title={t("Filter by ID")} sorted={sortById} active={Boolean(idFilter)} onOpen={() => setSortById(true)}>
+                      <h3>{t("Filter by ID")}</h3>
+                      <button className="teacher-column-sort" type="button" aria-pressed={sortById} onClick={() => setSortById(true)}><ArrowUp size={14} />{t("Sort ascending")}</button>
+                      <label className="teacher-column-input">{t("Find problem ID")}<input inputMode="numeric" value={idFilter} placeholder={t("Enter problem ID")} onChange={event => setIdFilter(event.target.value.replace(/\D/g, ""))} /></label>
+                      <button className="teacher-column-reset" type="button" disabled={!idFilter} onClick={() => setIdFilter("")}>{t("Clear ID filter")}</button>
+                    </TableColumnFilter>
+                  </th>
+                  <th><TranslatedText>{t("Problem")}</TranslatedText></th>
+                  <th>
+                    <TableColumnFilter label={t("Difficulty")} title={t("Filter by difficulty")} active={difficulties.length > 0}>
+                      <fieldset><legend>{t("Difficulty")}</legend>{["Easy", "Medium", "Hard"].map(level => <label className="teacher-column-checkbox" key={level}><input type="checkbox" checked={difficulties.includes(level)} onChange={event => setDifficulties(current => event.target.checked ? [...current, level] : current.filter(value => value !== level))} />{t(level)}</label>)}</fieldset>
+                      <p className="teacher-column-hint">{t("Leave unchecked to show all levels.")}</p>
+                      <button className="teacher-column-reset" type="button" disabled={!difficulties.length} onClick={() => setDifficulties([])}>{t("Clear difficulty filter")}</button>
+                    </TableColumnFilter>
+                  </th>
+                  <th><TranslatedText>{t("Created date")}</TranslatedText></th>
+                </tr></thead>
                 <tbody>{pageProblems.map((problem) => <tr
                   className={`teacher-selectable-list-row${selectedProblem?.id === problem.id ? " is-selected" : ""}`}
                   key={problem.id}
@@ -113,10 +139,9 @@ export function ProblemLibraryPage() {
                   <td data-label="ID">{problem.number}</td>
                   <td data-label={t("Problem")}><button className="teacher-selectable-row-title teacher-library-title" type="button" aria-label={t("Show details for {title}", { title: problem.title })} onClick={(event) => { event.stopPropagation(); setSelectedProblemId(problem.id); }}>{problem.title}</button></td>
                   <td data-label={t("Difficulty")}><TranslatedText>{t(problem.difficulty)}</TranslatedText></td>
-                  <td data-label={t("Topics")}>{problem.topics}</td>
-                  <td data-label={t("Visibility")}><TranslatedText>{t(problem.visibility)}</TranslatedText></td>
+                  <td data-label={t("Created date")} className="teacher-problem-created">{problem.createdAt ? <time dateTime={problem.createdAt}>{createdDate(problem.createdAt)}</time> : "—"}</td>
                 </tr>)}
-                {!filtered.length && <tr><td className="teacher-empty-row" colSpan={5}><TranslatedText>{t("No problems match these filters.")}</TranslatedText></td></tr>}
+                {!filtered.length && <tr><td className="teacher-empty-row" colSpan={4}><TranslatedText>{t("No problems match these filters.")}</TranslatedText></td></tr>}
                 </tbody>
               </table>
             </div>

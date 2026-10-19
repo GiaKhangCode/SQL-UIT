@@ -52,6 +52,7 @@ class Problem(Base):
     id = Column(Unicode(50), primary_key=True)
     number = Column(Unicode(50), nullable=False)
     title = Column(Unicode(255), nullable=False)
+    created_at = Column(DateTime, nullable=True, default=datetime.datetime.utcnow)
     topic = Column(Unicode(100), nullable=True)
     topics = Column(JSON, nullable=True)
     workspace_parts = Column(JSON, nullable=False, default=lambda: ["SQL"])
@@ -249,6 +250,8 @@ class Assignment(Base):
     leaderboard_enabled = Column(Boolean, default=False)
     ai_allowed = Column(Boolean, default=True)
     exam_mode = Column(Boolean, nullable=False, default=False)
+    show_scores_after_submit = Column(Boolean, nullable=False, default=True)
+    max_submissions = Column(Integer, nullable=True)
     
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)

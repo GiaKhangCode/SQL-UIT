@@ -8,10 +8,12 @@ import { useAuth } from "../../../../context/AuthContext";
 import "../../../../styles/workspace-exam.css";
 
 type Scripts = { ddl: string; dml: string; query: string; revision?: number };
-type Attempt = { examMode: boolean; problemIds: string[]; status: "not_started" | "active" | "submitted"; violationCount: number; drafts: Record<string, Scripts>; finishReason?: string };
+type Attempt = { showScoresAfterSubmit?: boolean; maxSubmissions?: number | null; submissionCounts?: Record<string, number>; examMode: boolean; problemIds: string[]; status: "not_started" | "active" | "submitted" | "closed"; closesAt?: string | null; serverNow?: string; violationCount: number; drafts: Record<string, Scripts>; finishReason?: string };
 type Violation = "focus_lost" | "external_paste" | "leave_attempt";
-type ExamContext = { enabled: boolean; busy: boolean; violations: number; draft: (id: string) => Scripts | undefined; update: (id: string, change: Partial<Scripts>) => void; requestSubmit: () => void };
+type ExamContext = { showScoresAfterSubmit: boolean; maxSubmissions: number | null; submissionCounts: Record<string, number>; enabled: boolean; busy: boolean; violations: number; draft: (id: string) => Scripts | undefined; update: (id: string, change: Partial<Scripts>) => void; requestSubmit: () => void };
 const Context = createContext<ExamContext | null>(null);
+const CountdownContext = createContext<number | null>(null);
+export const useWorkspaceCountdown = () => useContext(CountdownContext);
 export const useWorkspaceExam = () => useContext(Context);
 
 export function WorkspaceExamProvider({ children }: { children: ReactNode }) {
@@ -31,6 +33,10 @@ export function WorkspaceExamProvider({ children }: { children: ReactNode }) {
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
   const [stopping, setStopping] = useState(false);
+  const [remainingMs, setRemainingMs] = useState<number | null>(null);
+  const clockOffset = useRef(0);
+  const timeoutInFlight = useRef(false);
+  const retryTimeoutAt = useRef(0);
   const current = useRef<Attempt | null>(null);
   const drafts = useRef<Record<string, Scripts>>({});
   const activeProblem = useRef("");
@@ -40,11 +46,15 @@ export function WorkspaceExamProvider({ children }: { children: ReactNode }) {
   const pendingKey = `sql-practice:exam-events:${session?.id}:${activity}`;
   const pending = useRef<{ id: string; kind: Violation; snapshot: object }[]>([]);
   const enabled = Boolean(attempt?.examMode);
-  const active = enabled && attempt?.status === "active";
+  const tracking = eligible && attempt?.status === "active";
+  const timeExpired = tracking && remainingMs === 0;
+  const active = enabled && tracking && !timeExpired;
 
   function accept(value: Attempt) {
     if (current.current?.status === "submitted" && value.status !== "submitted") return;
     value = { ...value, violationCount: Math.max(current.current?.violationCount || 0, value.violationCount) };
+    if (value.serverNow) clockOffset.current = Date.parse(value.serverNow) - Date.now();
+    if (value.closesAt) setRemainingMs(Math.max(0, Date.parse(value.closesAt) - Date.now() - clockOffset.current));
     current.current = value;
     setAttempt(value);
     if (value.status === "submitted") { setWarning(false); setConfirm(false); setStopping(false); }
@@ -71,6 +81,7 @@ export function WorkspaceExamProvider({ children }: { children: ReactNode }) {
       }
       try { pending.current = JSON.parse(storage.get(pendingKey) || "[]"); } catch { pending.current = []; }
       if (value.status === "active" && value.violationCount + pending.current.length >= 2) setStopping(true);
+      if (value.examMode && value.status === "active" && value.violationCount + pending.current.length === 1) setWarning(true);
       accept(value);
     }).catch(e => { if (alive) setError(String(e.message)); }).finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; clearTimeout(saveTimer.current); };
@@ -109,7 +120,7 @@ export function WorkspaceExamProvider({ children }: { children: ReactNode }) {
   }, [pendingKey, snapshot, flushViolations, t]);
 
   useEffect(() => {
-    if (!active) return;
+    if (!tracking) return;
     const retry = () => {
       void (async () => {
         for (const [problemId, script] of Object.entries(drafts.current)) await send("save", { problemId, ...script });
@@ -122,10 +133,10 @@ export function WorkspaceExamProvider({ children }: { children: ReactNode }) {
       void apiFetch<Attempt>(`${endpoint}?source=${source}`).then(accept).catch(() => {});
     }, 5000);
     return () => { window.removeEventListener("online", retry); clearInterval(poll); };
-  }, [active, flushViolations, send, endpoint, source]);
+  }, [tracking, flushViolations, send, endpoint, source]);
 
   const blocker = useBlocker(({ nextLocation }) => {
-    if (!active || allowExit.current) return false;
+    if ((!active && !timeExpired) || allowExit.current) return false;
     const next = new URLSearchParams(nextLocation.search);
     const id = decodeURIComponent(nextLocation.pathname.replace(/^\/workspace\//, ""));
     return !(nextLocation.pathname.startsWith("/workspace/") && next.get("source") === source && next.get("context") === activity && attempt?.problemIds.includes(id));
@@ -145,8 +156,13 @@ export function WorkspaceExamProvider({ children }: { children: ReactNode }) {
       away = true;
       report("focus_lost");
     };
-    const visibility = () => { if (document.hidden) lostFocus(); else if (document.hasFocus()) away = false; };
+    // Browsers can restore visibility before window focus/hasFocus is updated.
+    // Returning to the tab must rearm detection for the next departure.
+    const visibility = () => { if (document.hidden) lostFocus(); else away = false; };
     const focus = () => { if (!document.hidden) away = false; };
+    // Cancelling the browser's leave prompt need not emit window.focus.
+    // Interacting with the workspace again starts a new departure episode.
+    const resume = () => { if (!document.hidden) away = false; };
     const copy = (event: ClipboardEvent) => { copied = event.clipboardData?.getData("text/plain") || window.getSelection()?.toString() || ""; };
     const paste = (event: ClipboardEvent) => {
       const text = event.clipboardData?.getData("text/plain") || "";
@@ -154,7 +170,11 @@ export function WorkspaceExamProvider({ children }: { children: ReactNode }) {
       event.preventDefault(); event.stopImmediatePropagation(); report("external_paste");
     };
     const drop = (event: DragEvent) => { event.preventDefault(); event.stopImmediatePropagation(); report("external_paste"); };
-    const unload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    const unload = (event: BeforeUnloadEvent) => {
+      if (allowExit.current) return;
+      if (!away) { away = true; report("leave_attempt"); }
+      event.preventDefault(); event.returnValue = "";
+    };
     const click = (event: MouseEvent) => {
       if ((event.target as Element)?.closest?.("[data-workspace-exit]")) {
         event.preventDefault(); event.stopImmediatePropagation(); report("leave_attempt"); return;
@@ -170,6 +190,8 @@ export function WorkspaceExamProvider({ children }: { children: ReactNode }) {
     window.addEventListener("focus", focus);
     window.addEventListener("beforeunload", unload);
     document.addEventListener("visibilitychange", visibility);
+    document.addEventListener("pointerdown", resume, true);
+    document.addEventListener("keydown", resume, true);
     document.addEventListener("copy", copy);
     document.addEventListener("cut", copy);
     document.addEventListener("paste", paste, true);
@@ -178,12 +200,13 @@ export function WorkspaceExamProvider({ children }: { children: ReactNode }) {
     return () => {
       window.removeEventListener("blur", lostFocus); window.removeEventListener("focus", focus); window.removeEventListener("beforeunload", unload);
       document.removeEventListener("visibilitychange", visibility); document.removeEventListener("copy", copy); document.removeEventListener("cut", copy);
+      document.removeEventListener("pointerdown", resume, true); document.removeEventListener("keydown", resume, true);
       document.removeEventListener("paste", paste, true); document.removeEventListener("drop", drop, true); document.removeEventListener("click", click, true);
     };
   }, [active, activity, source, report]);
 
   const update = useCallback((id: string, change: Partial<Scripts>) => {
-    if (!current.current?.examMode || current.current.status !== "active") return;
+    if (!eligible || current.current?.status !== "active") return;
     if (activeProblem.current && activeProblem.current !== id) {
       const previousId = activeProblem.current;
       void send("save", { problemId: previousId, ...drafts.current[previousId] }).then(accept)
@@ -196,7 +219,36 @@ export function WorkspaceExamProvider({ children }: { children: ReactNode }) {
     clearTimeout(saveTimer.current);
     const data = { problemId: id, ...drafts.current[id] };
     saveTimer.current = setTimeout(() => { void send("save", data).then(accept).catch(() => setError(t("Connection lost. Keep this page open while your work is saved."))); }, 600);
-  }, [send, t, pendingKey]);
+  }, [send, t, pendingKey, eligible]);
+
+  const finishAtDeadline = useCallback(async () => {
+    if (timeoutInFlight.current || Date.now() < retryTimeoutAt.current || current.current?.status !== "active") return;
+    timeoutInFlight.current = true;
+    clearTimeout(saveTimer.current);
+    setConfirm(false); setWarning(false); setBusy(true);
+    try {
+      for (const [problemId, script] of Object.entries(drafts.current)) await send("save", { problemId, ...script });
+      accept(await send("timeout", snapshot()));
+      setError("");
+    } catch {
+      retryTimeoutAt.current = Date.now() + 3000;
+      setError(t("Time is up. Reconnecting to submit your saved work…"));
+    } finally { timeoutInFlight.current = false; setBusy(false); }
+  }, [send, snapshot, t]);
+
+  useEffect(() => {
+    if (!eligible || !attempt?.closesAt) { setRemainingMs(null); return; }
+    const tick = () => {
+      const left = Math.max(0, Date.parse(attempt.closesAt!) - Date.now() - clockOffset.current);
+      setRemainingMs(left);
+      if (left === 0 && current.current?.status === "active") void finishAtDeadline();
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    document.addEventListener("visibilitychange", tick);
+    window.addEventListener("online", tick);
+    return () => { clearInterval(timer); document.removeEventListener("visibilitychange", tick); window.removeEventListener("online", tick); };
+  }, [eligible, attempt?.closesAt, attempt?.status, finishAtDeadline]);
 
   async function start() {
     setBusy(true); setError("");
@@ -219,19 +271,21 @@ export function WorkspaceExamProvider({ children }: { children: ReactNode }) {
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   }
-  const value = useMemo<ExamContext>(() => ({ enabled, busy, violations: attempt?.violationCount || 0,
-    draft: id => drafts.current[id], update, requestSubmit: () => setConfirm(true) }), [enabled, busy, attempt?.violationCount, update]);
+  const value = useMemo<ExamContext>(() => ({ showScoresAfterSubmit: attempt?.showScoresAfterSubmit !== false, maxSubmissions: attempt?.maxSubmissions ?? null, submissionCounts: attempt?.submissionCounts || {}, enabled, busy, violations: attempt?.violationCount || 0,
+    draft: id => drafts.current[id], update, requestSubmit: () => setConfirm(true) }), [enabled, busy, attempt, update]);
   if (loading) return <Loading />;
   if (eligible && !attempt) return <div className="workspace-exam-gate" role="alert"><h1>{t("Exam unavailable")}</h1><p>{error}</p><Link to={out}>{t("Back")}</Link></div>;
   if (enabled && attempt?.status === "not_started") return <div className="workspace-exam-gate"><h1>{t("Exam mode")}</h1><p>{t("Stay in this activity until you submit. Switching tabs or apps, leaving the activity, and pasting outside content count as violations. Your second violation automatically submits all problems.")}</p><p>{t("You can switch between problems and DDL, DML, SQL inside this activity.")}</p>{error && <p role="alert">{error}</p>}<button className="button primary" disabled={busy} onClick={() => void start()}>{t("Start exam")}</button><Link to={out}>{t("Back")}</Link></div>;
-  if (enabled && attempt?.status === "submitted") return <div className="workspace-exam-gate"><h1>{t("Exam submitted")}</h1><p>{t(attempt.finishReason === "violations" ? "Your work was automatically submitted after two violations." : "All your work has been submitted for teacher review.")}</p><button className="button primary" onClick={() => navigate(out, { replace: true })}>{t("Exit")}</button></div>;
-  return <Context.Provider value={value}>
+  if (attempt?.status === "closed") return <div className="workspace-exam-gate"><h1>{t("This activity has ended")}</h1><Link to={out}>{t("Back")}</Link></div>;
+  if (attempt?.status === "submitted") return <div className="workspace-exam-gate"><h1>{t(attempt.finishReason === "deadline" ? "Time is up" : "Exam submitted")}</h1><p>{t(attempt.finishReason === "deadline" ? "Your saved work was submitted automatically when the activity ended." : attempt.finishReason === "violations" ? "Your work was automatically submitted after two violations." : "All your work has been submitted and automatically graded.")}</p><button className="button primary" onClick={() => navigate(out, { replace: true })}>{t("Exit")}</button></div>;
+  return <Context.Provider value={value}><CountdownContext.Provider value={remainingMs}>
     {children}
+    {timeExpired && <Dialog title={t("Time is up")} hideClose closeOnBackdrop={false} closeOnCancel={false} onClose={() => {}}><p>{t("Submitting your saved work. Keep this page open until it finishes.")}</p>{error && <p role="alert">{error}</p>}</Dialog>}
     {active && stopping && <Dialog title={t("Submitting…")} hideClose closeOnBackdrop={false} closeOnCancel={false} onClose={() => {}}><p>{t("Your work is locked after two violations. Keep this page open until submission finishes.")}</p>{error && <p role="alert">{error}</p>}</Dialog>}
-    {active && error && <div className="workspace-exam-notice" role="alert">{error}<button onClick={() => { setError(""); void submit(); }}>{t("Save & submit again")}</button></div>}
+    {tracking && !timeExpired && error && <div className="workspace-exam-notice" role="alert">{error}<button onClick={() => { setError(""); for (const [problemId, script] of Object.entries(drafts.current)) void send("save", { problemId, ...script }).then(accept).catch(e => setError(e.message)); }}>{t("Retry saving")}</button></div>}
     {warning && active && !stopping && <Dialog title={t("Exam warning")} onClose={() => setWarning(false)}><p>{t("Stay in the exam. A second violation will automatically submit all your work.")}</p><p>{t("External paste is blocked. Copying within this workspace is allowed.")}</p><button className="button primary" onClick={() => setWarning(false)}>{t("Continue exam")}</button></Dialog>}
     {confirm && <Dialog title={t("Submit & Exit")} onClose={() => { if (!busy) setConfirm(false); }}><p>{t("Submit all problems in this activity? You cannot edit them after submitting.")}</p><div className="workspace-finish-actions"><button className="button" disabled={busy} onClick={() => setConfirm(false)}>{t("Cancel")}</button><button className="button primary" disabled={busy} onClick={() => void submit()}>{t(busy ? "Submitting…" : "Submit & Exit")}</button></div></Dialog>}
-  </Context.Provider>;
+  </CountdownContext.Provider></Context.Provider>;
 }
 
 export function WorkspaceExamFinishButton() {

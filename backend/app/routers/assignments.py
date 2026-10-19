@@ -105,9 +105,9 @@ def validate_assignment_classes(assignment: AssignmentCreate, db: Session, curre
     if assignment.published and any(not problem.workspace_parts for problem in assignment.problems):
         raise HTTPException(status_code=400, detail="Select at least one section for each problem.")
     if assignment.published and assignment.is_contest and not all((
-        assignment.short_description.strip(), assignment.description.strip(), assignment.rules.strip()
+        assignment.short_description.strip(), assignment.description.strip()
     )):
-        raise HTTPException(status_code=400, detail="Published contests need a short description, description, and rules.")
+        raise HTTPException(status_code=400, detail="Published contests need a short description and description.")
     if assignment.published:
         if not assignment.opens or not assignment.closes:
             raise HTTPException(status_code=400, detail="Published activities need valid start and end times.")
@@ -180,6 +180,8 @@ def create_assignment(assignment: AssignmentCreate, db: Session = Depends(get_db
         leaderboard_enabled=assignment.student_options.leaderboard if assignment.is_contest else False,
         ai_allowed=assignment.student_options.ai_allowed,
         exam_mode=assignment.student_options.exam_mode,
+        show_scores_after_submit=assignment.student_options.show_scores_after_submit,
+        max_submissions=assignment.student_options.max_submissions,
         instructor_id=current_user.id
     )
     db.add(new_assignment)
@@ -360,7 +362,9 @@ def get_assignments(db: Session = Depends(get_db), current_user: User = Depends(
                 "comments": a.comments_enabled,
                 "leaderboard": a.leaderboard_enabled,
                 "aiAllowed": a.ai_allowed,
-                "examMode": bool(a.exam_mode)
+                "examMode": bool(a.exam_mode),
+                "showScoresAfterSubmit": bool(a.show_scores_after_submit),
+                "maxSubmissions": a.max_submissions
             },
             "problemList": problems_list,
             "classIds": class_ids
@@ -493,7 +497,9 @@ def get_assignment(assignment_id: str, db: Session = Depends(get_db), current_us
             "comments": a.comments_enabled,
             "leaderboard": a.leaderboard_enabled,
             "aiAllowed": a.ai_allowed,
-                "examMode": bool(a.exam_mode)
+                "examMode": bool(a.exam_mode),
+                "showScoresAfterSubmit": bool(a.show_scores_after_submit),
+                "maxSubmissions": a.max_submissions
         },
         "problemList": problems_list,
         "classIds": class_ids
@@ -535,6 +541,8 @@ def update_assignment(assignment_id: str, assignment: AssignmentCreate, db: Sess
     a.leaderboard_enabled = assignment.student_options.leaderboard if assignment.is_contest else False
     a.ai_allowed = assignment.student_options.ai_allowed
     a.exam_mode = assignment.student_options.exam_mode
+    a.show_scores_after_submit = assignment.student_options.show_scores_after_submit
+    a.max_submissions = assignment.student_options.max_submissions
     a.updated_at = datetime.datetime.utcnow()
     
     db.query(AssignmentClass).filter(AssignmentClass.assignment_id == assignment_id).delete()

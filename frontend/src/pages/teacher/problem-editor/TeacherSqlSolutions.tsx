@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Play } from "lucide-react";
 import { TranslatedText } from "../../../components/TranslatedText";
 import { useLanguage } from "../../../context/LanguageContext";
@@ -37,20 +37,28 @@ function TimeLimitInput({ value, onChange, id }: { value: number; onChange: (val
 }
 
 export function TeacherSqlSolutions({ solutions, schema, datasets, onChange, expectedOutputs, expectedOutputVisible,
-  onExpectedOutputsChange, onExpectedOutputVisibilityChange, onRunningChange }: {
+  onExpectedOutputsChange, onExpectedOutputVisibilityChange, onDatasetVisibilityChange, onRunningChange }: {
   solutions: TeacherSqlSolution[];
   schema: string;
-  datasets: { seedData: string }[];
+  datasets: { seedData: string; isHidden?: boolean }[];
   onChange: (solutions: TeacherSqlSolution[]) => void;
   expectedOutputs: DataTable[];
   expectedOutputVisible: boolean;
   onExpectedOutputsChange: (outputs: DataTable[]) => void;
   onExpectedOutputVisibilityChange: (visible: boolean) => void;
+  onDatasetVisibilityChange: (index: number, hidden: boolean) => void;
   onRunningChange: (running: boolean) => void;
 }) {
   const { t: tr, locale } = useLanguage("teacher");
   const [runs, setRuns] = useState<Record<string, Run>>({});
+  const mounted = useRef(false);
+  const latest = useRef({ solutions, schema, datasets, onExpectedOutputsChange });
+  latest.current = { solutions, schema, datasets, onExpectedOutputsChange };
   const formatMs = (value: number) => new Intl.NumberFormat(locale, { maximumFractionDigits: 3 }).format(value);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   useEffect(() => onRunningChange(Object.values(runs).some((run) => run.running)), [runs, onRunningChange]);
   useEffect(() => () => onRunningChange(false), [onRunningChange]);
 
@@ -58,7 +66,7 @@ export function TeacherSqlSolutions({ solutions, schema, datasets, onChange, exp
     onChange(solutions.map((solution) => solution.id === id ? { ...solution, ...patch } : solution));
   }
   function sourceOf(solution: TeacherSqlSolution) {
-    return JSON.stringify([schema, datasets, solution.query]);
+    return JSON.stringify([schema, datasets.map((dataset) => dataset.seedData), solution.query]);
   }
   async function runSolution(solution: TeacherSqlSolution) {
     if (runs[solution.id]?.running || !solution.enabled || !solution.query.trim()) return;
@@ -76,10 +84,21 @@ export function TeacherSqlSolutions({ solutions, schema, datasets, onChange, exp
         } catch (error) {
           results.push({ dataset: index + 1, error: error instanceof Error ? error.message : tr("Run failed") });
         }
+        if (!mounted.current) return;
         setRuns((current) => ({ ...current, [solution.id]: { running: true, source, results: [...results] } }));
       }
     } finally {
-      setRuns((current) => ({ ...current, [solution.id]: { running: false, source, results: [...results] } }));
+      if (mounted.current) {
+        const current = latest.current;
+        const currentSolution = current.solutions.find((item) => item.id === solution.id);
+        const sourceIsCurrent = currentSolution?.enabled
+          && source === JSON.stringify([current.schema, current.datasets.map((dataset) => dataset.seedData), currentSolution.query]);
+        if (sourceIsCurrent && datasets.length > 0 && results.length === datasets.length
+          && results.every((result) => result.table && !result.error)) {
+          current.onExpectedOutputsChange(results.map((result) => result.table!));
+        }
+        setRuns((current) => ({ ...current, [solution.id]: { running: false, source, results: [...results] } }));
+      }
     }
   }
 
@@ -88,8 +107,6 @@ export function TeacherSqlSolutions({ solutions, schema, datasets, onChange, exp
       const run = runs[solution.id];
       const stale = Boolean(run && run.source !== sourceOf(solution));
       const times = (run?.results || []).flatMap((result) => typeof result.timeMs === "number" ? [result.timeMs] : []);
-      const canAddExpectedOutput = Boolean(run && !run.running && !stale && datasets.length > 0
-        && run.results.length === datasets.length && run.results.every((result) => result.table && !result.error));
       return <section className={`teacher-solution-card${solution.enabled ? "" : " is-disabled"}`} key={solution.id}>
         <div className="teacher-solution-heading">
           <span className="teacher-dataset-number"><TranslatedText>{tr("SQL Solution")}</TranslatedText></span>
@@ -129,23 +146,28 @@ export function TeacherSqlSolutions({ solutions, schema, datasets, onChange, exp
           <summary><TranslatedText>{tr("Dataset")}</TranslatedText> {result.dataset}
             {typeof result.timeMs === "number" && <span>{formatMs(result.timeMs)} <TranslatedText>{tr("ms")}</TranslatedText></span>}
             {result.error && <span><TranslatedText>{tr("Run failed")}</TranslatedText></span>}
+            <button className={`button teacher-small-button teacher-result-hidden-toggle${datasets[result.dataset - 1]?.isHidden ? " is-active" : ""}`}
+              type="button" aria-label={`${tr("Dataset")} ${result.dataset}: ${tr("Hidden dataset")}`}
+              aria-pressed={Boolean(datasets[result.dataset - 1]?.isHidden)}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onDatasetVisibilityChange(result.dataset - 1, !datasets[result.dataset - 1]?.isHidden);
+              }}><TranslatedText>{tr("Hidden dataset")}</TranslatedText></button>
+            {datasets[result.dataset - 1]?.isHidden && <span><TranslatedText>{tr("Hidden from students")}</TranslatedText></span>}
           </summary>
           {result.error ? <p role="alert">{result.error}</p> : result.table && <div className="teacher-table-scroll"><table className="teacher-table">
             <thead><tr>{result.table.columns.map((column, columnIndex) => <th key={columnIndex}>{column}</th>)}</tr></thead>
             <tbody>{result.table.rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, cellIndex) => <td key={cellIndex}>{String(cell ?? "NULL")}</td>)}</tr>)}</tbody>
           </table></div>}
         </details>)}
-        {(canAddExpectedOutput || expectedOutputs.length > 0) && <div className="teacher-solution-expected-actions">
-          {canAddExpectedOutput && <button className="button teacher-small-button" type="button" onClick={() => {
-            const outputs = run!.results.map((result) => result.table!);
-            onExpectedOutputsChange(outputs);
-          }}><TranslatedText>{tr(expectedOutputs.length ? "Update expected output" : "Add results to problem")}</TranslatedText></button>}
+        <div className="teacher-solution-expected-actions">
           {expectedOutputs.length > 0 && <button className="button teacher-small-button" type="button" aria-pressed={expectedOutputVisible}
             onClick={() => onExpectedOutputVisibilityChange(!expectedOutputVisible)}>
             <TranslatedText>{tr(expectedOutputVisible ? "Hide expected output" : "Show expected output")}</TranslatedText>
           </button>}
-          {expectedOutputs.length > 0 && <span className="teacher-solution-expected-note"><TranslatedText>{tr("Saved output tables are used when comparing student results.")}</TranslatedText></span>}
-        </div>}
+          <span className="teacher-solution-expected-note"><TranslatedText>{tr("Successful runs automatically update the expected output. Open Preview to view it in the problem.")}</TranslatedText></span>
+        </div>
       </section>;
     })}
   </div>;

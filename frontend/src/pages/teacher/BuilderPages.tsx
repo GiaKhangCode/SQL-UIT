@@ -13,7 +13,7 @@ import { ContestDetailView } from "../student/ContestDetailView";
 import type { Contest, WorkspacePart } from "../../data/models";
 import { ContestBannerCrop, defaultBannerCrop, type BannerCrop } from "../../components/ContestBannerCrop";
 import { resolveContestBannerUrl } from "../../utils/contestBanner";
-import { WORKSPACE_PARTS } from "../../utils/workspaceParts";
+import { WORKSPACE_PARTS, WORKSPACE_PART_LABELS } from "../../utils/workspaceParts";
 
 import "../../styles/problem-workspace.css";
 
@@ -32,7 +32,7 @@ type BuilderDraft = {
   opens: string;
   closes: string;
   problems: BuilderProblem[];
-  studentOptions: { hints: boolean; comments: boolean; leaderboard: boolean; aiAllowed: boolean; examMode: boolean };
+  studentOptions: { hints: boolean; comments: boolean; leaderboard: boolean; aiAllowed: boolean; examMode: boolean; showScoresAfterSubmit: boolean; maxSubmissions: number | null };
   published: boolean;
 };
 
@@ -50,7 +50,7 @@ const assignmentSeed: BuilderDraft = {
   opens: "",
   closes: "",
   problems: [],
-  studentOptions: { hints: true, comments: true, leaderboard: false, aiAllowed: true, examMode: false },
+  studentOptions: { hints: true, comments: true, leaderboard: false, aiAllowed: true, examMode: false, showScoresAfterSubmit: true, maxSubmissions: null },
   published: false,
 };
 const contestSeed: BuilderDraft = {
@@ -67,7 +67,7 @@ const contestSeed: BuilderDraft = {
   opens: "",
   closes: "",
   problems: [],
-  studentOptions: { hints: false, comments: false, leaderboard: true, aiAllowed: false, examMode: false },
+  studentOptions: { hints: false, comments: false, leaderboard: true, aiAllowed: false, examMode: false, showScoresAfterSubmit: true, maxSubmissions: null },
   published: false,
 };
 
@@ -275,7 +275,8 @@ function ActivityPreview({ draft, contest, classes, problems }: {
           id: item.id, title: problem?.title || item.id, difficulty: problem?.difficulty || "SQL problem",
           topic: problem?.topic || "SQL", points: item.points,
         }; }),
-        totalPoints, score: 0, rank: null, leaderboardEnabled: draft.studentOptions.leaderboard,
+        totalPoints, score: draft.studentOptions.showScoresAfterSubmit ? 0 : null, rank: null, leaderboardEnabled: draft.studentOptions.leaderboard && draft.studentOptions.showScoresAfterSubmit,
+        showScoresAfterSubmit: draft.studentOptions.showScoresAfterSubmit, maxSubmissions: draft.studentOptions.examMode ? 1 : draft.studentOptions.maxSubmissions,
         aiAllowed: draft.studentOptions.aiAllowed, leaderboard: [], submitters: 0,
       } satisfies Contest} />
     </> : <>
@@ -468,7 +469,7 @@ function BuilderPage({ contest }: { contest: boolean }) {
             ...item,
             workspaceParts: assignmentWorkspaceParts(item.workspaceParts),
           })),
-          studentOptions: data.studentOptions || (contest ? contestSeed.studentOptions : assignmentSeed.studentOptions),
+          studentOptions: { ...(contest ? contestSeed.studentOptions : assignmentSeed.studentOptions), ...data.studentOptions },
           published: data.published
         });
       } catch (e) {
@@ -620,8 +621,8 @@ function BuilderPage({ contest }: { contest: boolean }) {
         closes: draft!.closes ? new Date(draft!.closes).toISOString() : null,
         problems: draft!.problems,
         studentOptions: contest
-          ? { leaderboard: draft!.studentOptions.leaderboard, aiAllowed: draft!.studentOptions.aiAllowed, examMode: draft!.studentOptions.examMode }
-          : { hints: draft!.studentOptions.hints, comments: draft!.studentOptions.comments, aiAllowed: draft!.studentOptions.aiAllowed, examMode: draft!.studentOptions.examMode },
+          ? { leaderboard: draft!.studentOptions.leaderboard, aiAllowed: draft!.studentOptions.aiAllowed, examMode: draft!.studentOptions.examMode, showScoresAfterSubmit: draft!.studentOptions.showScoresAfterSubmit, maxSubmissions: draft!.studentOptions.examMode ? 1 : draft!.studentOptions.maxSubmissions }
+          : { hints: draft!.studentOptions.hints, comments: draft!.studentOptions.comments, aiAllowed: draft!.studentOptions.aiAllowed, examMode: draft!.studentOptions.examMode, showScoresAfterSubmit: draft!.studentOptions.showScoresAfterSubmit, maxSubmissions: draft!.studentOptions.examMode ? 1 : draft!.studentOptions.maxSubmissions },
         published: isPublished
       };
       
@@ -879,6 +880,14 @@ function BuilderPage({ contest }: { contest: boolean }) {
 
           <div className="teacher-exam-mode-setting">
             <div className="teacher-option-row">
+              <span><b><TranslatedText>{tr("Show scores after submission")}</TranslatedText></b><small><TranslatedText>{tr("Students can see their scores once their work has been graded.")}</TranslatedText></small></span>
+              <button type="button" role="switch" aria-label={tr("Show scores after submission")} aria-checked={draft.studentOptions.showScoresAfterSubmit} className={`teacher-toggle${draft.studentOptions.showScoresAfterSubmit ? " is-on" : ""}`} onClick={() => update("studentOptions", { ...draft.studentOptions, showScoresAfterSubmit: !draft.studentOptions.showScoresAfterSubmit })}><span /></button>
+            </div>
+            <div className="teacher-option-row teacher-submission-limit">
+              <span><b><TranslatedText>{tr("Submission limit")}</TranslatedText></b><small><TranslatedText>{tr(draft.studentOptions.examMode ? "Exam mode allows one final submission for the entire activity." : "Per problem. Leave blank for unlimited submissions.")}</TranslatedText></small></span>
+              <input type="number" min="1" max="100" step="1" aria-label={tr("Submission limit")} placeholder={tr("Unlimited")} disabled={draft.studentOptions.examMode} value={draft.studentOptions.examMode ? 1 : draft.studentOptions.maxSubmissions ?? ""} onChange={event => update("studentOptions", { ...draft.studentOptions, maxSubmissions: event.target.value ? Number(event.target.value) : null })} />
+            </div>
+            <div className="teacher-option-row">
               <span><b><TranslatedText>{tr("Exam mode")}</TranslatedText></b><small><TranslatedText>{tr("Keep students in this activity. A second focus, navigation or external paste violation automatically submits all work.")}</TranslatedText></small></span>
               <button type="button" role="switch" aria-label={tr("Exam mode")} aria-checked={Boolean(draft.studentOptions.examMode)} className={`teacher-toggle${draft.studentOptions.examMode ? " is-on" : ""}`} onClick={() => update("studentOptions", { ...draft.studentOptions, examMode: !draft.studentOptions.examMode })}><span /></button>
             </div>
@@ -910,7 +919,7 @@ function BuilderPage({ contest }: { contest: boolean }) {
                               <div className="teacher-problem-workspace-parts" role="group" aria-label={tr("Workspace sections for {value0}", { value0: problem.title })}>
                                 {WORKSPACE_PARTS.map((part) => {
                                   const selected = item.workspaceParts || [];
-                                  return <label key={part} className={"teacher-problem-workspace-part" + (selected.includes(part) ? " is-selected" : "")} title={part}>
+                                  return <label key={part} className={"teacher-problem-workspace-part" + (selected.includes(part) ? " is-selected" : "")} title={tr(WORKSPACE_PART_LABELS[part])}>
                                     <input
                                       type="checkbox"
                                       checked={selected.includes(part)}
@@ -918,7 +927,7 @@ function BuilderPage({ contest }: { contest: boolean }) {
                                         ? { ...row, workspaceParts: WORKSPACE_PARTS.filter((value) => value === part ? event.target.checked : selected.includes(value)) }
                                         : row))}
                                     />
-                                    <span>{part}</span>
+                                    <span><TranslatedText>{tr(WORKSPACE_PART_LABELS[part])}</TranslatedText></span>
                                   </label>;
                                 })}
                               </div>

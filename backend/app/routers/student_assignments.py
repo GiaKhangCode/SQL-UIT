@@ -4,6 +4,7 @@ import datetime
 from app.database import get_db
 from app.models import User, Class, ClassEnrollment, Assignment, AssignmentClass, AssignmentProblem, Submission, Problem
 from app.routers.auth import get_current_user
+from app.services.submission_policy import scores_visible, submission_limit
 
 router = APIRouter()
 
@@ -141,14 +142,17 @@ def get_student_assignments(db: Session = Depends(get_db), current_user: User = 
             "opens": a.opens.isoformat() if a.opens else None,
             "closes": a.closes.isoformat() if a.closes else None,
             "contestStatus": contest_status,
-            "leaderboardEnabled": bool(a.leaderboard_enabled) if a.is_contest else False,
+            "leaderboardEnabled": bool(a.leaderboard_enabled) and scores_visible(a) if a.is_contest else False,
             "aiAllowed": bool(a.ai_allowed),
             "examMode": bool(a.exam_mode),
+            "showScoresAfterSubmit": scores_visible(a),
+            "maxSubmissions": submission_limit(a),
+            "submissionCounts": {p_id: sum(1 for sub in subs if sub.problem_id == p_id) for p_id in p_ids},
             "totalPoints": sum(ap.points for ap in a_problems),
-            "score": score,
+            "score": score if scores_visible(a) else None,
             "submitters": submitters,
-            "rank": rank,
-            "leaderboard": leaderboard,
+            "rank": rank if scores_visible(a) else None,
+            "leaderboard": leaderboard if scores_visible(a) else [],
         })
         
         if a.closes and status != "Solved":
