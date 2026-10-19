@@ -156,14 +156,14 @@ export const studentApi = {
     return apiFetch(`/api/problems/${encodeURIComponent(id)}/workspace/submit`, { method: "POST", body: JSON.stringify(input) });
   },
 
-  runWorkspace: async (id: string, input: { part: "DDL" | "DML" | "SQL"; ddl: string; dml: string; query: string; source: string; context: string }): Promise<QueryResult> => {
+  runWorkspace: async (id: string, input: { solutionId?: string; part: "DDL" | "DML" | "SQL"; ddl: string; dml: string; query: string; source: string; context: string }): Promise<QueryResult> => {
     return await apiFetch(`/api/problems/${encodeURIComponent(id)}/workspace/run`, { method: "POST", body: JSON.stringify(input) });
   },
 
-  runQuery: async (id: string, query: string, database: string, source = "Practice", context = "Practice"): Promise<QueryResult> => {
+  runQuery: async (id: string, query: string, database: string, source = "Practice", context = "Practice", solutionId?: string): Promise<QueryResult> => {
     return await apiFetch(`/api/problems/${id}/run`, {
       method: "POST",
-      body: JSON.stringify({ query, database, source, context }),
+      body: JSON.stringify({ query, database, source, context, solutionId }),
     });
   },
 

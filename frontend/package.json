@@ -7,6 +7,7 @@
     "dev": "vite",
     "start": "vite",
     "build": "tsc -b && vite build",
+    "test:builder-settings": "node tests/builder-problem-settings.test.mjs && node tests/builder-settings-flow.test.mjs",
     "test:workspace-flow": "node tests/workspace-flow.test.mjs",
     "test:exam-mode": "node tests/exam-mode.test.mjs",
     "test:problem-library": "node tests/problem-library.test.mjs",

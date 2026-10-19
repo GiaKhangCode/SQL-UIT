@@ -150,10 +150,12 @@ def _grade_dml(db, engine, problem, scripts, parts, cases):
     return 1.0, "Your inserted rows match the target dataset.", False
 
 
-def grade_workspace_submission(db, problem, scripts, parts, maximum=100):
+def grade_workspace_submission(db, problem, scripts, parts, maximum=100, dataset_visibility=None):
     """Grade each selected stage against the instructor's canonical problem data."""
     engine = db.get_bind()
     cases = _problem_cases(db, problem)
+    for case in cases:
+        case["hidden"] = not (dataset_visibility or {}).get(str(case["index"] + 1), not case["hidden"])
     if not cases:
         return {"status": "Runtime Error", "score": 0, "feedback": "No instructor datasets are configured."}
     ratios = []

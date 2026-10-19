@@ -25,7 +25,7 @@ const output = await build({
     import { Simulate } from 'react-dom/test-utils';
     import { TeacherSqlSolutions, initialSqlSolutions } from './src/pages/teacher/problem-editor/TeacherSqlSolutions';
     import { ProblemEditorPage } from './src/pages/teacher/ProblemEditorPage';
-    import { MemoryRouter } from 'react-router-dom';
+    import { MemoryRouter, Routes, Route } from 'react-router-dom';
     let latest;
     let expected;
     let visible;
@@ -47,7 +47,7 @@ const output = await build({
     }
     export { act };
     export function mount(node) { const root = createRoot(node); root.render(<Harness/>); return root; }
-    export function showEditor(root) { root.render(<MemoryRouter initialEntries={['/teacher/problems/new']}><ProblemEditorPage /></MemoryRouter>); }
+    export function showEditor(root) { root.render(<MemoryRouter initialEntries={['/teacher/problems/new']}><Routes><Route path='/teacher/problems/new' element={<ProblemEditorPage />} /><Route path='/teacher/problems/:problemId/edit' element={<ProblemEditorPage />} /></Routes></MemoryRouter>); }
     export function state() { return latest; }
     export function expectedState() { return expected; }
     export function outputVisible() { return visible; }
@@ -57,7 +57,7 @@ const output = await build({
   loader: { ".css": "empty" },
   plugins: [{ name: "solution-ui-test", setup(builder) {
     builder.onResolve({ filter: /^(react|react-dom)(\/.*)?$/ }, args => ({ path: require.resolve(args.path), external: true }));
-    builder.onLoad({ filter: /[\\/]teacherService\.ts$/ }, () => ({ contents: "export const teacherService = { getAllProblems: async () => [], validateSolution: (data) => globalThis.__solutionRun(data) };", loader: "js" }));
+    builder.onLoad({ filter: /[\\/]teacherService\.ts$/ }, () => ({ contents: "export const teacherService = { getAllProblems: async () => [], getProblem: async () => structuredClone(globalThis.__savedProblem), createProblem: async payload => { globalThis.__savedPayload = structuredClone(payload); globalThis.__savedProblem = { ...payload, id: 'saved-problem', description: payload.statement, databaseType: payload.database, practiceListed: payload.visibility === 'Public', testCases: payload.testCases.map(tc => ({ ...tc, schema: payload.schema })) }; return structuredClone(globalThis.__savedProblem); }, updateProblem: async (id, payload) => { globalThis.__savedPayload = structuredClone(payload); }, validateSolution: (data) => globalThis.__solutionRun(data) };", loader: "js" }));
     builder.onLoad({ filter: /[\\/]LanguageContext\.tsx$/ }, () => ({ contents: "export const useLanguage = () => ({ locale:'en-US', t: (text, values={}) => typeof text === 'string' ? text.replace(/\\{(\\w+)\\}/g, (_, key) => values[key] ?? '') : text });", loader: "js" }));
     builder.onLoad({ filter: /[\\/]TranslatedText\.tsx$/ }, () => ({ contents: "export function TranslatedText({children}) { return <>{children}</>; }", loader: "jsx" }));
     builder.onLoad({ filter: /[\\/]ProblemSqlEditor\.tsx$/ }, () => ({ contents: "export function ProblemSqlEditor({value,label,onChange}) { return <textarea aria-label={label} value={value} onChange={event=>onChange(event.target.value)} />; }", loader: "jsx" }));
@@ -71,7 +71,7 @@ try {
   api = require(filename);
   await api.act(async () => { root = api.mount(document.getElementById("root")); });
   assert.equal(document.querySelectorAll(".teacher-solution-card").length, 1);
-  assert.ok(![...document.querySelectorAll("button")].some(button => button.textContent.includes("Add solution")));
+  assert.ok([...document.querySelectorAll("button")].some(button => button.textContent.includes("Add solution")));
   await api.act(async () => api.change(document.querySelector(".teacher-solution-filename input"), "answer"));
   assert.equal(api.state()[0].name, "answer.sql");
   await api.act(async () => api.change(document.querySelector(".teacher-solution-limit input"), "7000"));
@@ -95,7 +95,7 @@ try {
   assert.equal(api.outputVisible(), false);
   await api.act(async () => runButton().click());
   assert.equal(api.outputVisible(), false, "Rerunning must preserve the instructor's hidden-output setting");
-  assert.equal(document.querySelector("textarea").value, "SELECT 1 AS n");
+  assert.equal(document.querySelector('textarea[aria-label="Solution 1 SQL"]').value, "SELECT 1 AS n");
   const savedOutputs = api.expectedState();
   globalThis.__solutionRun = async payload => payload.seedData === "seed B"
     ? { status: "Error", message: "Invalid SQL" }
@@ -105,10 +105,18 @@ try {
   let complete;
   globalThis.__solutionRun = () => new Promise(resolve => { complete = resolve; });
   await api.act(async () => runButton().click());
-  await api.act(async () => api.change(document.querySelector("textarea"), "SELECT 3 AS n"));
+  await api.act(async () => api.change(document.querySelector('textarea[aria-label="Solution 1 SQL"]'), "SELECT 3 AS n"));
   await api.act(async () => complete({ status: "Success", table: { name: "Result", columns: ["n"], rows: [[2]] } }));
   await api.act(async () => complete({ status: "Success", table: { name: "Result", columns: ["n"], rows: [[2]] } }));
   assert.deepEqual(api.expectedState(), savedOutputs, "Results from an edited query must not replace the expected output");
+
+  await api.act(async () => [...document.querySelectorAll('button')].find(button => button.textContent.includes('Add solution')).click());
+  assert.equal(api.state().length, 2);
+  assert.equal(api.state()[1].name, 'solution_2.sql');
+  const descriptions = document.querySelectorAll('.teacher-solution-description textarea');
+  await api.act(async () => api.change(descriptions[1], 'List products from China.'));
+  assert.equal(api.state()[1].description, 'List products from China.');
+  assert.notEqual(api.state()[0].id, api.state()[1].id);
 
   // Use the actual New problem page and Preview button, without saving the draft.
   let value = 7;
@@ -143,20 +151,53 @@ try {
   await api.act(async () => api.change(document.querySelector('textarea[aria-label="Test dataset 2 SQL"]'), "INSERT INTO T (id) VALUES (900);"));
   await api.act(async () => document.querySelector('[aria-controls="database-panel-solution"]').click());
   await api.act(async () => runButton().click());
-  assert.equal(preview().querySelectorAll('.problem-expected-sample').length, 1, 'An added hidden dataset must not appear in Preview');
-  const datasetToggle = index => document.querySelectorAll('.teacher-result-hidden-toggle')[index];
-  assert.equal(datasetToggle(1).getAttribute('aria-pressed'), 'true');
-  await api.act(async () => datasetToggle(1).click());
-  assert.equal(preview().querySelectorAll('.problem-expected-sample').length, 2, 'Showing another dataset must update Preview immediately without rerunning');
-  await api.act(async () => datasetToggle(0).click());
-  assert.equal(preview().querySelectorAll('.problem-expected-sample').length, 1);
-  assert.equal(preview().querySelector('.problem-expected-sample h4').textContent, 'Dataset 2', 'The remaining output must retain its original dataset number');
+  assert.equal(preview().querySelectorAll('.problem-expected-sample').length, 2, 'Source datasets are visible by default; activity settings control dataset visibility');
+  assert.equal(document.querySelector('.teacher-result-hidden-toggle'), null, 'Dataset hide controls belong to activity Data Import settings');
   await api.act(async () => [...document.querySelectorAll('.teacher-preview-tabs button')].find(button => button.textContent === 'Database').click());
-  assert.ok(preview().textContent.includes('900'), 'Database Preview must use the visible dataset');
-  assert.ok(!preview().textContent.includes('100'), 'Database Preview must not contain hidden seed data');
+  assert.ok(preview().textContent.includes('100'), 'Source Preview uses the first visible dataset');
   await api.act(async () => document.querySelector('[aria-controls="database-panel-datasets"]').click());
-  assert.equal(document.querySelector('.teacher-dataset-hidden-toggle').getAttribute('aria-pressed'), 'true', 'Query-result visibility must stay in sync with the dataset tab');
-  console.log("PASS: automatic expected output, failed/stale-run protection, live Preview, and per-dataset hiding of seed data and output.");
+  assert.equal(document.querySelector('.teacher-dataset-hidden-toggle'), null, 'Source Data Import has no dataset visibility buttons');
+  await api.act(async () => document.querySelector('[aria-controls="database-panel-solution"]').click());
+  await api.act(async () => [...document.querySelectorAll('button')].find(button => button.textContent.includes('Add solution')).click());
+  await api.act(async () => api.change(document.querySelectorAll('.teacher-solution-description textarea')[1], 'Count all products.'));
+  await api.act(async () => api.change(document.querySelector('textarea[aria-label="Solution 2 SQL"]'), 'SELECT 42 AS n'));
+  globalThis.__solutionRun = async () => ({ status:'Success', executionTimeMs:1, table:{name:'Result',columns:['n'],rows:[[42]]} });
+  await api.act(async () => [...document.querySelectorAll('.teacher-solution-card')][1].querySelector('.teacher-solution-run-row .primary').click());
+  await api.act(async () => [...document.querySelectorAll('.teacher-preview-tabs button')].find(button => button.textContent === 'Description').click());
+  const questionSelect = preview().querySelector('.workspace-question-picker select');
+  const firstId = questionSelect.options[0].value;
+  const secondId = questionSelect.options[1].value;
+  await api.act(async () => api.change(questionSelect, secondId));
+  assert.ok(preview().textContent.includes('Count all products.'));
+  assert.equal(preview().querySelector('.problem-expected-output td').textContent,'42');
+  await api.act(async () => api.change(questionSelect, firstId));
+  assert.equal(preview().querySelector('.problem-expected-output td').textContent,'9','Running the second question must preserve the first output');
+  // Check Table Design and save the actual New problem form into Edit.
+  await api.act(async () => document.querySelector('[aria-controls="database-panel-schema"]').click());
+  await api.act(async () => api.change(document.querySelector('textarea[aria-label="Database structure SQL"]'), 'CREATE TABLE T (id INT PRIMARY KEY);'));
+  const relationInputs = document.querySelectorAll('.database-description-row input, .database-description-row textarea');
+  await api.act(async () => api.change(relationInputs[0], 'T'));
+  await api.act(async () => api.change(relationInputs[1], 'id'));
+  await api.act(async () => api.change(relationInputs[2], 'Stores identifiers.'));
+  await api.act(async () => [...document.querySelectorAll('button')].find(button => button.textContent.trim() === 'Run table').click());
+  assert.ok(document.querySelector('.teacher-schema-diagram-panel'), 'Table Design previews the schema');
+  await api.act(async () => document.querySelector('[aria-controls="database-panel-solution"]').click());
+  await api.act(async () => document.querySelectorAll('.teacher-solution-card')[1].querySelector('.teacher-solution-run-row .primary').click());
+  await api.act(async () => document.querySelector('[aria-controls="database-panel-datasets"]').click());
+  await api.act(async () => api.change(document.querySelector('input[aria-label="Dataset 1 file name"]'), 'students_seed'));
+  await api.act(async () => api.change(document.querySelectorAll('#basic-information input')[1], 'Saved flow test'));
+  await api.act(async () => document.querySelector('.teacher-problem-save-exit-actions .primary').click());
+  assert.equal(globalThis.__savedPayload.databaseDescription[0].predicate, 'Stores identifiers.');
+  assert.equal(globalThis.__savedPayload.testCases.length, 2);
+  assert.equal(globalThis.__savedPayload.sqlSolutions.length, 2);
+  assert.equal(globalThis.__savedPayload.sqlSolutions[1].expectedOutputs[0].rows[0][0], 42);
+  assert.equal(localStorage.getItem('teacher-dataset-names:new'), null, 'Saved dataset names must not leak to the next New problem');
+  await api.act(async () => document.querySelector('[aria-controls="database-panel-datasets"]').click());
+  assert.equal(document.querySelector('input[aria-label="Dataset 1 file name"]').value, 'students_seed', 'Dataset names must survive New to Edit navigation');
+  await api.act(async () => document.querySelector('[aria-controls="database-panel-solution"]').click());
+  assert.equal(document.querySelectorAll('.teacher-solution-description textarea')[1].value, 'Count all products.', 'Question descriptions restore in Edit');
+  assert.equal(document.querySelector('textarea[aria-label="Solution 2 SQL"]').value, 'SELECT 42 AS n');
+  console.log("PASS: automatic expected output, failed/stale-run protection, live Preview, and dataset visibility controls moved to activity settings.");
 } finally {
   if (root) await api.act(async () => root.unmount());
   await unlink(filename).catch(() => {});

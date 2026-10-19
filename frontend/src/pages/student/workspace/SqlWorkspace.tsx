@@ -1,5 +1,6 @@
 import { TranslatedText } from "../../../components/TranslatedText";
 import { useLanguage } from "../../../context/LanguageContext";
+import { readQuestionDrafts, writeQuestionDrafts } from "../../../utils/sqlQuestionDrafts";
 import { workspaceDraftKey, workspaceParts } from "../../../utils/workspaceParts";
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
@@ -15,6 +16,7 @@ import "../../../styles/workspace.css";
 import { AppHeader } from "../../../components/AppHeader";
 import { DataGrid, Dialog, Loading, Status } from "../../../components/ui";
 import { ProblemExpectedOutput } from "../../../components/ProblemExpectedOutput";
+import { ProblemDatabaseDescription } from "../../../components/ProblemDatabaseDescription";
 import { ProblemMarkdown } from "../../../components/ProblemMarkdown";
 import { studentApi, type QueryResult } from "../../../services/studentApi";
 import { storage } from "../../../services/storage";
@@ -29,7 +31,7 @@ import { useProblemWorkspaceLayout } from "./components/ProblemWorkspaceLayoutCo
 import { WorkspaceResizeHandle } from "./components/WorkspaceResizeHandle";
 import { WorkspaceDatabasePanel, type WorkspaceDatabaseState } from "./components/WorkspaceDatabasePanel";
 import { WorkspaceSubmissionPanel, type WorkspaceAttempt } from "./components/WorkspaceSubmissionPanel";
-import { WorkspaceProblemSwitcher } from "./components/WorkspaceProblemSwitcher";
+import { WorkspaceSolutionSwitcher } from "./components/WorkspaceSolutionSwitcher";
 
 import { WorkspaceEditorStatus } from "./components/WorkspaceEditorStatus";
 import { useWorkspaceExam, WorkspaceExamFinishButton } from "./components/WorkspaceExamContext";
@@ -45,7 +47,8 @@ const MIN_EDITOR_HEIGHT = 30;
 const MAX_EDITOR_HEIGHT = 75;
 
 
-export function SqlWorkspace({ problem, embedded = false, setupScripts, database, readOnly: parentReadOnly = false, onUserEdit, submissionAttempts: externalAttempts, submissionBusy = false, submissionNotice = "", submissionSignal = 0, submissionsUsed: parentSubmissionsUsed, maxSubmissions: parentMaxSubmissions }: {
+export function SqlWorkspace({ problem, selectedSolutionId, onSolutionChange, onBusyChange, embedded = false, setupScripts, database, readOnly: parentReadOnly = false, onUserEdit, submissionAttempts: externalAttempts, submissionBusy = false, submissionNotice = "", submissionSignal = 0, submissionsUsed: parentSubmissionsUsed, maxSubmissions: parentMaxSubmissions }: {
+  selectedSolutionId?: string; onSolutionChange?: (id: string) => void; onBusyChange?: (busy: boolean) => void;
   problem: Problem; database?: WorkspaceDatabaseState; embedded?: boolean; setupScripts?: { ddl: string; dml: string };
   readOnly?: boolean; onUserEdit?: () => void; submissionAttempts?: WorkspaceAttempt[]; submissionBusy?: boolean; submissionNotice?: string;
   submissionSignal?: number; submissionsUsed?: number; maxSubmissions?: number | null;
@@ -123,11 +126,25 @@ export function SqlWorkspace({ problem, embedded = false, setupScripts, database
   const editorResults = useRef<HTMLDivElement | null>(null);
   const activeResize = useRef<"vertical" | "horizontal" | "secondary" | null>(null);
   const expandTrigger = useRef<HTMLButtonElement>(null);
-  const [code, setCode] = useState(
+  const [allCode, setAllCode] = useState(
     () => (exam?.draft(problem.id)?.query ?? (exam?.enabled ? "" : undefined)) ?? (setupScripts || source !== "Practice" ? storage.get(sqlDraftKey) : studentApi.getDraft(problem.id)) ?? (problem.draft || ""),
   );
+  const checks = problem.sqlChecks || [];
+  const [localQuestionId, setLocalQuestionId] = useState(checks[0]?.id || "");
+  const selectedQuestionId = selectedSolutionId ?? localQuestionId;
+  const setSelectedQuestionId = onSolutionChange ?? setLocalQuestionId;
+  const question = checks.find(check => check.id === selectedQuestionId) || checks[0];
+  const multiQuestion = checks.length > 1 || allCode.startsWith("-- solution:");
+  const answers = readQuestionDrafts(allCode, checks.map(check => check.id));
+  const submissionCode = checks.length > 1 ? writeQuestionDrafts(answers, checks.map(check => check.id)) : allCode;
+  const code = multiQuestion && question ? answers[question.id] || "" : allCode;
+  function setCode(value: string) {
+    setAllCode(previous => multiQuestion && question
+      ? writeQuestionDrafts({ ...readQuestionDrafts(previous, checks.map(check => check.id)), [question.id]: value }, checks.map(check => check.id))
+      : value);
+  }
   const syncDraft = exam?.update;
-  useEffect(() => { syncDraft?.(problem.id, { query: code }); }, [syncDraft, problem.id]);
+  useEffect(() => { syncDraft?.(problem.id, { query: submissionCode }); }, [syncDraft, problem.id, submissionCode]);
   const [selected, setSelected] = useState("");
   const [problemTab, setProblemTab] = useState(layout === "Debug" ? "Database" : "Description");
   const [resultTab, setResultTab] = useState("Run result");
@@ -136,6 +153,8 @@ export function SqlWorkspace({ problem, embedded = false, setupScripts, database
   const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
   const [helpText, setHelpText] = useState("");
   const [busy, setBusy] = useState(false);
+  useEffect(() => { onBusyChange?.(busy); }, [busy, onBusyChange]);
+  useEffect(() => () => onBusyChange?.(false), [onBusyChange]);
   const [attempts, setAttempts] = useState<WorkspaceAttempt[]>([]);
   const attemptCounter = useRef(0);
   const [result, setResult] = useState<QueryResult | null>(null);
@@ -153,6 +172,12 @@ export function SqlWorkspace({ problem, embedded = false, setupScripts, database
   const exitDestination = source === "Contests" ? `/contests/${encodeURIComponent(context)}` : source === "Assignments" ? `/assignments/work/${encodeURIComponent(context)}` : "/dashboard";
   const [confirmResetQuery, setConfirmResetQuery] = useState(false);
   const [notice, setNotice] = useState("");
+  const previousQuestionId = useRef(question?.id);
+  useEffect(() => {
+    if (previousQuestionId.current === question?.id) return;
+    previousQuestionId.current = question?.id;
+    setSelected(""); setResult(null); setNotice(""); setProblemTab("Description");
+  }, [question?.id]);
   useEffect(() => {
     if (focus) { setExpanded(false); setMobileTab("SQL"); }
   }, [focus]);
@@ -168,9 +193,9 @@ export function SqlWorkspace({ problem, embedded = false, setupScripts, database
     };
   }, []);
   useEffect(() => {
-    if (setupScripts || source !== "Practice") storage.set(sqlDraftKey, code);
-    else studentApi.saveDraft(problem.id, code);
-  }, [code, problem.id, sqlDraftKey, Boolean(setupScripts)]);
+    if (setupScripts || source !== "Practice") storage.set(sqlDraftKey, submissionCode);
+    else studentApi.saveDraft(problem.id, submissionCode);
+  }, [submissionCode, problem.id, sqlDraftKey, Boolean(setupScripts)]);
   useEffect(() => { if (!sharedLayout) storage.set(layoutKey, JSON.stringify(preferences)); }, [layoutKey, preferences, sharedLayout]);
   useEffect(() => {
     const node = workspaceLayout.current;
@@ -224,7 +249,7 @@ export function SqlWorkspace({ problem, embedded = false, setupScripts, database
             maxScore: item.maxScore,
           },
         })));
-        if (typeof latest.query === "string") setCode(latest.query);
+        if (typeof latest.query === "string") setAllCode(latest.query);
       }
     }).catch(() => {}).finally(() => { if (active) setHistoryLoaded(true); });
     return () => { active = false; };
@@ -234,7 +259,7 @@ export function SqlWorkspace({ problem, embedded = false, setupScripts, database
     setProblemTab("Submission");
     if (embedded) {
       const submittedQuery = storage.get(sqlDraftKey);
-      if (submittedQuery !== null) setCode(submittedQuery);
+      if (submittedQuery !== null) setAllCode(submittedQuery);
     }
   }, [submissionSignal, embedded, sqlDraftKey]);
   async function toggleSaved() {
@@ -303,14 +328,14 @@ export function SqlWorkspace({ problem, embedded = false, setupScripts, database
         kind === "submit"
           ? await studentApi.submitSolution(
               problem.id,
-              code,
+              submissionCode,
               "SQL Server",
               source,
               context,
             )
           : setupScripts
-            ? await studentApi.runWorkspace(problem.id, { part: "SQL", query: kind === "selected" ? selected : code, ...setupScripts, source, context })
-            : await studentApi.runQuery(problem.id, kind === "selected" ? selected : code, "SQL Server", source, context);
+            ? await studentApi.runWorkspace(problem.id, { part: "SQL", query: kind === "selected" ? selected : code, solutionId: question?.id, ...setupScripts, source, context })
+            : await studentApi.runQuery(problem.id, kind === "selected" ? selected : code, "SQL Server", source, context, question?.id);
       if (alive.current) {
         if (kind === "submit") { setLastSubmit(value); setReviewMode(true); setHasSubmitted(true); setEditedSinceSubmission(false); }
         else setResult(value);
@@ -416,7 +441,7 @@ export function SqlWorkspace({ problem, embedded = false, setupScripts, database
       {!embedded && (
       <AppHeader
         workspaceActions={<><WorkspaceTools layout={layout} onLayout={chooseLayout} focus={focus} onFocus={toggleFocus} timerKey={workspaceKey(session?.id || "anonymous", source === "Practice" ? problem.id : `${source}:${context}`, "timer")} /><WorkspaceExamFinishButton />{!exam?.enabled && <button type="button" className="button workspace-submit-exit" disabled={!historyLoaded} onClick={() => setConfirmExit(true)}>{tr("Exit")}</button>}</>}
-        workspaceProblemNavigation={source !== "Practice" && params.get("context") ? <WorkspaceProblemSwitcher source={source} context={context} problemId={problem.id} problemTitle={problem.title} /> : undefined}
+        workspaceProblemNavigation={<WorkspaceSolutionSwitcher solutions={checks} selectedId={question?.id} disabled={busy} onChange={setSelectedQuestionId} />}
         workspace={{
           title: problem.title,
           number: problem.number,
@@ -497,13 +522,17 @@ export function SqlWorkspace({ problem, embedded = false, setupScripts, database
                     />
                   </div>
                   <ProblemMarkdown>{problem.description || ""}</ProblemMarkdown>
+          <ProblemDatabaseDescription rows={problem.databaseDescription} visible={problem.databaseDescriptionVisible} />
+                  {checks.length > 0 && <label className="workspace-question-picker"><TranslatedText>{tr("Question")}</TranslatedText>
+                    <select value={question?.id || ""} disabled={busy} onChange={event => { setSelectedQuestionId(event.target.value); setSelected(""); setResult(null); setNotice(""); }}>{checks.map((check, index) => <option key={check.id} value={check.id}>{index + 1}. {check.name}</option>)}</select>
+                  </label>}
                   <h3><TranslatedText>{tr("Requirements")}</TranslatedText></h3>
-                  <ProblemMarkdown>{problem.requirements || ""}</ProblemMarkdown>
-                  <ProblemExpectedOutput table={problem.expected} samples={problem.expectedSamples} />
+                  <ProblemMarkdown>{question?.description || problem.requirements || ""}</ProblemMarkdown>
+                  <ProblemExpectedOutput table={question ? undefined : problem.expected} samples={question ? question.expectedSamples : problem.expectedSamples} />
                   <hr />
                 </>
               ) : problemTab === "Database" ? (
-                <WorkspaceDatabasePanel database={database || { schemaTables, tables: seedTables.length ? seedTables : problem.tables || [] }} />
+                <WorkspaceDatabasePanel database={database || { schemaTables, tables: seedTables.length ? seedTables : problem.tables || [] }} description={problem.databaseDescription} descriptionVisible={problem.databaseDescriptionVisible} structureVisible={problem.databaseStructureVisible} />
               ) : <WorkspaceSubmissionPanel submissionsUsed={source !== "Practice" ? submissionsUsed : undefined} maxSubmissions={maxSubmissions} attempts={externalAttempts ? [...externalAttempts, ...attempts].sort((a, b) => b.id - a.id) : attempts} busy={busy || submissionBusy} notice={submissionNotice || notice} />}
             </div>
             <div
@@ -614,7 +643,7 @@ export function SqlWorkspace({ problem, embedded = false, setupScripts, database
               <div className="editor-toolbar">
                 <span className="editor-dialect">SQL Server</span>
                 <button className="icon-button" type="button" aria-label={tr("Reset SQL query")} title={isReadOnly ? tr("Submitted work is read-only") : tr("Reset SQL query")} disabled={isReadOnly} onClick={() => setConfirmResetQuery(true)}><RotateCcw size={16} /></button>
-                <b>query.sql</b>
+                <b>{question?.name || "query.sql"}</b>
                 {isReadOnly && <small className="muted"><TranslatedText>{tr("View only")}</TranslatedText></small>}
                 <button
                   className="icon-button format-query"
@@ -654,7 +683,7 @@ export function SqlWorkspace({ problem, embedded = false, setupScripts, database
                 </button>
               </div>
               {Boolean(problem.sqlChecks?.length) && <div className="workspace-sql-checks">
-                <ol>{problem.sqlChecks?.map((check) => <li key={check.id}>{check.name} <span>{check.timeLimitMs} <TranslatedText>{tr("ms")}</TranslatedText></span></li>)}</ol>
+                <div className="workspace-question-tabs" role="tablist" aria-label={tr("SQL questions")}>{checks.map((check, index) => <button type="button" role="tab" aria-selected={question?.id === check.id} disabled={busy} key={check.id} onClick={() => { setSelectedQuestionId(check.id); setSelected(""); setResult(null); setNotice(""); setProblemTab("Description"); }}><TranslatedText>{tr("Question")}</TranslatedText> {index + 1}</button>)}</div>
               </div>}
               <div className="sql-editor">
                 <CodeMirror
@@ -663,7 +692,7 @@ export function SqlWorkspace({ problem, embedded = false, setupScripts, database
                   readOnly={isReadOnly}
                   editable={!isReadOnly}
                   extensions={sqlEditorExtensions}
-                  onChange={value => { if (!isReadOnly) { setCode(value); setEditedSinceSubmission(true); onUserEdit?.(); exam?.update(problem.id, { query: value }); } }}
+                  onChange={value => { if (!isReadOnly) { setCode(value); setEditedSinceSubmission(true); onUserEdit?.(); } }}
                   onCreateEditor={(view) => {
                     editor.current = view;
                   }}
@@ -730,7 +759,7 @@ export function SqlWorkspace({ problem, embedded = false, setupScripts, database
           </div>
         </div>
       </div>
-      {confirmResetQuery && !isReadOnly && <Dialog title={tr("Reset SQL query?")} onClose={() => setConfirmResetQuery(false)}><p><TranslatedText>{tr("Your current SQL draft will be cleared from this browser.")}</TranslatedText></p><div className="dialog-actions"><button className="button" type="button" onClick={() => setConfirmResetQuery(false)}><TranslatedText>{tr("Cancel")}</TranslatedText></button><button className="button primary" type="button" onClick={() => { setCode(""); setEditedSinceSubmission(true); onUserEdit?.(); exam?.update(problem.id, { query: "" }); setResult(null); setAttempts(previous => previous.filter(attempt => attempt.kind === "submit")); setConfirmResetQuery(false); }}><TranslatedText>{tr("Clear query")}</TranslatedText></button></div></Dialog>}
+      {confirmResetQuery && !isReadOnly && <Dialog title={tr("Reset SQL query?")} onClose={() => setConfirmResetQuery(false)}><p><TranslatedText>{tr("Your current SQL draft will be cleared from this browser.")}</TranslatedText></p><div className="dialog-actions"><button className="button" type="button" onClick={() => setConfirmResetQuery(false)}><TranslatedText>{tr("Cancel")}</TranslatedText></button><button className="button primary" type="button" onClick={() => { setCode(""); setEditedSinceSubmission(true); onUserEdit?.(); setResult(null); setAttempts(previous => previous.filter(attempt => attempt.kind === "submit")); setConfirmResetQuery(false); }}><TranslatedText>{tr("Clear query")}</TranslatedText></button></div></Dialog>}
       {!embedded && !exam?.enabled && confirmExit && <Dialog title={tr("Exit workspace?")} onClose={() => setConfirmExit(false)}><p><TranslatedText>{tr(editedSinceSubmission ? "You have unsubmitted changes. Exit without submitting them?" : hasSubmitted ? "Your submission is saved. Are you sure you want to exit?" : "You have not submitted your work. Are you sure you want to exit without submitting?")}</TranslatedText></p><div className="dialog-actions"><button className="button" type="button" onClick={() => setConfirmExit(false)}><TranslatedText>{tr("Stay here")}</TranslatedText></button><button className="button primary" type="button" onClick={() => navigate(exitDestination)}><TranslatedText>{tr("Exit")}</TranslatedText></button></div></Dialog>}
     </div>
   );
@@ -776,7 +805,7 @@ export function ContestSqlWorkspace({ state }: { state: ContestWorkspaceControll
                     >
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                         <span className={`contest-question-status-dot ${hasAnswer ? "answered" : ""}`} />
-                        <span><TranslatedText>{tr("Question")}</TranslatedText> {idx + 1}. {q.title}</span>
+                        <span><TranslatedText><TranslatedText>{tr("Question")}</TranslatedText></TranslatedText> {idx + 1}. {q.title}</span>
                       </div>
                       <span style={{ fontSize: 11, opacity: 0.7 }}>{q.points ?? 10} <TranslatedText>{tr("pts")}</TranslatedText></span>
                     </button>
@@ -791,7 +820,7 @@ export function ContestSqlWorkspace({ state }: { state: ContestWorkspaceControll
                 <>
                   <div className="contest-prompt-pane">
                     <h2>
-                      <span><TranslatedText>{tr("Question")}</TranslatedText> {activeQuestionIndex + 1}: {activeQuestion.title}</span>
+                      <span><TranslatedText><TranslatedText>{tr("Question")}</TranslatedText></TranslatedText> {activeQuestionIndex + 1}: {activeQuestion.title}</span>
                       <span className="contest-prompt-points">{activeQuestion.points ?? 10} <TranslatedText>{tr("points")}</TranslatedText></span>
                     </h2>
                     <div style={{ fontSize: 13, lineHeight: 1.6, color: "var(--text)" }}>

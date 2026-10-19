@@ -5,6 +5,7 @@ from app.database import get_db
 from app.models import User, Problem, Submission
 from app.schemas import WorkspaceRunRequest, ProblemListResponse, ProblemDetailResponse, QueryRequest, ProblemCreate, TestCaseCreate, ProblemValidateRequest, TrendingProblem, DataTable
 from app.routers.auth import get_current_user
+from app.services.dataset_visibility import dataset_is_hidden
 from app.services.sandbox import run_sandbox
 from app.services.sql_solutions import stored_solutions, save_solutions, solution_response
 from app.services.expected_outputs import read_expected_outputs, save_expected_outputs
@@ -228,6 +229,11 @@ def get_problem(problem_id: str, context: Optional[str] = None, db: Session = De
             progress = "In progress"
             
     resp = ProblemDetailResponse.model_validate(p)
+    if activity_problem is not None:
+        resp.database_structure_visible = activity_problem.database_structure_visible
+        resp.database_description_visible = activity_problem.database_description_visible
+    if current_user.role == "student" and not resp.database_description_visible:
+        resp.database_description = []
     expected_outputs, expected_output_visible = read_expected_outputs(p.expected)
     expected_output_tables = [DataTable.model_validate(output) for output in expected_outputs]
     resp.expected_output_visible = expected_output_visible
@@ -237,7 +243,7 @@ def get_problem(problem_id: str, context: Optional[str] = None, db: Session = De
     resp.workspace_parts = effective_workspace_parts
     from app.schemas import SqlCheckInfo
     solutions = stored_solutions(db, p.id)
-    resp.sql_checks = [SqlCheckInfo(id=row.id, name=row.name, timeLimitMs=row.time_limit_ms)
+    resp.sql_checks = [SqlCheckInfo(id=row.id, name=row.name, description=row.description or "", timeLimitMs=row.time_limit_ms)
                        for row in solutions if row.enabled and row.query.strip()]
     if current_user.role in ["instructor", "admin"]:
         resp.sql_solutions = [solution_response(row) for row in solutions] or None
@@ -247,12 +253,20 @@ def get_problem(problem_id: str, context: Optional[str] = None, db: Session = De
     
     from app.models import TestCase, TestCaseScript
     tcs = db.query(TestCase).filter(TestCase.problem_id == p.id).order_by(TestCase.order_index).all()
+    dataset_visibility = (activity_problem.dataset_visibility or {}) if activity_problem is not None else {}
+    from app.schemas import ExpectedOutputSample
+    for check in resp.sql_checks:
+        row = next(row for row in solutions if row.id == check.id)
+        outputs, visible = read_expected_outputs(row.expected) if row.expected is not None else (expected_outputs, expected_output_visible) if row.id == solutions[0].id else ([], True)
+        check.expected_samples = [ExpectedOutputSample(dataset=index + 1, table=DataTable.model_validate(outputs[index]))
+                                  for index, tc in enumerate(tcs)
+                                  if visible and not dataset_is_hidden(tc, index, dataset_visibility) and index < len(outputs)]
     if current_user.role == "student":
         from app.schemas import ExpectedOutputSample
         resp.expected_samples = [
             ExpectedOutputSample(dataset=index + 1, table=expected_output_tables[index])
             for index, tc in enumerate(tcs)
-            if expected_output_visible and not tc.is_hidden and index < len(expected_output_tables)
+            if expected_output_visible and not dataset_is_hidden(tc, index, dataset_visibility) and index < len(expected_output_tables)
         ]
         resp.expected = resp.expected_samples[0].table if resp.expected_samples else None
         # Only visible sample outputs reach the student. Hidden answers remain
@@ -262,14 +276,14 @@ def get_problem(problem_id: str, context: Optional[str] = None, db: Session = De
     if tcs:
         mapped_tcs = []
         for idx, tc in enumerate(tcs):
-            if tc.is_hidden and current_user.role == "student":
+            if dataset_is_hidden(tc, idx, dataset_visibility) and current_user.role == "student":
                 continue
             script = db.query(TestCaseScript).filter(TestCaseScript.test_case_id == tc.id).first()
             if script:
                 mapped_tcs.append({
                     "schema": script.create_script,
                     "seedData": script.insert_script,
-                    "isHidden": tc.is_hidden
+                    "isHidden": dataset_is_hidden(tc, idx, dataset_visibility)
                 })
                 if len(mapped_tcs) == 1:
                     resp.schema_sql = script.create_script
@@ -280,7 +294,7 @@ def get_problem(problem_id: str, context: Optional[str] = None, db: Session = De
                         resp.reference_solution = ""
         resp.test_cases = mapped_tcs
         
-    if current_user.role == "student" and "DDL" in effective_workspace_parts:
+    if current_user.role == "student" and (("DDL" in effective_workspace_parts and activity_problem is None) or not resp.database_structure_visible):
         resp.schema_sql = ""
         for case in resp.test_cases or []:
             case["schema"] = ""
@@ -311,6 +325,8 @@ def update_problem(problem_id: str, problem: ProblemCreate, db: Session = Depend
     p.hint = "\n".join(problem.hints) if problem.hints else None
     p.database_type = problem.database
     p.schema_file_name = problem.schema_file_name
+    p.database_description = [row.model_dump(by_alias=True) for row in problem.database_description]
+    p.database_description_visible = problem.database_description_visible
     if problem.expected_outputs is not None:
         p.expected = save_expected_outputs(problem.expected_outputs, problem.expected_output_visible)
     if problem.workspace_parts is not None:
@@ -428,6 +444,8 @@ def create_problem(problem: ProblemCreate, db: Session = Depends(get_db), curren
         hint="\n".join(problem.hints) if problem.hints else None,
         database_type=problem.database,
         schema_file_name=problem.schema_file_name,
+        database_description=[row.model_dump(by_alias=True) for row in problem.database_description],
+        database_description_visible=problem.database_description_visible,
         workspace_parts=problem.workspace_parts or ["SQL"],
         expected=save_expected_outputs(problem.expected_outputs, problem.expected_output_visible) if problem.expected_outputs is not None else None,
         creator_id=current_user.id
@@ -510,7 +528,10 @@ def run_query(problem_id: str, request: QueryRequest, db: Session = Depends(get_
     if effective_workspace_parts != ["SQL"]:
         raise HTTPException(status_code=400, detail="Use the workspace to run multi-section problems. Combined submissions are not supported by the SQL-only grader.")
         
-    result = run_sandbox(db, p, request.query, is_submit=False)
+    run_options = {}
+    if request.source in ["Assignments", "Contests"] and activity_problem.dataset_visibility:
+        run_options["dataset_visibility"] = activity_problem.dataset_visibility
+    result = run_sandbox(db, p, request.query, is_submit=False, solution_id=request.solution_id, **run_options)
     return result
 
 @router.post("/{problem_id}/submit")
@@ -630,10 +651,17 @@ def run_problem_workspace(problem_id: str, request: "WorkspaceRunRequest", db: S
     if request.part not in enabled:
         raise HTTPException(status_code=400, detail="This section is not enabled for this problem.")
     from app.models import TestCase, TestCaseScript
-    tc = db.query(TestCase).filter(TestCase.problem_id == p.id, TestCase.is_hidden == False).order_by(TestCase.order_index).first()
+    visibility = (activity_problem.dataset_visibility or {}) if request.source in ["Assignments", "Contests"] else {}
+    cases = db.query(TestCase).filter(TestCase.problem_id == p.id).order_by(TestCase.order_index).all()
+    tc = next((case for index, case in enumerate(cases) if not dataset_is_hidden(case, index, visibility)), None)
     script = db.query(TestCaseScript).filter(TestCaseScript.test_case_id == tc.id).first() if tc else None
     solutions = stored_solutions(db, p.id) if request.part == "SQL" else []
-    limits = [row.time_limit_ms for row in solutions if row.enabled and row.query.strip()] if solutions else None
+    available = [row for row in solutions if row.enabled and row.query.strip()]
+    if request.solution_id:
+        available = [row for row in available if row.id == request.solution_id]
+        if not available:
+            raise HTTPException(status_code=400, detail="Invalid or disabled SQL solution.")
+    limits = [row.time_limit_ms for row in available] if solutions else None
     if limits == []:
         raise HTTPException(status_code=400, detail="No enabled SQL solution has been configured for this problem.")
     return run_workspace(db.get_bind(), enabled, request,

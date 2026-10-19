@@ -1,0 +1,6 @@
+-- 6.34: Tính doanh thu bán hàng mỗi ngày.
+-- Bai tap 1, phan III, cau 34 trong PDF.
+SELECT CAST(NGHD AS DATE) AS NGAY, SUM(TRIGIA) AS DOANH_THU
+FROM HOADON
+GROUP BY CAST(NGHD AS DATE)
+ORDER BY NGAY;

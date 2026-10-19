@@ -15,7 +15,7 @@ import { DdlWorkspace } from "./DdlWorkspace";
 import { DmlWorkspace } from "./DmlWorkspace";
 import { SqlWorkspace } from "./SqlWorkspace";
 import { WorkspaceNavigation } from "./components/WorkspaceNavigation";
-import { WorkspaceProblemSwitcher } from "./components/WorkspaceProblemSwitcher";
+import { WorkspaceSolutionSwitcher } from "./components/WorkspaceSolutionSwitcher";
 import { ProblemWorkspaceLayoutProvider } from "./components/ProblemWorkspaceLayoutContext";
 import type { WorkspaceAttempt } from "./components/WorkspaceSubmissionPanel";
 import { parseDatabaseSchema } from "../../../utils/parseDatabaseSchema";
@@ -69,6 +69,8 @@ export function ProblemWorkspace({ problem }: { problem: Problem }) {
   const sqlOnly = parts.length === 1 && parts[0] === "SQL";
   const [focus, setFocus] = useState(false);
   const [active, setActive] = useState<WorkspacePart>(parts[0] || "SQL");
+  const [selectedSolutionId, setSelectedSolutionId] = useState(problem.sqlChecks?.[0]?.id || "");
+  const [sqlBusy, setSqlBusy] = useState(false);
   const layoutKey = workspaceKey(session?.id || "anonymous", "preferences", "layouts");
   const [preferences, setPreferences] = useState(() => readLayouts(layoutKey));
   const draftKey = workspaceDraftKey(session?.id || "anonymous", problem.id, context);
@@ -86,7 +88,7 @@ export function ProblemWorkspace({ problem }: { problem: Problem }) {
   const [executedDdl, setExecutedDdl] = useState<string | null>(null);
   const [executedDml, setExecutedDml] = useState<string | null>(null);
   const [database, setDatabase] = useState<WorkspaceDatabaseState>(() => ({
-    schemaTables: parts.includes("DDL") ? [] : parseDatabaseSchema((problem as Problem & { schema?: string }).schema || ""),
+    schemaTables: parts.includes("DDL") && problem.databaseStructureVisible !== true ? [] : parseDatabaseSchema(problem.schema || ""),
     tables: parts.includes("DDL") ? [] : problem.tables || [],
   }));
   const databaseView = { ...database, stale: (executedDdl !== null && executedDdl !== scripts.ddl) || (executedDml !== null && executedDml !== scripts.dml) };
@@ -186,14 +188,14 @@ export function ProblemWorkspace({ problem }: { problem: Problem }) {
   return <ProblemWorkspaceLayoutProvider value={{ preferences, setPreferences, focus, setFocus }}><div className="problem-workspace">
     <AppHeader
       workspace={{ title: problem.title, number: problem.number, topic: problem.topic || "SQL", source, context: params.get("contextTitle") || context, backTo: source === "Assignments" ? "/assignments" : source === "Contests" ? "/contests" : "/dashboard" }}
-      workspaceProblemNavigation={source !== "Practice" && params.get("context") ? <WorkspaceProblemSwitcher source={source} context={context} problemId={problem.id} problemTitle={problem.title} /> : undefined}
+      workspaceProblemNavigation={parts.includes("SQL") ? <WorkspaceSolutionSwitcher solutions={problem.sqlChecks} selectedId={selectedSolutionId} disabled={busy || sqlBusy || submitting} onChange={id => { setSelectedSolutionId(id); setActive("SQL"); }} /> : undefined}
       workspaceActions={<><WorkspaceTools layout={preferences.layout} onLayout={layout => { setPreferences(value => ({ ...value, layout })); setFocus(false); }} focus={focus} onFocus={() => setFocus(value => !value)} timerKey={workspaceKey(session?.id || "anonymous", source === "Practice" ? problem.id : `${source}:${context}`, "timer")} /><WorkspaceNavigation parts={parts} active={active} onChange={setActive} /><WorkspaceExamFinishButton />{!exam?.enabled && <><button className={`button ${reviewMode ? "" : "primary"} workspace-submit-exit`} disabled={busy || submitting || (!reviewMode && submissionLimitReached) || !historyLoaded} title={submissionLimitReached && !reviewMode ? tr("Submission limit reached") : undefined} onClick={() => reviewMode ? setReviewMode(false) : setConfirmSubmit(true)}>{tr(reviewMode ? "Edit again" : "Submit")}</button><button className="button workspace-submit-exit" disabled={submitting || !historyLoaded} onClick={() => setConfirmExit(true)}>{tr("Exit")}</button></>}</>}
     />
     <main id="main-content" className="problem-workspace-body">
     {parts.map(part => <div key={part} id={`workspace-stage-${part}`} className="problem-workspace-stage" hidden={active !== part}>
       {part === "DDL" ? <DdlWorkspace database={databaseView} problem={problem} value={scripts.ddl} onChange={ddl => updateScripts({ ddl })} onReset={() => { updateScripts({ ddl: "" }); setResults(value => ({ ...value, DDL: undefined })); setErrors(value => ({ ...value, DDL: "" })); }} onRun={selection => run("DDL", selection)} busy={busy} result={results.DDL} error={errors.DDL} readOnly={isReadOnly} submissionAttempts={submissionAttempts} submissionBusy={submitting} submissionNotice={submitError} submissionSignal={submissionSignal} submissionsUsed={submissionsUsed} maxSubmissions={maxSubmissions} />
         : part === "DML" ? <DmlWorkspace database={databaseView} problem={problem} value={scripts.dml} onChange={dml => updateScripts({ dml })} onReset={() => { updateScripts({ dml: "" }); setResults(value => ({ ...value, DML: undefined })); setErrors(value => ({ ...value, DML: "" })); }} onRun={selection => run("DML", selection)} busy={busy} result={results.DML} error={errors.DML} readOnly={isReadOnly} submissionAttempts={submissionAttempts} submissionBusy={submitting} submissionNotice={submitError} submissionSignal={submissionSignal} submissionsUsed={submissionsUsed} maxSubmissions={maxSubmissions} />
-        : <SqlWorkspace problem={problem} embedded setupScripts={scripts} database={databaseView} readOnly={isReadOnly} onUserEdit={() => setEditedSinceSubmission(true)} submissionAttempts={submissionAttempts} submissionBusy={submitting} submissionNotice={submitError} submissionSignal={submissionSignal} submissionsUsed={submissionsUsed} maxSubmissions={maxSubmissions} />}
+        : <SqlWorkspace problem={problem} selectedSolutionId={selectedSolutionId} onSolutionChange={setSelectedSolutionId} onBusyChange={setSqlBusy} embedded setupScripts={scripts} database={databaseView} readOnly={isReadOnly} onUserEdit={() => setEditedSinceSubmission(true)} submissionAttempts={submissionAttempts} submissionBusy={submitting} submissionNotice={submitError} submissionSignal={submissionSignal} submissionsUsed={submissionsUsed} maxSubmissions={maxSubmissions} />}
     </div>)}
     </main>
     {confirmSubmit && <Dialog title={tr("Submit work?")} onClose={() => { if (!submitting) setConfirmSubmit(false); }}><p>{tr("Submit all enabled sections of this problem for automatic grading?")}</p>{submitError && <p role="alert">{submitError}</p>}<div className="workspace-finish-actions"><button className="button" disabled={submitting} onClick={() => setConfirmSubmit(false)}>{tr("Cancel")}</button><button className="button primary" disabled={submitting} onClick={() => void submitWork()}>{tr(submitting ? "Submitting…" : "Submit")}</button></div></Dialog>}

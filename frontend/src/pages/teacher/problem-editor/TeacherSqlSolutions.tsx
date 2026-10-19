@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Play } from "lucide-react";
+import { Play, Plus, Trash2 } from "lucide-react";
 import { TranslatedText } from "../../../components/TranslatedText";
 import { useLanguage } from "../../../context/LanguageContext";
 import type { DataTable } from "../../../data/models";
@@ -16,7 +16,7 @@ type DatasetResult = {
 type Run = { running: boolean; source: string; results: DatasetResult[] };
 
 export function initialSqlSolutions(solutions?: TeacherSqlSolution[] | null, legacyQuery = "", legacyId: string = crypto.randomUUID()): TeacherSqlSolution[] {
-  return solutions?.length ? solutions : [{ id: legacyId, name: "solution_1.sql", query: legacyQuery, enabled: true, timeLimitMs: 5000 }];
+  return solutions?.length ? solutions.map(solution => ({ ...solution, description: solution.description || "", expectedOutputs: solution.expectedOutputs || [], expectedOutputVisible: solution.expectedOutputVisible !== false })) : [{ id: legacyId, name: "solution_1.sql", description: "", expectedOutputs: [], expectedOutputVisible: true, query: legacyQuery, enabled: true, timeLimitMs: 5000 }];
 }
 
 function TimeLimitInput({ value, onChange, id }: { value: number; onChange: (value: number) => void; id: string }) {
@@ -37,7 +37,7 @@ function TimeLimitInput({ value, onChange, id }: { value: number; onChange: (val
 }
 
 export function TeacherSqlSolutions({ solutions, schema, datasets, onChange, expectedOutputs, expectedOutputVisible,
-  onExpectedOutputsChange, onExpectedOutputVisibilityChange, onDatasetVisibilityChange, onRunningChange }: {
+  onExpectedOutputsChange, onExpectedOutputVisibilityChange, onRunningChange }: {
   solutions: TeacherSqlSolution[];
   schema: string;
   datasets: { seedData: string; isHidden?: boolean }[];
@@ -46,14 +46,13 @@ export function TeacherSqlSolutions({ solutions, schema, datasets, onChange, exp
   expectedOutputVisible: boolean;
   onExpectedOutputsChange: (outputs: DataTable[]) => void;
   onExpectedOutputVisibilityChange: (visible: boolean) => void;
-  onDatasetVisibilityChange: (index: number, hidden: boolean) => void;
   onRunningChange: (running: boolean) => void;
 }) {
   const { t: tr, locale } = useLanguage("teacher");
   const [runs, setRuns] = useState<Record<string, Run>>({});
   const mounted = useRef(false);
-  const latest = useRef({ solutions, schema, datasets, onExpectedOutputsChange });
-  latest.current = { solutions, schema, datasets, onExpectedOutputsChange };
+  const latest = useRef({ solutions, schema, datasets, onExpectedOutputsChange, onChange });
+  latest.current = { solutions, schema, datasets, onExpectedOutputsChange, onChange };
   const formatMs = (value: number) => new Intl.NumberFormat(locale, { maximumFractionDigits: 3 }).format(value);
   useEffect(() => {
     mounted.current = true;
@@ -63,13 +62,13 @@ export function TeacherSqlSolutions({ solutions, schema, datasets, onChange, exp
   useEffect(() => () => onRunningChange(false), [onRunningChange]);
 
   function change(id: string, patch: Partial<TeacherSqlSolution>) {
-    onChange(solutions.map((solution) => solution.id === id ? { ...solution, ...patch } : solution));
+    onChange(solutions.map((solution) => solution.id === id ? { ...solution, ...patch, ...(patch.query !== undefined && patch.query !== solution.query ? { expectedOutputs: [] } : {}) } : solution));
   }
   function sourceOf(solution: TeacherSqlSolution) {
     return JSON.stringify([schema, datasets.map((dataset) => dataset.seedData), solution.query]);
   }
   async function runSolution(solution: TeacherSqlSolution) {
-    if (runs[solution.id]?.running || !solution.enabled || !solution.query.trim()) return;
+    if (Object.values(runs).some(run => run.running) || !solution.enabled || !solution.query.trim()) return;
     const source = sourceOf(solution);
     const results: DatasetResult[] = [];
     setRuns((current) => ({ ...current, [solution.id]: { running: true, source, results: [] } }));
@@ -95,7 +94,9 @@ export function TeacherSqlSolutions({ solutions, schema, datasets, onChange, exp
           && source === JSON.stringify([current.schema, current.datasets.map((dataset) => dataset.seedData), currentSolution.query]);
         if (sourceIsCurrent && datasets.length > 0 && results.length === datasets.length
           && results.every((result) => result.table && !result.error)) {
-          current.onExpectedOutputsChange(results.map((result) => result.table!));
+          const outputs = results.map((result) => result.table!);
+          current.onChange(current.solutions.map(item => item.id === solution.id ? { ...item, expectedOutputs: outputs } : item));
+          if (current.solutions[0]?.id === solution.id) current.onExpectedOutputsChange(outputs);
         }
         setRuns((current) => ({ ...current, [solution.id]: { running: false, source, results: [...results] } }));
       }
@@ -117,6 +118,16 @@ export function TeacherSqlSolutions({ solutions, schema, datasets, onChange, exp
             <span>.sql</span>
           </div>
           <div className="teacher-solution-actions">
+            {index === 0 && <button type="button" className="button teacher-small-button" disabled={solutions.length >= 50} onClick={() => {
+              const names = new Set(solutions.map(item => item.name));
+              let number = solutions.length + 1;
+              while (names.has(`solution_${number}.sql`)) number++;
+              onChange([...solutions, { id: crypto.randomUUID(), name: `solution_${number}.sql`, description: "", query: "", enabled: true, timeLimitMs: 5000, expectedOutputs: [], expectedOutputVisible: true }]);
+            }}><Plus size={14} aria-hidden="true" /><TranslatedText>{tr("Add solution")}</TranslatedText></button>}
+            {solutions.length > 1 && <button type="button" className="button teacher-small-button" disabled={run?.running} aria-label={tr("Delete solution {value0}", { value0: index + 1 })} onClick={() => {
+              if ((solution.query.trim() || solution.description?.trim()) && !window.confirm(tr("Delete this solution and its question?"))) return;
+              onChange(solutions.filter(item => item.id !== solution.id));
+            }}><Trash2 size={14} aria-hidden="true" /><TranslatedText>{tr("Delete")}</TranslatedText></button>}
             <button className={`button teacher-small-button${solution.enabled ? "" : " is-active"}`} type="button"
               aria-pressed={!solution.enabled} disabled={run?.running}
               aria-label={tr("Disable solution {value0}", { value0: index + 1 })}
@@ -126,6 +137,10 @@ export function TeacherSqlSolutions({ solutions, schema, datasets, onChange, exp
           </div>
         </div>
         {!solution.enabled && <p className="teacher-solution-note"><TranslatedText>{tr("Disabled solutions are excluded from grading.")}</TranslatedText></p>}
+        <label className="teacher-solution-description"><TranslatedText>{tr("Question description")}</TranslatedText>
+          <textarea rows={3} maxLength={20000} value={solution.description || ""} placeholder={tr("Describe what students must query for this question.")}
+            onChange={event => change(solution.id, { description: event.target.value })} />
+        </label>
         <ProblemSqlEditor value={solution.query} label={tr("Solution {value0} SQL", { value0: index + 1 })}
           placeholder={tr("-- Example SQL Server query\nSELECT CustomerId, FullName\nFROM Customers\nORDER BY CustomerId;")}
           onChange={(query) => change(solution.id, { query })} />
@@ -139,22 +154,14 @@ export function TeacherSqlSolutions({ solutions, schema, datasets, onChange, exp
             <TimeLimitInput id={`solution-limit-${solution.id}`} value={solution.timeLimitMs} onChange={(timeLimitMs) => change(solution.id, { timeLimitMs })} />
             <span><TranslatedText>{tr("ms")}</TranslatedText></span>
           </label>
-          <button className="button primary" type="button" disabled={run?.running || !solution.enabled || !solution.query.trim()}
+          <button className="button primary" type="button" disabled={Object.values(runs).some(run => run.running) || !solution.enabled || !solution.query.trim()}
             onClick={() => void runSolution(solution)}><Play size={14} aria-hidden="true" /><TranslatedText>{tr(run?.running ? "Running…" : "Run")}</TranslatedText></button>
         </div>
         {run && !stale && run.results.map((result) => <details className={`teacher-solution-output${result.error ? " is-error" : ""}`} key={result.dataset}>
           <summary><TranslatedText>{tr("Dataset")}</TranslatedText> {result.dataset}
             {typeof result.timeMs === "number" && <span>{formatMs(result.timeMs)} <TranslatedText>{tr("ms")}</TranslatedText></span>}
             {result.error && <span><TranslatedText>{tr("Run failed")}</TranslatedText></span>}
-            <button className={`button teacher-small-button teacher-result-hidden-toggle${datasets[result.dataset - 1]?.isHidden ? " is-active" : ""}`}
-              type="button" aria-label={`${tr("Dataset")} ${result.dataset}: ${tr("Hidden dataset")}`}
-              aria-pressed={Boolean(datasets[result.dataset - 1]?.isHidden)}
-              onClick={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                onDatasetVisibilityChange(result.dataset - 1, !datasets[result.dataset - 1]?.isHidden);
-              }}><TranslatedText>{tr("Hidden dataset")}</TranslatedText></button>
-            {datasets[result.dataset - 1]?.isHidden && <span><TranslatedText>{tr("Hidden from students")}</TranslatedText></span>}
+
           </summary>
           {result.error ? <p role="alert">{result.error}</p> : result.table && <div className="teacher-table-scroll"><table className="teacher-table">
             <thead><tr>{result.table.columns.map((column, columnIndex) => <th key={columnIndex}>{column}</th>)}</tr></thead>
@@ -162,9 +169,9 @@ export function TeacherSqlSolutions({ solutions, schema, datasets, onChange, exp
           </table></div>}
         </details>)}
         <div className="teacher-solution-expected-actions">
-          {expectedOutputs.length > 0 && <button className="button teacher-small-button" type="button" aria-pressed={expectedOutputVisible}
-            onClick={() => onExpectedOutputVisibilityChange(!expectedOutputVisible)}>
-            <TranslatedText>{tr(expectedOutputVisible ? "Hide expected output" : "Show expected output")}</TranslatedText>
+          {(solution.expectedOutputs?.length || (index === 0 ? expectedOutputs.length : 0)) > 0 && <button className="button teacher-small-button" type="button" aria-pressed={solution.expectedOutputVisible !== false}
+            onClick={() => { change(solution.id, { expectedOutputVisible: solution.expectedOutputVisible === false }); if (index === 0) onExpectedOutputVisibilityChange(!expectedOutputVisible); }}>
+            <TranslatedText>{tr(solution.expectedOutputVisible !== false ? "Hide expected output" : "Show expected output")}</TranslatedText>
           </button>}
           <span className="teacher-solution-expected-note"><TranslatedText>{tr("Successful runs automatically update the expected output. Open Preview to view it in the problem.")}</TranslatedText></span>
         </div>

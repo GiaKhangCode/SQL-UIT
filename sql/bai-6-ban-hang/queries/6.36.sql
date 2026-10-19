@@ -1,0 +1,7 @@
+-- 6.36: Tính doanh thu bán hàng của từng tháng trong năm 2006.
+-- Bai tap 1, phan III, cau 36 trong PDF.
+SELECT MONTH(NGHD) AS THANG, SUM(TRIGIA) AS DOANH_THU
+FROM HOADON
+WHERE NGHD >= '20060101' AND NGHD < '20070101'
+GROUP BY MONTH(NGHD)
+ORDER BY THANG;

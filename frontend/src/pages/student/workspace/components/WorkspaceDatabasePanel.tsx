@@ -1,10 +1,11 @@
-import type { DataTable } from "../../../../data/models";
+import type { DatabaseRelationDescription, DataTable } from "../../../../data/models";
 import type { QueryResult } from "../../../../services/studentApi";
 import type { SchemaTable } from "../../../../utils/parseDatabaseSchema";
 import { DataGrid } from "../../../../components/ui";
 import { TranslatedText } from "../../../../components/TranslatedText";
 import { useLanguage } from "../../../../context/LanguageContext";
 import { DatabaseDiagram } from "../../../../components/DatabaseDiagram";
+import { ProblemDatabaseDescription } from "../../../../components/ProblemDatabaseDescription";
 import { SqlErrorMessage } from "./SqlErrorMessage";
 
 export type WorkspaceDatabaseState = {
@@ -20,14 +21,16 @@ export function ExecutionFeedback({ result, error }: { result?: QueryResult | nu
   </div>;
 }
 
-export function WorkspaceDatabasePanel({ database, result, error }: {
+export function WorkspaceDatabasePanel({ database, result, error, description, descriptionVisible, structureVisible = true }: {
   database: WorkspaceDatabaseState; result?: QueryResult | null; error?: string;
+  description?: DatabaseRelationDescription[]; descriptionVisible?: boolean; structureVisible?: boolean;
 }) {
   const { t: tr } = useLanguage("workspace");
   return <div className="workspace-database-content">
+    <ProblemDatabaseDescription rows={description} visible={descriptionVisible} />
     <ExecutionFeedback result={result} error={error} />
     {database.stale && <p className="muted tiny"><TranslatedText>{tr("Showing the last successful run. Run your updated script to refresh the database.")}</TranslatedText></p>}
-    {database.schemaTables.length ? <DatabaseDiagram tables={database.schemaTables} allowDownload={false} /> : <p className="muted"><TranslatedText>{tr("Run DDL successfully to view your database diagram.")}</TranslatedText></p>}
+    {structureVisible && (database.schemaTables.length ? <DatabaseDiagram tables={database.schemaTables} allowDownload={false} /> : <p className="muted"><TranslatedText>{tr("Run DDL successfully to view your database diagram.")}</TranslatedText></p>)}
     <section className="workspace-database-data">
       <h3><TranslatedText>{tr("Table data")}</TranslatedText></h3>
       {database.tables.length ? database.tables.map((table, index) => <section className="workspace-database-table" key={`${table.name}-${index}`}>

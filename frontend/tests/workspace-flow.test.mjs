@@ -25,7 +25,7 @@ const output = await build({
   loader: { ".css": "empty" }, define: { "process.env.NODE_ENV": '"development"', "import.meta.hot": "undefined" },
   plugins: [{ name: "workspace-test-adapters", setup(builder) {
     const stub = (filter, contents) => builder.onLoad({ filter }, () => ({ contents, loader: "tsx", resolveDir: process.cwd() }));
-    stub(/components[\\/]AppHeader\.tsx$/, 'export const AppHeader = ({workspaceActions}) => <header>{workspaceActions}</header>;');
+    stub(/components[\\/]AppHeader\.tsx$/, 'export const AppHeader = ({workspaceActions,workspaceProblemNavigation}) => <header>{workspaceProblemNavigation}{workspaceActions}</header>;');
     stub(/context[\\/]AuthContext\.tsx$/, 'export const useAuth = () => ({session:{id:"student", name:"Student"}});');
     stub(/services[\\/]studentApi\.ts$/, 'export const studentApi = globalThis.__workspaceApi;');
     stub(/components[\\/]AiChatPanel\.tsx$/, 'export const AiChatPanel = () => null;');
@@ -129,6 +129,64 @@ try {
   assert.ok(!document.body.textContent.includes('0/25'), 'A hidden score must not appear as zero');
   await act(async()=>root.render(h(WorkspaceSubmissionPanel,{busy:false,notice:'',attempts:[{id:1,kind:'submit',result:{status:'Pending review',message:'Saved',scoreVisible:true,score:null,maxScore:25}}]})));
   assert.ok(document.body.textContent.includes('Đang chờ chấm điểm'), 'Pending review must not look like a zero grade');
+  const questions = [{id:'q1',name:'first.sql',description:'Return the first customer.',timeLimitMs:5000,expectedSamples:[{dataset:1,table:{name:'First',columns:['id'],rows:[[11]]}}]},
+    {id:'q2',name:'second.sql',description:'Count the customers.',timeLimitMs:900,expectedSamples:[{dataset:1,table:{name:'Second',columns:['total'],rows:[[22]]}}]}];
+  const multi = {...problem,id:'multi',workspaceParts:['SQL'],sqlChecks:questions};
+  const mountMulti = () => root.render(h(MemoryRouter,{key:'multi-test'},h(SqlWorkspace,{problem:multi,key:'multi-workspace'})));
+  await act(async()=>mountMulti());
+  const questionTabs = () => [...document.querySelectorAll('.workspace-question-tabs button')];
+  assert.equal(questionTabs().length,2);
+  const headerSolution = () => document.querySelector('header .workspace-solution-switcher select');
+  assert.ok(headerSolution(), 'Top bar must switch solutions in the current problem');
+  assert.equal(headerSolution().options.length, 2);
+  assert.equal(headerSolution().value, 'q1');
+  const chooseHeaderSolution = async id => act(async()=>{ const select=headerSolution(); select.value=id; select.dispatchEvent(new dom.window.Event('change',{bubbles:true})); });
+
+  assert.ok(document.querySelector('.problem-scroll').textContent.includes('Return the first customer.'));
+  assert.ok(document.querySelector('.problem-expected-output').textContent.includes('11'));
+  const editSql = async value => act(async()=>{const input=document.querySelector('.sql-editor textarea'); input.value=value;input.dispatchEvent(new dom.window.Event('input',{bubbles:true}));});
+  await editSql('SELECT 11 AS id');
+  await chooseHeaderSolution('q2');
+  assert.equal(questionTabs()[1].getAttribute('aria-selected'), 'true');
+  assert.ok(document.querySelector('.problem-scroll').textContent.includes('Count the customers.'));
+  assert.ok(document.querySelector('.problem-expected-output').textContent.includes('22'));
+  assert.equal(document.querySelector('.sql-editor textarea').value,'');
+  await editSql('SELECT 22 AS total');
+  await click(questionTabs()[0]);
+  assert.equal(headerSolution().value,'q1', 'Editor tabs and header share the selected solution');
+  assert.equal(document.querySelector('.sql-editor textarea').value,'SELECT 11 AS id');
+  let runArgs, submitted;
+  globalThis.__workspaceApi.runQuery = async (...args) => {runArgs=args;return {...success,table:{name:'First',columns:['id'],rows:[[11]]}};};
+  globalThis.__workspaceApi.submitSolution = async (...args) => {submitted=args;return {...success,status:'Accepted',passed:2,total:2};};
+  await click(document.querySelectorAll('.editor-actions button')[1]);
+  assert.equal(runArgs[5],'q1');
+  assert.equal(runArgs[1],'SELECT 11 AS id');
+  await click(document.querySelector('.editor-actions .primary'));
+  assert.ok(submitted[1].includes('-- solution:q1\nSELECT 11 AS id'));
+  assert.ok(submitted[1].includes('-- solution:q2\nSELECT 22 AS total'));
+  await act(async()=>root.render(h('div')));
+  globalThis.__workspaceApi.getDraft = () => submitted[1];
+  await act(async()=>mountMulti());
+  await click(questionTabs()[1]);
+  assert.equal(document.querySelector('.sql-editor textarea').value,'SELECT 22 AS total','Reload preserves each question draft');
+
+  await act(async()=>root.render(h('div')));
+  await act(async()=>root.render(h(MemoryRouter,{key:'embedded-solutions'},h(ProblemWorkspace,{problem:{...multi,id:'multi-embedded',workspaceParts:['DDL','DML','SQL']}}))));
+  assert.equal(stage().id,'workspace-stage-DDL');
+  await chooseHeaderSolution('q2');
+  assert.equal(stage().id,'workspace-stage-SQL','Choosing a solution opens its SQL stage');
+  assert.ok(stage().querySelector('.problem-scroll').textContent.includes('Count the customers.'));
+  assert.equal(stage().querySelector('.workspace-question-tabs button[aria-selected="true"]').textContent.trim(),'Câu hỏi 2');
+  await click(stage().querySelector('.workspace-question-tabs button'));
+  assert.equal(headerSolution().value,'q1');
+
+  for (const visible of [true, false]) {
+    await act(async()=>root.render(h(MemoryRouter,{key:'reference-' + visible},h(ProblemWorkspace,{problem:{...problem,id:'reference-' + visible,databaseStructureVisible:visible,schema: visible ? 'CREATE TABLE ReferenceCustomers (Id INT)' : ''}}))));
+    await click(stage().querySelectorAll('.pane-tabs button')[1]);
+    assert.equal(Boolean(stage().querySelector('.teacher-schema-diagram-panel')), visible, 'Teacher structure visibility must apply before any DDL run');
+    if (visible) assert.ok(stage().querySelector('.problem-scroll').textContent.includes('ReferenceCustomers'));
+  }
+
   const realNow=Date.now;
   let fakeNow=1800000000000;
   Date.now=()=>fakeNow;

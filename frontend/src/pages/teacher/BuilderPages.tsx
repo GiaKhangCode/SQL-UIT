@@ -1,7 +1,7 @@
 import { TranslatedText } from "../../components/TranslatedText";
 import { useLanguage } from "../../context/LanguageContext";
 import { useState, useEffect, useLayoutEffect, useRef, type CSSProperties } from "react";
-import { CalendarDays, X } from "lucide-react";
+import { CalendarDays, Settings2, X } from "lucide-react";
 import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { ProblemMarkdown } from "../../components/ProblemMarkdown";
 import { Dialog, Loading } from "../../components/ui";
@@ -16,8 +16,9 @@ import { resolveContestBannerUrl } from "../../utils/contestBanner";
 import { WORKSPACE_PARTS, WORKSPACE_PART_LABELS } from "../../utils/workspaceParts";
 
 import "../../styles/problem-workspace.css";
+import { BuilderProblemSettings } from "./BuilderProblemSettings";
 
-type BuilderProblem = { id: string; points: number; workspaceParts?: WorkspacePart[] };
+type BuilderProblem = { id: string; points: number; workspaceParts?: WorkspacePart[]; datasetVisibility?: Record<string, boolean>; databaseStructureVisible?: boolean; databaseDescriptionVisible?: boolean };
 type BuilderDraft = {
   title: string;
   classIds: string[];
@@ -334,6 +335,12 @@ function BuilderPage({ contest }: { contest: boolean }) {
   const contestNavigationRef = useRef<HTMLElement>(null);
   const activeContestNavigationButtonRef = useRef<HTMLButtonElement>(null);
   const [addProblemOpen, setAddProblemOpen] = useState(false);
+  const [settingsProblemId, setSettingsProblemId] = useState<string | null>(null);
+  const [settingsClosing, setSettingsClosing] = useState(false);
+  const [pendingDatasetVisibility, setPendingDatasetVisibility] = useState<Record<string, boolean>>({});
+  const [pendingVisibility, setPendingVisibility] = useState({ databaseStructureVisible: true, databaseDescriptionVisible: true });
+  const [pendingParts, setPendingParts] = useState<WorkspacePart[]>([...WORKSPACE_PARTS]);
+  const settingsTrigger = useRef<HTMLElement | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewClosing, setPreviewClosing] = useState(false);
   const [previewWidth, setPreviewWidth] = useState(420);
@@ -686,6 +693,8 @@ function BuilderPage({ contest }: { contest: boolean }) {
   }
 
   function toggleContestPreview() {
+    setSettingsProblemId(null);
+    setSettingsClosing(false);
     if (previewOpen && !previewClosing) {
       closeContestPreview();
       return;
@@ -694,15 +703,38 @@ function BuilderPage({ contest }: { contest: boolean }) {
     setPreviewOpen(true);
   }
 
-  function addProblem(problemId: string) {
+  function openProblemSettings(problemId: string) {
+    settingsTrigger.current = document.activeElement as HTMLElement;
+    setPreviewOpen(false);
+    setPreviewClosing(false);
+    setAddProblemOpen(false);
+    setPendingParts([...WORKSPACE_PARTS]);
+    setPendingVisibility({ databaseStructureVisible: true, databaseDescriptionVisible: true });
+    setPendingDatasetVisibility({});
+    setSettingsClosing(false);
+    setSettingsProblemId(problemId);
+  }
+
+  function closeProblemSettings() {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) setSettingsProblemId(null);
+    else setSettingsClosing(true);
+    if (settingsTrigger.current?.isConnected) settingsTrigger.current.focus();
+  }
+
+  function addProblem(problemId: string, parts: WorkspacePart[] = [...WORKSPACE_PARTS], visibility = { databaseStructureVisible: true, databaseDescriptionVisible: true }, datasetVisibility: Record<string, boolean> = {}) {
     if (!draft!.problems.some((item) => item.id === problemId)) {
       update("problems", [...draft!.problems, {
         id: problemId,
         points: 10,
-        workspaceParts: [...WORKSPACE_PARTS],
+        workspaceParts: parts,
+        ...visibility,
+        datasetVisibility,
       }]);
     }
   }
+
+  const settingsItem = draft.problems.find(item => item.id === settingsProblemId);
+  const settingsSummary = allProblems.find(item => item.id === settingsProblemId);
 
   const availableProblems = allProblems.filter(
     (problem) => !draft!.problems.some((item) => item.id === problem.id),
@@ -717,8 +749,8 @@ function BuilderPage({ contest }: { contest: boolean }) {
     <section className={`teacher-page teacher-builder-page teacher-authoring-editor-page${contest ? " teacher-contest-editor-page" : " teacher-assignment-editor-page"}`}>
       <div
         ref={contestSplitLayoutRef}
-        className={`teacher-problem-workspace-layout${previewOpen ? " has-live-preview" : ""}${previewClosing ? " is-closing-preview" : ""}`}
-        style={{ "--teacher-preview-width": `${previewWidth}px` } as CSSProperties}
+        className={`teacher-problem-workspace-layout${previewOpen || settingsProblemId ? " has-live-preview" : ""}${previewClosing || settingsClosing ? " is-closing-preview" : ""}${settingsProblemId ? " has-problem-settings" : ""}`}
+        style={{ "--teacher-preview-width": `${settingsProblemId ? 420 : previewWidth}px` } as CSSProperties}
       >
       <div className={`teacher-builder-layout${contest ? " teacher-contest-builder-layout" : " teacher-assignment-builder-layout"}`}>
         <aside className={`teacher-contest-navigation${contest ? "" : " teacher-assignment-navigation"}`}>
@@ -916,21 +948,8 @@ function BuilderPage({ contest }: { contest: boolean }) {
                             <span className="teacher-problem-order">{String(index + 1).padStart(2, "0")}</span>
                             <div className="builder-problem-details">
                               <span className="builder-problem-title">{problem.title}</span>
-                              <div className="teacher-problem-workspace-parts" role="group" aria-label={tr("Workspace sections for {value0}", { value0: problem.title })}>
-                                {WORKSPACE_PARTS.map((part) => {
-                                  const selected = item.workspaceParts || [];
-                                  return <label key={part} className={"teacher-problem-workspace-part" + (selected.includes(part) ? " is-selected" : "")} title={tr(WORKSPACE_PART_LABELS[part])}>
-                                    <input
-                                      type="checkbox"
-                                      checked={selected.includes(part)}
-                                      onChange={(event) => update("problems", draft.problems.map((row) => row.id === item.id
-                                        ? { ...row, workspaceParts: WORKSPACE_PARTS.filter((value) => value === part ? event.target.checked : selected.includes(value)) }
-                                        : row))}
-                                    />
-                                    <span><TranslatedText>{tr(WORKSPACE_PART_LABELS[part])}</TranslatedText></span>
-                                  </label>;
-                                })}
-                              </div>
+                              <span className="builder-problem-sections"><TranslatedText>{(item.workspaceParts || []).map(part => tr(WORKSPACE_PART_LABELS[part])).join(" · ") || tr("Select at least one section.")}</TranslatedText></span>
+                              <button type="button" className="button teacher-small-button builder-problem-settings-button" aria-label={tr("Settings for {value0}", { value0: problem.title })} aria-expanded={settingsProblemId === item.id && !settingsClosing} aria-controls="builder-problem-settings" onClick={() => openProblemSettings(item.id)}><Settings2 size={15} aria-hidden="true" /><TranslatedText>{tr("Problem settings")}</TranslatedText></button>
                             </div>
                           </div>
                         </td>
@@ -955,6 +974,15 @@ function BuilderPage({ contest }: { contest: boolean }) {
         </section>
 
       </div>
+      {settingsProblemId && <BuilderProblemSettings key={settingsProblemId} problemId={settingsProblemId} title={settingsSummary?.title || ""}
+        parts={settingsItem?.workspaceParts || pendingParts} closing={settingsClosing} onClose={closeProblemSettings}
+        onClosed={() => { setSettingsProblemId(null); setSettingsClosing(false); }}
+        onPartsChange={parts => { if (settingsItem) update("problems", draft.problems.map(row => row.id === settingsProblemId ? { ...row, workspaceParts: parts } : row)); else setPendingParts(parts); }}
+        visibility={settingsItem ? { databaseStructureVisible: settingsItem.databaseStructureVisible !== false, databaseDescriptionVisible: settingsItem.databaseDescriptionVisible !== false } : pendingVisibility}
+        onVisibilityChange={visibility => { if (settingsItem) update("problems", draft.problems.map(row => row.id === settingsProblemId ? { ...row, ...visibility } : row)); else setPendingVisibility(visibility); }}
+        datasetVisibility={settingsItem?.datasetVisibility || pendingDatasetVisibility}
+        onDatasetVisibilityChange={datasetVisibility => { if (settingsItem) update("problems", draft.problems.map(row => row.id === settingsProblemId ? { ...row, datasetVisibility } : row)); else setPendingDatasetVisibility(datasetVisibility); }}
+        onAdd={settingsItem ? undefined : () => addProblem(settingsProblemId, pendingParts, pendingVisibility, pendingDatasetVisibility)} />}
       {previewOpen && <aside
         className={`teacher-student-preview-panel${contest ? " teacher-contest-preview-panel" : " teacher-assignment-preview-panel"}${previewClosing ? " is-closing" : ""}`}
         aria-label={tr("Student preview")}
@@ -1017,6 +1045,7 @@ function BuilderPage({ contest }: { contest: boolean }) {
                   <b>{problem.number} · {problem.title}</b>
                   <small><TranslatedText>{tr(problem.difficulty)}</TranslatedText> · {problem.topics}</small>
                 </span>
+                <button className="button teacher-small-button" type="button" aria-label={tr("Settings for {value0}", { value0: problem.title })} onClick={() => openProblemSettings(problem.id)}><Settings2 size={15} aria-hidden="true" /><TranslatedText>{tr("Problem settings")}</TranslatedText></button>
                 <button className="button" type="button" onClick={() => addProblem(problem.id)}>
                   <TranslatedText>{tr("Add")}</TranslatedText>
                 </button>

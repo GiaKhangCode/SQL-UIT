@@ -1,0 +1,49 @@
+.builder-problem-settings { overflow: hidden; }
+.builder-problem-settings .teacher-student-preview-heading h2 { display: flex; gap: 6px; align-items: center; font-size: 13px; line-height: 18px; }
+.builder-problem-settings-scroll { overflow: auto; min-height: 0; flex: 1; padding: 12px; font-size: 12px; line-height: 1.5; }
+.builder-problem-settings-name { margin: 0 0 6px; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.builder-problem-settings-scroll > .muted { font-size: 11px; line-height: 1.5; margin: 0 0 12px; }
+.builder-settings-section { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; overflow: hidden; }
+.builder-settings-section.is-enabled { border-color: var(--accent, #5546d7); }
+.builder-settings-section-heading { display: flex; gap: 8px; align-items: center; padding: 9px 10px; background: var(--surface); }
+.builder-settings-section-heading input { width: 15px; height: 15px; accent-color: var(--accent, #5546d7); flex: 0 0 auto; }
+.builder-settings-section-heading button { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; padding: 2px; }
+.builder-settings-section-heading svg { transition: transform 240ms; }
+.builder-settings-section-heading svg.is-expanded { transform: rotate(180deg); }
+.builder-settings-fold { display: grid; grid-template-rows: 0fr; visibility: hidden; transition: grid-template-rows 240ms ease, visibility 240ms; }
+.builder-settings-fold.is-expanded { grid-template-rows: 1fr; visibility: visible; }
+.builder-settings-fold-inner { min-height: 0; overflow: hidden; }
+.builder-settings-content { border-top: 1px solid var(--border); padding: 10px; min-width: 0; overflow-wrap: anywhere; }
+.builder-settings-content h4 { margin: 10px 0 5px; font-size: 12px; }
+.builder-settings-content h5 { margin: 8px 0 4px; font-size: 11px; }
+.builder-settings-sql { max-height: 200px; overflow: auto; padding: 8px; background: var(--surface-muted, var(--surface)); border: 1px solid var(--border); border-radius: 8px; font-size: 11px; white-space: pre; }
+.builder-settings-data { margin: 8px 0; }
+.builder-settings-content .table-scroll { max-height: 240px; overflow: auto; }
+.builder-settings-content .data-table { font-size: 11px; }
+.builder-settings-badge { display: inline-block; margin-left: 8px; color: var(--muted); font-size: 11px; }
+.builder-problem-settings-footer { padding: 10px 12px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; }
+.builder-problem-sections { display: block; font-size: 11px; color: var(--muted); margin: 4px 0; line-height: 1.4; }
+.builder-problem-settings-button { display: inline-flex; align-items: center; gap: 5px; margin-top: 2px; min-height: 28px; padding: 4px 8px; font-size: 10px; line-height: 16px; }
+.has-problem-settings .builder-points-actions { flex-wrap: wrap; }
+.has-problem-settings .teacher-builder-main { min-width: 0; }
+.teacher-add-problem-list > div > span { flex: 1; min-width: 0; }
+@media (prefers-reduced-motion: reduce) { .builder-settings-fold, .builder-settings-section-heading svg { transition: none; } }
+
+.builder-problem-settings > .teacher-student-preview-heading { min-height: 42px; padding: 6px 10px 6px 12px; }
+.builder-problem-settings .builder-settings-section-heading button { font-size: 12px; line-height: 18px; }
+.builder-problem-settings .builder-settings-content p, .builder-problem-settings .builder-settings-content li { font-size: 12px; line-height: 1.5; margin-top: 5px; margin-bottom: 7px; }
+.builder-problem-settings .builder-settings-content h3 { font-size: 12px; line-height: 1.5; margin: 10px 0 6px; }
+.builder-problem-settings .builder-settings-content .problem-database-description { margin: 10px 0; }
+.builder-problem-settings .problem-database-relation { margin: 8px 0; }
+.builder-problem-settings .data-table th, .builder-problem-settings .data-table td { padding: 5px 7px; font-size: 11px; line-height: 1.4; }
+.builder-problem-settings-footer .button { min-height: 30px; padding: 5px 12px; font-size: 11px; }
+.builder-problem-settings .icon-button { width: 28px; height: 28px; min-height: 28px; }
+.builder-problem-settings-button svg { width: 13px; height: 13px; }
+
+.builder-settings-visibility { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.builder-settings-visibility .button { display: inline-flex; gap: 5px; align-items: center; min-height: 28px; padding: 4px 8px; font-size: 10px; }
+.builder-settings-visibility .button[aria-pressed="true"] { background: var(--accent-subtle); border-color: var(--accent, #5546d7); }
+
+.builder-settings-dataset-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.builder-settings-dataset-heading .button { display: inline-flex; align-items: center; gap: 5px; min-height: 28px; padding: 4px 8px; font-size: 10px; }
+.builder-settings-dataset-heading .button[aria-pressed="true"] { background: var(--accent-subtle); border-color: var(--accent, #5546d7); }

@@ -22,8 +22,13 @@ export type ExpectedOutputSample = { dataset: number; table: DataTable };
 
 export type WorkspacePart = "DDL" | "DML" | "SQL";
 
+export type DatabaseRelationDescription = { tableName: string; attributes: string; predicate: string };
+
 export type Problem = {
-  sqlChecks?: { id: string; name: string; timeLimitMs: number }[];
+  databaseStructureVisible?: boolean;
+  databaseDescription?: DatabaseRelationDescription[];
+  databaseDescriptionVisible?: boolean;
+  sqlChecks?: { id: string; name: string; timeLimitMs: number; description?: string; expectedSamples?: ExpectedOutputSample[] }[];
   workspaceParts?: WorkspacePart[];
   testCases?: { schema?: string; seedData?: string; isHidden?: boolean }[];
   schema?: string;

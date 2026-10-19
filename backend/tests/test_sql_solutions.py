@@ -120,6 +120,38 @@ class SqlSolutionPersistenceTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             self.payload(sqlSolutions=[dict(id="a", name="a.sql"), dict(id="a", name="b.sql")])
 
+    def test_multiple_questions_have_independent_prompts_outputs_and_grading(self):
+        from app.models import Problem
+        outputs = lambda value: [{"name": "Result", "columns": ["n"], "rows": [[value]]}] * 2
+        created = create_problem(self.payload(sqlSolutions=[
+            dict(id="first", name="first.sql", description="First question", query="SELECT 1 AS n", timeLimitMs=700, expectedOutputs=outputs(1)),
+            dict(id="second", name="second.sql", description="Second question", query="SELECT 2 AS n", timeLimitMs=900, expectedOutputs=outputs(2)),
+        ], testCases=[dict(seedData="", isHidden=False), dict(seedData="secret", isHidden=True)]), self.db, self.teacher)
+        view = get_problem(created.id, db=self.db, current_user=self.student)
+        self.assertEqual([item.description for item in view.sql_checks], ["First question", "Second question"])
+        self.assertEqual(view.sql_checks[1].expected_samples[0].table.rows, [[2]])
+        self.assertEqual(len(view.sql_checks[1].expected_samples), 1)
+        self.assertNotIn("query", view.sql_checks[1].model_dump())
+        problem = self.db.get(Problem, created.id)
+        with patch("app.services.sandbox.seed_sandbox_data_scripts"), patch("app.services.sandbox.execute_query", side_effect=self.execute_result):
+            result = run_sandbox(self.db, problem, "-- solution:first\nSELECT 1 AS n\n\n-- solution:second\nSELECT 2 AS n", True)
+            self.assertEqual((result["status"], result["passed"], result["total"]), ("Accepted", 4, 4))
+            result = run_sandbox(self.db, problem, "-- solution:first\nSELECT 1 AS n\n\n-- solution:second\n", True)
+            self.assertEqual((result["status"], result["passed"], result["total"]), ("Partial", 2, 4))
+            result = run_sandbox(self.db, problem, "SELECT 2 AS n", False, "second")
+            self.assertEqual(result["passed"], 1)
+            result = run_sandbox(self.db, problem, "SELECT 1 AS n", False, "foreign")
+            self.assertEqual(result["status"], "Runtime Error")
+        with patch("app.services.problem_workspace.run_workspace", return_value={"status": "Success"}) as run:
+            run_problem_workspace(created.id, WorkspaceRunRequest(part="SQL", query="SELECT 2", solutionId="second"), self.db, self.student)
+            self.assertEqual(run.call_args.kwargs["sql_time_limits"], [900])
+        payload = self.payload(sqlSolutions=[dict(id="second", name="renamed.sql", description="Second updated", query="SELECT 2 AS n", expectedOutputs=outputs(2), expectedOutputVisible=False)])
+        update_problem(created.id, payload, self.db, self.teacher)
+        view = get_problem(created.id, db=self.db, current_user=self.student)
+        self.assertEqual(len(view.sql_checks), 1)
+        self.assertEqual(view.sql_checks[0].expected_samples, [])
+        self.assertEqual(view.sql_checks[0].description, "Second updated")
+
     def grading_problem(self):
         return create_problem(self.payload(sqlSolutions=[
             dict(id="first", name="first.sql", query="SELECT 1 AS n", timeLimitMs=700),

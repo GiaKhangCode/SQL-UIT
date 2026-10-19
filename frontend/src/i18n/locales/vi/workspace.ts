@@ -1,6 +1,9 @@
 import type { Dictionary } from "../../types";
 
 export const workspace: Dictionary = {
+  "Solution": "Solution",
+  "Switch solution": "Chuyển solution",
+  "SQL questions": "Các câu hỏi SQL",
   "Run table": "Chạy tạo bảng",
   "Run data": "Chạy dữ liệu",
   "Run query": "Chạy truy vấn",

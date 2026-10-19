@@ -4,6 +4,7 @@ import { useLanguage } from "../../../../context/LanguageContext";
 import CodeMirror from "@uiw/react-codemirror";
 import { sqlEditorExtensions } from "../../../../components/sqlEditorExtensions";
 import { Dialog } from "../../../../components/ui";
+import { ProblemDatabaseDescription } from "../../../../components/ProblemDatabaseDescription";
 import { ProblemMarkdown } from "../../../../components/ProblemMarkdown";
 import { ProblemExpectedOutput } from "../../../../components/ProblemExpectedOutput";
 import { Play, RotateCcw } from "lucide-react";
@@ -54,10 +55,11 @@ export function StageEditor({ problem, value, onChange, onRun, onReset, busy, re
         {(["Description", "Database", "Submission"] as const).map(tab => <button key={tab} type="button" role="tab" aria-selected={problemTab === tab} className={problemTab === tab ? "active" : ""} onClick={() => setProblemTab(tab)}><TranslatedText>{tr(tab)}</TranslatedText></button>)}
       </div>
       <div className="problem-scroll">
-        {problemTab === "Submission" ? <WorkspaceSubmissionPanel attempts={submissionAttempts} busy={submissionBusy} notice={submissionNotice} submissionsUsed={submissionsUsed} maxSubmissions={maxSubmissions} /> : problemTab === "Database" ? <WorkspaceDatabasePanel database={database} result={result} error={error} /> : <>
+        {problemTab === "Submission" ? <WorkspaceSubmissionPanel attempts={submissionAttempts} busy={submissionBusy} notice={submissionNotice} submissionsUsed={submissionsUsed} maxSubmissions={maxSubmissions} /> : problemTab === "Database" ? <WorkspaceDatabasePanel database={database} result={result} error={error} description={problem.databaseDescription} descriptionVisible={problem.databaseDescriptionVisible} structureVisible={problem.databaseStructureVisible} /> : <>
           <h1>{problem.title}</h1>
           <p className="muted stage-problem-description"><TranslatedText>{tr(description)}</TranslatedText></p>
           <ProblemMarkdown>{problem.description}</ProblemMarkdown>
+          <ProblemDatabaseDescription rows={problem.databaseDescription} visible={problem.databaseDescriptionVisible} />
           {problem.requirements && <><h3><TranslatedText>{tr("Requirements")}</TranslatedText></h3><ProblemMarkdown>{problem.requirements}</ProblemMarkdown></>}
           {targetDataset && <details className="stage-target-dataset" open>
             <summary><TranslatedText>{tr("Target dataset")}</TranslatedText></summary>

@@ -412,3 +412,10 @@
  .problem-workspace .workspace-header .problem-workspace-tabs { order:5; flex:1 0 100%; height:auto; justify-content:flex-start; }
  .problem-workspace .workspace-header .student-header-status { margin-left:auto; }
 }
+
+.teacher-solution-description, .workspace-question-picker { display: flex; flex-direction: column; gap: 8px; margin: 16px 0; font-size: 13px; }
+.teacher-solution-description textarea, .workspace-question-picker select { width: 100%; box-sizing: border-box; font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+.teacher-solution-description textarea { resize: vertical; }
+.workspace-question-tabs { display: flex; gap: 6px; overflow-x: auto; padding: 8px 12px; }
+.workspace-question-tabs button { flex-shrink: 0; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; background: var(--surface); color: inherit; font: inherit; cursor: pointer; }
+.workspace-question-tabs button[aria-selected="true"] { background: var(--primary, #5145cd); color: white; }

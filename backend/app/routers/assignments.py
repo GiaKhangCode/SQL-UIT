@@ -30,6 +30,9 @@ def assignment_problem_payload(problem: AssignmentProblem):
     return {
         "id": problem.problem_id,
         "points": problem.points,
+        "datasetVisibility": problem.dataset_visibility or {},
+        "databaseStructureVisible": problem.database_structure_visible,
+        "databaseDescriptionVisible": problem.database_description_visible,
         "workspaceParts": DEFAULT_ASSIGNMENT_WORKSPACE_PARTS if problem.workspace_parts is None else problem.workspace_parts,
     }
 
@@ -202,6 +205,9 @@ def create_assignment(assignment: AssignmentCreate, db: Session = Depends(get_db
             points=p.points,
             order_index=i,
             workspace_parts=p.workspace_parts,
+            dataset_visibility=p.dataset_visibility,
+            database_structure_visible=p.database_structure_visible,
+            database_description_visible=p.database_description_visible,
         )
         db.add(ap)
         
@@ -563,6 +569,9 @@ def update_assignment(assignment_id: str, assignment: AssignmentCreate, db: Sess
             points=p.points,
             order_index=i,
             workspace_parts=p.workspace_parts,
+            dataset_visibility=p.dataset_visibility,
+            database_structure_visible=p.database_structure_visible,
+            database_description_visible=p.database_description_visible,
         )
         db.add(ap)
         

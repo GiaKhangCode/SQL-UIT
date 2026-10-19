@@ -90,7 +90,12 @@ def store_submission(db, user_id, problem, source, context, scripts, parts, reas
     answered = any(scripts.get(key, "").strip() for key in ("ddl", "dml", "query"))
     if answered:
         from app.services.workspace_grading import grade_workspace_submission
-        grade = grade_workspace_submission(db, problem, scripts, parts, maximum)
+        options = {}
+        if source in ("Assignments", "Contests"):
+            member = db.query(AssignmentProblem).filter(AssignmentProblem.assignment_id == context, AssignmentProblem.problem_id == problem.id).first()
+            if member and member.dataset_visibility:
+                options["dataset_visibility"] = member.dataset_visibility
+        grade = grade_workspace_submission(db, problem, scripts, parts, maximum, **options)
         result = grade["status"]
         score = grade["score"]
         feedback = grade.get("feedback")

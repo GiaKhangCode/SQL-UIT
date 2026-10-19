@@ -1,6 +1,9 @@
 import type { DataTable, WorkspacePart } from "./models";
 
 export type TeacherSqlSolution = {
+  description?: string;
+  expectedOutputs?: DataTable[];
+  expectedOutputVisible?: boolean;
   id: string;
   name: string;
   query: string;
@@ -9,6 +12,8 @@ export type TeacherSqlSolution = {
 };
 
 export type TeacherProblem = {
+  databaseDescription?: import("./models").DatabaseRelationDescription[];
+  databaseDescriptionVisible?: boolean;
   workspaceParts?: WorkspacePart[];
   id: string;
   number: string;

@@ -5,10 +5,12 @@ import { TeacherSqlSolutions, initialSqlSolutions } from "./problem-editor/Teach
 import { useState, useEffect, useLayoutEffect, useRef, type CSSProperties } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { Dialog, ErrorState, Loading, Status } from "../../components/ui";
+import { ProblemDatabaseDescription } from "../../components/ProblemDatabaseDescription";
+import { DatabaseDescriptionEditor } from "./problem-editor/DatabaseDescriptionEditor";
 import { ProblemMarkdown } from "../../components/ProblemMarkdown";
 import { ProblemExpectedOutput } from "../../components/ProblemExpectedOutput";
 import { teacherService, type TeacherDatabaseLibraryEntry } from "../../services/teacherService";
-import { type TeacherProblem } from "../../data/teacherTypes";
+import { type TeacherProblem, type TeacherSqlSolution } from "../../data/teacherTypes";
 import { TeacherField, TeacherSectionTitle } from "./TeacherPageParts";
 import { parseDatabaseSchema } from "../../utils/parseDatabaseSchema";
 import { parseSeedData } from "../../utils/parseSeedData";
@@ -70,6 +72,12 @@ function parseProblemTopics(value: unknown): string[] {
   return [...new Set(topics.map((topic) => String(topic).trim()).filter(Boolean))];
 }
 
+function comparableSolutions(solutions: TeacherSqlSolution[] = []) {
+  return solutions.map(solution => [solution.id, solution.name, solution.query, solution.description || "", solution.enabled,
+    solution.timeLimitMs, solution.expectedOutputVisible !== false,
+    (solution.expectedOutputs || []).map(table => [table.name, table.columns, table.rows])]);
+}
+
 function problemPayloadWasSaved(data: any, payload: any) {
   const actualTopics = parseProblemTopics(data?.topics ?? data?.topic).join("|");
   const expectedTopics = parseProblemTopics(payload?.topics).join("|");
@@ -96,7 +104,9 @@ function problemPayloadWasSaved(data: any, payload: any) {
     && (data?.schema || "") === (payload?.schema || "")
     && (data?.schemaFileName || "database.sql") === (payload?.schemaFileName || "database.sql")
     && (data?.referenceSolution || "") === (payload?.referenceSolution || "")
-    && JSON.stringify(data?.sqlSolutions || []) === JSON.stringify(payload?.sqlSolutions || [])
+    && JSON.stringify(comparableSolutions(data?.sqlSolutions || [])) === JSON.stringify(comparableSolutions(payload?.sqlSolutions || []))
+    && JSON.stringify(data?.databaseDescription || []) === JSON.stringify(payload?.databaseDescription || [])
+    && (data?.databaseDescriptionVisible !== false) === (payload?.databaseDescriptionVisible !== false)
     && testCasesMatch;
 }
 
@@ -341,6 +351,8 @@ export function ProblemEditorPage() {
           visibility: data.practiceListed ? "Public" : "Private",
           database: data.databaseType || "SQL Server",
           schemaFileName: data.schemaFileName || "database.sql",
+          databaseDescription: data.databaseDescription || [],
+          databaseDescriptionVisible: data.databaseDescriptionVisible !== false,
           statement: data.description || "",
           requirements: data.requirements || "",
           hints: data.hint ? data.hint.split('\n') : [],
@@ -348,7 +360,7 @@ export function ProblemEditorPage() {
           seedData: data.seedData || "",
           seedSummary: "",
           referenceSolution: data.referenceSolution || "",
-          sqlSolutions: initialSqlSolutions(data.sqlSolutions, data.referenceSolution || ""),
+          sqlSolutions: initialSqlSolutions(data.sqlSolutions, data.referenceSolution || "").map((solution, index) => ({ ...solution, description: solution.description || "", expectedOutputs: solution.expectedOutputs?.length ? solution.expectedOutputs : index === 0 ? data.expectedOutputs || [] : [], expectedOutputVisible: solution.expectedOutputVisible ?? data.expectedOutputVisible !== false })),
           expectedOutputs: Array.isArray(data.expectedOutputs)
             ? data.expectedOutputs
             : data.expected ? [data.expected] : [],
@@ -389,6 +401,7 @@ export function ProblemEditorPage() {
   }
   const [previewTab, setPreviewTab] = useState<"Description" | "Database">("Description");
   const [previewHintOpen, setPreviewHintOpen] = useState(false);
+  const [previewSolutionId, setPreviewSolutionId] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewClosing, setPreviewClosing] = useState(false);
   const [previewWidth, setPreviewWidth] = useState(420);
@@ -614,8 +627,10 @@ export function ProblemEditorPage() {
     ? problem.testCases.find((dataset) => !dataset.isHidden)?.seedData || ""
     : problem.seedData || "";
   const seedTables = parseSeedData(seedDataText);
+  const previewSolutions = (problem.sqlSolutions || []).filter(solution => solution.enabled);
+  const previewSolution = previewSolutions.find(solution => solution.id === previewSolutionId) || previewSolutions[0];
   const expectedOutputSamples = (problem.testCases || []).flatMap((dataset, index) => {
-    const table = problem.expectedOutputs?.[index];
+    const table = (previewSolution?.expectedOutputs ?? problem.expectedOutputs)?.[index];
     return !dataset.isHidden && table ? [{ dataset: index + 1, table }] : [];
   });
 
@@ -631,7 +646,7 @@ export function ProblemEditorPage() {
     setProblem((current) => current ? ({
       ...current,
       [field]: value,
-      ...(invalidatesExpectedOutputs ? { expectedOutputs: [] } : {}),
+      ...(invalidatesExpectedOutputs ? { expectedOutputs: [], sqlSolutions: field === "sqlSolutions" ? value as TeacherSqlSolution[] : current.sqlSolutions?.map(solution => ({ ...solution, expectedOutputs: [] })) } : {}),
     }) : null);
     markUnsaved();
     setSaveState("Unsaved changes");
@@ -670,6 +685,7 @@ export function ProblemEditorPage() {
       schemaFileName: entry.createTableFileName || `${fallbackName}_createtable.sql`,
       seedData: importedDatasets[0]?.sql || "",
       testCases,
+      sqlSolutions: current.sqlSolutions?.map(solution => ({ ...solution, expectedOutputs: [] })),
       expectedOutputs: [],
     } : null);
     setSchemaDiagram(null);
@@ -772,6 +788,8 @@ export function ProblemEditorPage() {
         hints: problem.hints.filter((_, index) => !disabledHints.has(index)),
         database: problem.database,
         schemaFileName: problem.schemaFileName || "database.sql",
+        databaseDescription: problem.databaseDescription || [],
+        databaseDescriptionVisible: problem.databaseDescriptionVisible !== false,
         schema: problem.schema,
         testCases: problem.testCases || [{ seedData: problem.seedData, isHidden: false }],
         referenceSolution: problem.referenceSolution,
@@ -785,6 +803,12 @@ export function ProblemEditorPage() {
         let savedProblem: any = null;
         if (selectedId === "new") {
             savedProblem = await teacherService.createProblem(payload);
+            if (savedProblem?.id) {
+              try {
+                localStorage.setItem(`teacher-dataset-names:${savedProblem.id}`, JSON.stringify(datasetNames));
+                localStorage.removeItem("teacher-dataset-names:new");
+              } catch { /* Storage availability must not prevent saving the problem. */ }
+            }
         } else {
             await teacherService.updateProblem(selectedId, payload);
         }
@@ -1058,6 +1082,8 @@ export function ProblemEditorPage() {
             ))}
           </div>
           {databaseTab === "schema" && <section id="database-panel-schema" role="tabpanel" className="teacher-validation-section">
+            <DatabaseDescriptionEditor rows={problem.databaseDescription || []}
+              onChange={(rows) => update("databaseDescription", rows)} />
             <div className="teacher-schema-heading">
               <div className="teacher-schema-titleline">
                 <TeacherSectionTitle title={tr("Provided database structure")} />
@@ -1117,23 +1143,6 @@ export function ProblemEditorPage() {
                   <span className="teacher-dataset-file-extension">.sql</span>
                 </div>
                 <div className="teacher-dataset-card-actions">
-                  <div className={`teacher-dataset-visibility${tc.isHidden ? " is-hidden" : ""}`}>
-                  <button
-                    type="button"
-                    className={"button teacher-small-button teacher-dataset-hidden-toggle" + (tc.isHidden ? " is-active" : "")}
-                    aria-label={`${tr("Dataset")} ${index + 1}: ${tr("Hidden dataset")}`}
-                    aria-pressed={tc.isHidden}
-                    aria-describedby={tc.isHidden ? `dataset-hidden-notice-${index}` : undefined}
-                    onClick={() => {
-                      const datasets = [...(problem.testCases || [{seedData: problem.seedData, isHidden: false}])];
-                      datasets[index] = { ...datasets[index], isHidden: !tc.isHidden };
-                      update("testCases", datasets);
-                    }}
-                  ><TranslatedText>{tr("Hidden dataset")}</TranslatedText></button>
-                  <div id={`dataset-hidden-notice-${index}`} className="teacher-dataset-hidden-notice" aria-hidden={!tc.isHidden}>
-                    <div><span><TranslatedText>{tr("Hidden from students")}</TranslatedText></span></div>
-                  </div>
-                  </div>
                   <button
                     type="button"
                     className={`button teacher-small-button teacher-dataset-preview-toggle${previewDatasetIndex === index ? " is-active" : ""}`}
@@ -1162,7 +1171,7 @@ export function ProblemEditorPage() {
                   let fileNumber = datasets.length + 1;
                   while (names.includes(`seed_${fileNumber}.sql`)) fileNumber += 1;
                   changeDatasetNames([...names, `seed_${fileNumber}.sql`]);
-                  datasets.push({seedData: "", isHidden: true});
+                  datasets.push({seedData: "", isHidden: false});
                   update("testCases", datasets);
                 }}><Plus size={14} aria-hidden="true" /><TranslatedText>{tr("Add dataset")}</TranslatedText></button>}
                 </div>
@@ -1198,9 +1207,6 @@ export function ProblemEditorPage() {
                 update("expectedOutputs", outputs);
               }}
               onExpectedOutputVisibilityChange={(visible) => update("expectedOutputVisible", visible)}
-              onDatasetVisibilityChange={(index, hidden) => update("testCases",
-                (problem.testCases || [{ seedData: problem.seedData, isHidden: false }])
-                  .map((dataset, datasetIndex) => datasetIndex === index ? { ...dataset, isHidden: hidden } : dataset))}
               onRunningChange={setValidating}
             />
           </div>}
@@ -1279,15 +1285,20 @@ export function ProblemEditorPage() {
                     <Status value="Not started" />
                   </div>
                   <ProblemMarkdown>{problem.statement || tr("No statement yet.")}</ProblemMarkdown>
+                  <ProblemDatabaseDescription rows={problem.databaseDescription} visible={problem.databaseDescriptionVisible} />
+                  {previewSolutions.length > 0 && <label className="workspace-question-picker"><TranslatedText>{tr("Question")}</TranslatedText>
+                    <select value={previewSolution?.id || ""} onChange={event => setPreviewSolutionId(event.target.value)}>{previewSolutions.map((solution, index) => <option value={solution.id} key={solution.id}>{index + 1}. {solution.name}</option>)}</select>
+                  </label>}
                   <h3><TranslatedText>{tr("Requirements")}</TranslatedText></h3>
-                  <ProblemMarkdown>{problem.requirements || tr("No requirements yet.")}</ProblemMarkdown>
-                  {problem.expectedOutputVisible !== false && <ProblemExpectedOutput
+                  <ProblemMarkdown>{previewSolution?.description || problem.requirements || tr("No requirements yet.")}</ProblemMarkdown>
+                  {(previewSolution ? previewSolution.expectedOutputVisible !== false : problem.expectedOutputVisible !== false) && <ProblemExpectedOutput
                     samples={expectedOutputSamples} className="teacher-student-preview-expected-output" />}
                 </div>
               ) : (
                 <div className="teacher-student-preview-content teacher-student-preview-database">
                   <h2><TranslatedText>{tr("Database setup")}</TranslatedText></h2>
                   <p className="muted"><TranslatedText>{tr("SQL Server · read-only database structure and seed data used for evaluation")}</TranslatedText></p>
+                  <ProblemDatabaseDescription rows={problem.databaseDescription} visible={problem.databaseDescriptionVisible} />
                   <section className="schema-section">
                     <h3><TranslatedText>{tr("Database structure")}</TranslatedText></h3>
                     {schemaTables.length ? (
@@ -1327,6 +1338,7 @@ export function ProblemEditorPage() {
                       <pre className="workspace-schema-code"><code>{tr(schemaText) || tr("No schema provided.")}</code></pre>
                     )}
                   </section>
+                  <ProblemDatabaseDescription rows={problem.databaseDescription} visible={problem.databaseDescriptionVisible} />
                   <section className="schema-section">
                     <h3><TranslatedText>{tr("Seed data")}</TranslatedText></h3>
                     {seedTables.length ? (

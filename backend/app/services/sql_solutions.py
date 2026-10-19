@@ -25,6 +25,10 @@ def save_solutions(db, problem_id, solutions):
             db.add(row)
         row.name = solution.name
         row.query = solution.query
+        row.description = solution.description
+        from app.services.expected_outputs import save_expected_outputs
+        if solution.expected_outputs is not None:
+            row.expected = save_expected_outputs(solution.expected_outputs, solution.expected_output_visible) or {"_expectedOutputs": [], "_expectedOutputVisible": solution.expected_output_visible}
         row.enabled = solution.enabled
         row.time_limit_ms = solution.time_limit_ms
         row.order_index = index
@@ -35,5 +39,8 @@ def save_solutions(db, problem_id, solutions):
 
 
 def solution_response(row):
-    return SqlSolutionConfig(id=row.id, name=row.name, query=row.query,
+    from app.services.expected_outputs import read_expected_outputs
+    outputs, visible = read_expected_outputs(row.expected)
+    return SqlSolutionConfig(id=row.id, name=row.name, query=row.query, description=row.description or "",
+                             expectedOutputs=outputs, expectedOutputVisible=visible,
                              enabled=row.enabled, timeLimitMs=row.time_limit_ms)

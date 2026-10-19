@@ -271,19 +271,49 @@ def run_validate_sandbox(db: Session, schema_sql: str, seed_data: str, query: st
     except Exception as e:
         return {"status": "Error", "message": f"Validation failed: {str(e)}"}
 
-def run_sandbox(db: Session, problem: Problem, query: str, is_submit: bool) -> Dict[str, Any]:
+def run_sandbox(db: Session, problem: Problem, query: str, is_submit: bool, solution_id: str = None, dataset_visibility=None) -> Dict[str, Any]:
     try:
         from app.models import TestCase, TestCaseScript
         from app.services.sql_solutions import stored_solutions
         configured = stored_solutions(db, problem.id)
-        solution = next((item for item in configured if item.enabled and item.query.strip()), None)
+        enabled = [item for item in configured if item.enabled and item.query.strip()]
+        if solution_id is None and len(enabled) > 1:
+            if not is_submit:
+                raise SandboxError("Select a SQL question to run.")
+            import re
+            markers = list(re.finditer(r"(?m)^-- solution:([^\r\n]+)\r?\n", query))
+            answers = {match.group(1): query[match.end():markers[index + 1].start() if index + 1 < len(markers) else len(query)].strip()
+                       for index, match in enumerate(markers)}
+            if len(answers) != len(markers) or any(key not in {item.id for item in enabled} for key in answers):
+                raise SandboxError("Invalid SQL question identifiers.")
+            dataset_count = max(1, db.query(TestCase).filter(TestCase.problem_id == problem.id).count())
+            results = [run_sandbox(db, problem, answers[item.id], True, item.id) if answers.get(item.id, "").strip()
+                       else {"status": "Wrong Answer", "message": "No answer provided.", "passed": 0, "total": dataset_count} for item in enabled]
+            for result in results:
+                result.setdefault("total", dataset_count)
+            total = sum(item.get("total", 1) for item in results)
+            passed = sum(item.get("passed", 0) for item in results)
+            return {"status": "Accepted" if passed == total else "Partial" if passed else "Wrong Answer",
+                    "passed": passed, "total": total,
+                    "message": " ".join(f"Question {index + 1}: {item.get('message', item['status'])}" for index, item in enumerate(results)),
+                    "executionTimeMs": round(sum(item.get("executionTimeMs", 0) for item in results), 3)}
+        solution = next((item for item in enabled if solution_id is None or item.id == solution_id), None)
+        if solution_id and solution is None:
+            raise SandboxError("Invalid or disabled SQL solution.")
         if configured and solution is None:
             raise SandboxError("No enabled SQL solution has been configured for this problem.")
+        if query.startswith("-- solution:") and len(enabled) == 1 and solution_id is None:
+            import re
+            blocks = list(re.finditer(r"(?m)^-- solution:([^\r\n]+)\r?\n", query))
+            match = next((entry for entry in blocks if entry.group(1) == solution.id), None)
+            if match:
+                index = blocks.index(match)
+                query = query[match.end():blocks[index + 1].start() if index + 1 < len(blocks) else len(query)]
         statements = split_query_script(query)
         if len(statements) != 1:
             raise SandboxError("Enter one SELECT query for this problem.")
         student_query = rewrite_query(statements[0])
-        expected_outputs, _ = read_expected_outputs(problem.expected)
+        expected_outputs, _ = read_expected_outputs(solution.expected if solution and solution.expected is not None else problem.expected if not solution or solution.id == configured[0].id else None)
         time_limit_ms = solution.time_limit_ms if solution else 5000
         test_cases = []
         for tc in db.query(TestCase).filter(TestCase.problem_id == problem.id).order_by(TestCase.order_index).all():
@@ -302,7 +332,8 @@ def run_sandbox(db: Session, problem: Problem, query: str, is_submit: bool) -> D
         if is_submit:
             cases_to_run = indexed_test_cases
         else:
-            visible = [(index, tc) for index, tc in indexed_test_cases if not (tc.get("is_hidden", False) if isinstance(tc, dict) else tc.is_hidden)]
+            from app.services.dataset_visibility import dataset_is_hidden
+            visible = [(index, tc) for index, tc in indexed_test_cases if not dataset_is_hidden(tc, index, dataset_visibility)]
             if not visible:
                 raise SandboxError("No visible dataset is available for preview.")
             cases_to_run = visible[:1]

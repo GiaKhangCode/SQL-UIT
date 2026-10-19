@@ -58,6 +58,25 @@ class ProblemWorkspaceTests(unittest.TestCase):
         self.assertEqual(student.schema_sql, "")
         self.assertTrue(all(case["schema"] == "" for case in student.test_cases))
 
+    def test_database_description_persists_and_visibility_filters_student_response(self):
+        payload = self.payload(["DDL"])
+        from app.schemas import DatabaseRelationDescription
+        payload.database_description = [DatabaseRelationDescription(tableName="KHACHHANG", attributes="MAKH, HOTEN", predicate="Lưu khách hàng thành viên.")]
+        self.assertTrue(payload.database_description_visible)
+        created = create_problem(payload, self.db, self.teacher)
+        shown = get_problem(created.id, db=self.db, current_user=self.student)
+        self.assertEqual(shown.database_description[0].table_name, "KHACHHANG")
+        payload.database_description_visible = False
+        update_problem(created.id, payload, self.db, self.teacher)
+        teacher = get_problem(created.id, db=self.db, current_user=self.teacher)
+        student = get_problem(created.id, db=self.db, current_user=self.student)
+        self.assertEqual(teacher.database_description[0].predicate, "Lưu khách hàng thành viên.")
+        self.assertFalse(teacher.database_description_visible)
+        self.assertEqual(student.database_description, [])
+        payload.database_description_visible = True
+        update_problem(created.id, payload, self.db, self.teacher)
+        self.assertEqual(len(get_problem(created.id, db=self.db, current_user=self.student).database_description), 1)
+
     def test_reference_database_filename_is_saved_and_editable(self):
         payload = self.payload(["DDL"])
         payload.schema_file_name = "thuviensach.sql"

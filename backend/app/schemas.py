@@ -95,7 +95,10 @@ class TestCaseSchema(CamelModel):
     is_hidden: bool = False
 
 class SqlSolutionConfig(CamelModel):
-    id: str = Field(min_length=1, max_length=50)
+    description: str = Field(default="", max_length=20000)
+    expected_outputs: Optional[List[DataTable]] = Field(default=None, alias="expectedOutputs", max_length=30)
+    expected_output_visible: bool = Field(default=True, alias="expectedOutputVisible")
+    id: str = Field(min_length=1, max_length=50, pattern=r"^[A-Za-z0-9_-]+$")
     name: str = Field(min_length=1, max_length=120)
     query: str = Field(default="", max_length=100000)
     enabled: bool = True
@@ -110,6 +113,8 @@ class SqlSolutionConfig(CamelModel):
 
 
 class SqlCheckInfo(CamelModel):
+    description: str = ""
+    expected_samples: List["ExpectedOutputSample"] = Field(default_factory=list, alias="expectedSamples")
     id: str
     name: str
     time_limit_ms: int = Field(alias="timeLimitMs")
@@ -120,7 +125,16 @@ class ExpectedOutputSample(CamelModel):
     table: DataTable
 
 
+class DatabaseRelationDescription(CamelModel):
+    table_name: str = Field(default="", alias="tableName", max_length=255)
+    attributes: str = Field(default="", max_length=10000)
+    predicate: str = Field(default="", max_length=20000)
+
+
 class ProblemDetailResponse(ProblemBase):
+    database_structure_visible: bool = Field(default=True, alias="databaseStructureVisible")
+    database_description: List[DatabaseRelationDescription] = Field(default_factory=list, alias="databaseDescription", max_length=100)
+    database_description_visible: bool = Field(default=True, alias="databaseDescriptionVisible")
     description: str
     requirements: str
     hint: Optional[str] = None
@@ -143,6 +157,8 @@ class TestCaseCreate(CamelModel):
     is_hidden: bool = False
 
 class ProblemCreate(CamelModel):
+    database_description: List[DatabaseRelationDescription] = Field(default_factory=list, alias="databaseDescription", max_length=100)
+    database_description_visible: bool = Field(default=True, alias="databaseDescriptionVisible")
     workspace_parts: Optional[WorkspaceParts] = None
     number: str
     title: str
@@ -159,7 +175,7 @@ class ProblemCreate(CamelModel):
     reference_solution: str = Field(..., alias="referenceSolution")
     expected_outputs: Optional[List[DataTable]] = Field(default=None, alias="expectedOutputs", max_length=30)
     expected_output_visible: bool = Field(default=True, alias="expectedOutputVisible")
-    sql_solutions: Optional[List[SqlSolutionConfig]] = Field(default=None, alias="sqlSolutions", max_length=1)
+    sql_solutions: Optional[List[SqlSolutionConfig]] = Field(default=None, alias="sqlSolutions", max_length=50)
     test_cases: Optional[List[TestCaseCreate]] = Field(default=None, alias="testCases")
 
     @model_validator(mode="after")
@@ -253,12 +269,14 @@ class ProblemValidateRequest(CamelModel):
     reference_solution: str = Field(..., alias="referenceSolution")
 
 class QueryRequest(CamelModel):
+    solution_id: Optional[str] = Field(default=None, alias="solutionId", max_length=50)
     query: str
     database: Optional[str] = "SQL Server"
     source: Optional[str] = "Practice"
     context: Optional[str] = "Practice"
 
 class WorkspaceRunRequest(CamelModel):
+    solution_id: Optional[str] = Field(default=None, alias="solutionId", max_length=50)
     part: Literal["DDL", "DML", "SQL"]
     ddl: str = Field(default="", max_length=100000)
     dml: str = Field(default="", max_length=100000)
@@ -487,12 +505,17 @@ class ClassMemberAdd(CamelModel):
 # Pydantic models cho Assignments / Contests
 # ========================
 class BuilderProblem(CamelModel):
+    dataset_visibility: Dict[str, bool] = Field(default_factory=dict, alias="datasetVisibility")
+    database_structure_visible: bool = Field(default=True, alias="databaseStructureVisible")
+    database_description_visible: bool = Field(default=True, alias="databaseDescriptionVisible")
     id: str
     points: int
     workspace_parts: Optional[WorkspaceParts] = None
 
     @model_validator(mode="after")
     def normalize_workspace_parts(self):
+        if any(not key.isdigit() or not 1 <= int(key) <= 100 for key in self.dataset_visibility):
+            raise ValueError("Dataset numbers must be between 1 and 100.")
         if self.workspace_parts is not None:
             self.workspace_parts = [part for part in ("DDL", "DML", "SQL") if part in self.workspace_parts]
         return self

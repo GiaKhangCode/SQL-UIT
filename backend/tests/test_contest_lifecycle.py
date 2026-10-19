@@ -151,6 +151,96 @@ class ContestLifecycleTests(unittest.TestCase):
             ["DML", "SQL"],
         )
 
+    def test_activity_visibility_is_independent_and_applies_to_student_problem(self):
+        from app.models import TestCase, TestCaseScript
+        problem = self.db.get(Problem, "P")
+        problem.database_description = [{"tableName": "Customers", "attributes": "Id", "predicate": "Customer records"}]
+        self.db.add(TestCase(id="tc-visibility", problem_id="P", order_index=0, is_hidden=False))
+        self.db.flush()
+        self.db.add(TestCaseScript(id="script-visibility", test_case_id="tc-visibility", table_name="Customers", create_script="CREATE TABLE Customers (Id INT)", insert_script=""))
+        self.db.commit()
+        payload = self.payload()
+        payload.problems[0].workspace_parts = ["SQL"]
+        activity = create_assignment(payload, db=self.db, current_user=self.teacher)
+        other = create_assignment(payload, db=self.db, current_user=self.teacher)
+        for structure, statement in [(False, True), (True, False), (False, False), (True, True)]:
+            payload.problems[0].database_structure_visible = structure
+            payload.problems[0].database_description_visible = statement
+            update_assignment(activity["id"], payload, db=self.db, current_user=self.teacher)
+            row = get_assignment(activity["id"], db=self.db, current_user=self.teacher)["problemList"][0]
+            self.assertEqual(row["databaseStructureVisible"], structure)
+            self.assertEqual(row["databaseDescriptionVisible"], statement)
+            student = get_problem("P", context=activity["id"], db=self.db, current_user=self.enrolled)
+            self.assertEqual(bool(student.schema_sql), structure)
+            self.assertEqual(bool(student.database_description), statement)
+            self.assertTrue(all(bool(case["schema"]) == structure for case in student.test_cases))
+            teacher = get_problem("P", context=activity["id"], db=self.db, current_user=self.teacher)
+            self.assertTrue(teacher.schema_sql)
+            self.assertTrue(teacher.database_description)
+            untouched = get_problem("P", context=other["id"], db=self.db, current_user=self.enrolled)
+            self.assertTrue(untouched.schema_sql)
+            self.assertTrue(untouched.database_description)
+
+    def test_structure_visibility_applies_when_table_design_is_enabled(self):
+        from app.models import TestCase, TestCaseScript
+        case = TestCase(id="ddl-visibility", problem_id="P", order_index=0, is_hidden=False)
+        self.db.add(case)
+        self.db.flush()
+        self.db.add(TestCaseScript(id="ddl-visibility-script", test_case_id=case.id, table_name="T",
+                                  create_script="CREATE TABLE T (Id INT)", insert_script=""))
+        self.db.commit()
+        payload = self.payload()
+        payload.problems[0].workspace_parts = ["DDL", "DML", "SQL"]
+        activity = create_assignment(payload, db=self.db, current_user=self.teacher)
+        shown = get_problem("P", context=activity["id"], db=self.db, current_user=self.enrolled)
+        self.assertTrue(shown.database_structure_visible)
+        self.assertIn("CREATE TABLE T", shown.schema_sql)
+        payload.problems[0].database_structure_visible = False
+        update_assignment(activity["id"], payload, db=self.db, current_user=self.teacher)
+        hidden = get_problem("P", context=activity["id"], db=self.db, current_user=self.enrolled)
+        self.assertEqual(hidden.schema_sql, "")
+        self.assertTrue(all(not case["schema"] for case in hidden.test_cases))
+
+    def test_dataset_visibility_overrides_are_saved_and_filter_samples_independently(self):
+        from app.models import TestCase, TestCaseScript
+        from app.services.expected_outputs import save_expected_outputs
+        problem = self.db.get(Problem, "P")
+        problem.expected = save_expected_outputs([
+            {"name": "one", "columns": ["Id"], "rows": [[1]]},
+            {"name": "two", "columns": ["Id"], "rows": [[2]]}], True)
+        for index, hidden in enumerate([False, True]):
+            case = TestCase(id=f"visibility-{index}", problem_id="P", order_index=index, is_hidden=hidden)
+            self.db.add(case)
+            self.db.flush()
+            self.db.add(TestCaseScript(id=f"visibility-script-{index}", test_case_id=case.id, table_name="T",
+                                      create_script="CREATE TABLE T (Id INT)", insert_script=f"INSERT INTO T VALUES ({index + 1})"))
+        self.db.commit()
+        payload = self.payload()
+        payload.problems[0].workspace_parts = ["SQL"]
+        original = create_assignment(payload, db=self.db, current_user=self.teacher)
+        payload.problems[0].dataset_visibility = {"1": False, "2": True}
+        activity = create_assignment(payload, db=self.db, current_user=self.teacher)
+        row = get_assignment(activity["id"], db=self.db, current_user=self.teacher)["problemList"][0]
+        self.assertEqual(row["datasetVisibility"], {"1": False, "2": True})
+        student = get_problem("P", context=activity["id"], db=self.db, current_user=self.enrolled)
+        self.assertEqual(len(student.test_cases), 1)
+        self.assertIn("(2)", student.test_cases[0]["seedData"])
+        self.assertEqual([sample.dataset for sample in student.expected_samples], [2])
+        from app.routers.problems import run_problem_workspace
+        from app.schemas import WorkspaceRunRequest
+        with patch("app.services.problem_workspace.run_workspace", return_value={"status": "Success"}) as runner:
+            run_problem_workspace("P", WorkspaceRunRequest(part="SQL", query="SELECT Id FROM T", source="Contests", context=activity["id"]), db=self.db, current_user=self.enrolled)
+        self.assertEqual(runner.call_args.args[4], "INSERT INTO T VALUES (2)")
+
+        unchanged = get_problem("P", context=original["id"], db=self.db, current_user=self.enrolled)
+        self.assertIn("(1)", unchanged.test_cases[0]["seedData"])
+        self.assertEqual([sample.dataset for sample in unchanged.expected_samples], [1])
+        payload.problems[0].dataset_visibility = {"1": False, "2": False}
+        update_assignment(activity["id"], payload, db=self.db, current_user=self.teacher)
+        hidden = get_problem("P", context=activity["id"], db=self.db, current_user=self.enrolled)
+        self.assertEqual(hidden.test_cases, [])
+        self.assertEqual(hidden.expected_samples, [])
+
     def test_legacy_activity_parts_default_does_not_inherit_problem_mode(self):
         contest = create_assignment(self.payload(), db=self.db, current_user=self.teacher)
         stored_problem = self.db.get(Problem, "P")
